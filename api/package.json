@@ -1,0 +1,33 @@
+{
+  "name": "manga-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "start": "tsx --env-file-if-exists=.env src/server.ts",
+    "typecheck": "tsc",
+    "test:source": "tsx --env-file-if-exists=.env scripts/test-source.ts",
+    "migrate": "prisma migrate dev",
+    "test:pipeline": "tsx --env-file-if-exists=.env scripts/test-pipeline.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.1.0",
+    "@fastify/rate-limit": "^11.1.0",
+    "@prisma/client": "^6.19.3",
+    "fastify": "^5.10.0",
+    "prisma": "^6.19.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  }
+}

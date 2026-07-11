@@ -1,0 +1,291 @@
+// Database schema. Each Series/Chapter row is a cached copy of what a
+// source site returned — the DB is a cache, the sources are the truth.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// One row per real-world series, shared by every source that carries it.
+// normTitles collects every normalized title/alt-title seen — the match keys.
+model CanonicalSeries {
+  id         String         @id @default(cuid())
+  title      String
+  coverUrl   String?
+  normTitles String[]
+  createdAt  DateTime       @default(now())
+  series     Series[]
+  comments   Comment[]
+  readEvents ReadChapter[]
+  library    LibraryEntry[]
+  progress   Progress[]
+  posts      Post[]
+}
+
+model User {
+  id                   String             @id @default(cuid())
+  email                String             @unique
+  username             String             @unique
+  passwordHash         String
+  createdAt            DateTime           @default(now())
+  role                 String             @default("user") // user | moderator | admin
+  status               String             @default("active") // active | suspended | banned
+  suspendedUntil       DateTime?
+  acceptedTermsVersion String?
+  acceptedTermsAt      DateTime?
+  // Denormalized XP: comment +10, like received +5, chapter read +2.
+  // Level is derived: floor(sqrt(xp/100)) + 1.
+  xp                   Int                @default(0)
+  // Earned badge the user displays as their Title (validated on equip)
+  equippedBadgeId      String?
+  sessions             Session[]
+  comments             Comment[]
+  likes                CommentLike[]
+  notifications        Notification[]
+  badges               UserBadge[]
+  readChapters         ReadChapter[]
+  library              LibraryEntry[]
+  progress             Progress[]
+  posts                Post[]
+  postLikes            PostLike[]
+  reports              Report[]
+  blocking             Block[]            @relation("Blocker")
+  blockedBy            Block[]            @relation("Blocked")
+  moderationActions    ModerationAction[] @relation("ModeratorActions")
+}
+
+// Cloud copy of the on-device library (followed series), canonical-keyed so
+// it's server-independent; source/sourceSeriesId remember which "server" the
+// user follows it on.
+model LibraryEntry {
+  userId         String
+  canonicalId    String
+  source         String
+  sourceSeriesId String
+  addedAt        DateTime        @default(now())
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canonical      CanonicalSeries @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
+
+  @@id([userId, canonicalId])
+}
+
+// Cloud copy of reading position per series (last-write-wins on updatedAt)
+model Progress {
+  userId        String
+  canonicalId   String
+  chapterNumber Float
+  pageIndex     Int             @default(0)
+  pageCount     Int?
+  updatedAt     DateTime        @default(now())
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canonical     CanonicalSeries @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
+
+  @@id([userId, canonicalId])
+}
+
+// badgeId keys into the static catalog in src/badges.ts (names/icons live in
+// code so artwork can be swapped without touching the DB).
+model UserBadge {
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, badgeId])
+}
+
+// Server-side record of chapters read (signed-in users only). Powers reading
+// badges/XP now; the basis for cross-device sync later.
+model ReadChapter {
+  userId        String
+  canonicalId   String
+  chapterNumber Float
+  readAt        DateTime        @default(now())
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canonical     CanonicalSeries @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
+
+  @@id([userId, canonicalId, chapterNumber])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+// Comments hang off the canonical series + chapter NUMBER, so one thread per
+// chapter no matter which server it's read on.
+model Comment {
+  id               String          @id @default(cuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canonicalId      String
+  canonical        CanonicalSeries @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
+  chapterNumber    Float
+  body             String
+  createdAt        DateTime        @default(now())
+  moderationStatus String          @default("visible") // visible | removed
+  moderationReason String?
+  moderatedAt      DateTime?
+  likes            CommentLike[]
+  // Single-level threading: replies point at a top-level comment
+  parentId         String?
+  parent           Comment?        @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies          Comment[]       @relation("Replies")
+  notifications    Notification[]
+
+  @@index([canonicalId, chapterNumber])
+}
+
+// In-app inbox: created when someone replies to your comment or post
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String // recipient
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentId String? // the comment reply that triggered it
+  comment   Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  postId    String? // or the post reply that triggered it
+  post      Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, readAt])
+}
+
+// The social wall: reader posts, optionally anchored to a series/chapter.
+// Same single-level threading model as comments.
+model Post {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canonicalId      String?
+  canonical        CanonicalSeries? @relation(fields: [canonicalId], references: [id], onDelete: SetNull)
+  chapterNumber    Float?
+  body             String
+  isSpoiler        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  moderationStatus String           @default("visible") // visible | removed
+  moderationReason String?
+  moderatedAt      DateTime?
+  likes            PostLike[]
+  parentId         String?
+  parent           Post?            @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies          Post[]           @relation("PostReplies")
+  notifications    Notification[]
+
+  @@index([canonicalId, createdAt])
+  @@index([createdAt])
+}
+
+model PostLike {
+  userId    String
+  postId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
+}
+
+// Safety: user reports (reviewed by the admin during moderation)
+model Report {
+  id         String    @id @default(cuid())
+  reporterId String
+  reporter   User      @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType String // "post" | "comment" | "user"
+  targetId   String
+  reason     String?
+  createdAt  DateTime  @default(now())
+  status     String    @default("pending") // pending | resolved | dismissed
+  resolution String?
+  reviewedAt DateTime?
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+}
+
+model ModerationAction {
+  id          String   @id @default(cuid())
+  moderatorId String
+  moderator   User     @relation("ModeratorActions", fields: [moderatorId], references: [id], onDelete: Cascade)
+  targetType  String
+  targetId    String
+  action      String
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+// Safety: blocking hides the blocked user's posts/comments from the blocker
+model Block {
+  blockerId String
+  blockedId String
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([blockerId, blockedId])
+}
+
+model CommentLike {
+  userId    String
+  commentId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, commentId])
+}
+
+model Series {
+  id             String           @id @default(cuid())
+  source         String // adapter id, e.g. "mangadex"
+  sourceSeriesId String // the series' id on that source
+  title          String
+  altTitles      String[]
+  coverUrl       String?
+  description    String?
+  status         String? // ongoing | completed | hiatus | cancelled | unknown
+  tags           String[]
+  fetchedAt      DateTime         @default(now()) // when we last refreshed from the source
+  chapters       Chapter[]
+  canonicalId    String?
+  canonical      CanonicalSeries? @relation(fields: [canonicalId], references: [id])
+
+  @@unique([source, sourceSeriesId])
+  @@index([source])
+  @@index([canonicalId])
+}
+
+model Chapter {
+  id              String    @id @default(cuid())
+  seriesId        String
+  series          Series    @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  sourceChapterId String // the chapter's id on the source
+  number          Float // 10.5 for chapter 10.5
+  title           String?
+  publishedAt     DateTime?
+  pages           Page[]
+  pagesFetchedAt  DateTime? // when the page list was last refreshed
+
+  @@unique([seriesId, sourceChapterId])
+}
+
+model Page {
+  id        String  @id @default(cuid())
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  index     Int
+  imageUrl  String
+
+  @@unique([chapterId, index])
+}
