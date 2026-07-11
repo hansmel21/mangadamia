@@ -343,6 +343,10 @@ model Post {
   canonical        CanonicalSeries? @relation(fields: [canonicalId], references: [id], onDelete: SetNull)
   chapterNumber    Float?
   body             String
+  // System Record type: record | theory | review | spoiler_intel
+  kind             String           @default("record")
+  // 1–5 rating, reviews only (drives the community series rank)
+  rating           Int?
   isSpoiler        Boolean          @default(false)
   createdAt        DateTime         @default(now())
   moderationStatus String           @default("visible") // visible | removed
@@ -367,6 +371,7 @@ model Post {
   @@index([createdAt])
   @@index([rootId])
   @@index([guildId, createdAt])
+  @@index([canonicalId, kind])
 }
 
 model PostSeriesTag {
@@ -384,11 +389,14 @@ model PostSeriesTag {
 model PostLike {
   userId    String
   postId    String
+  // Reaction type: endorse (grants EXP) | hype | mindblown | pain | dead
+  type      String   @default("endorse")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@id([userId, postId])
+  @@index([postId, type])
 }
 
 // Safety: user reports (reviewed by the admin during moderation)

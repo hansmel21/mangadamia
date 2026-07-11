@@ -55,9 +55,11 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`. Posts become typed
 become **⚡ Endorse (EXP) + free emotes**, and **Reviews** roll up into a
 community **series rank** (E→S) shown on the series screen.
 
-- [ ] Schema: `Post.kind`, `Post.rating`, `PostLike.type` + migration
-- [ ] Backend: post kind/rating, reaction endpoint (`/posts/:id/react`),
-      reaction aggregation in serialize, reviews summary endpoint, `ranks.ts`
+- [x] Schema: `Post.kind`, `Post.rating`, `PostLike.type` + migration
+      `20260711212222_system_social` (applied)
+- [x] Backend: post kind/rating, reaction endpoint (`/posts/:id/react`),
+      reaction aggregation in serialize + feed/thread, reviews summary
+      (`GET /canonical/:id/reviews`), `api/src/ranks.ts`. Verified live.
 - [ ] Client: reaction bar, rank badge, review rating, System Record card,
       composer type picker, feed type filter, series rank badge
 - [ ] Verify end-to-end + typecheck

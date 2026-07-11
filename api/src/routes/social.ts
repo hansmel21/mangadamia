@@ -22,6 +22,7 @@ import { prisma } from "../db/client.js";
 import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../identity.js";
 import { createNotification } from "../notifications.js";
 import { creditGuild } from "../guilds.js";
+import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateUserContent } from "../policy.js";
 import { questListForUser, recordActivity } from "../quests.js";
 import { deleteUserCompletely } from "../accounts.js";
@@ -1027,13 +1028,16 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     id: string;
     parentId: string | null;
     body: string;
+    kind: string;
+    rating: number | null;
     isSpoiler: boolean;
     createdAt: Date;
     author: Awaited<ReturnType<typeof identityForUser>>;
     username: string;
     level: number | null;
-    likeCount: number;
-    likedByMe: boolean;
+    // Per-type reaction counts, e.g. { endorse: 42, hype: 8 }.
+    reactions: Record<string, number>;
+    myReaction: string | null;
     mine: boolean;
     chapterNumber: number | null;
     series: { canonicalId: string; title: string; coverUrl: string | null } | null;
@@ -1055,8 +1059,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         orderBy: { position: "asc" as const },
         include: { canonical: { select: { id: true, title: true, coverUrl: true } } },
       },
-      _count: { select: { likes: true } },
-      likes: meId ? { where: { userId: meId }, select: { userId: true } } : false,
+      likes: meId ? { where: { userId: meId }, select: { type: true } } : false,
     }) as const;
 
   // Structural shape of a post row loaded with postInclude(); shared by the
@@ -1065,6 +1068,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     id: string;
     parentId: string | null;
     body: string;
+    kind: string;
+    rating: number | null;
     isSpoiler: boolean;
     createdAt: Date;
     userId: string;
@@ -1074,25 +1079,27 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       canonical: { id: string; title: string; coverUrl: string | null };
       chapterNumber: number | null;
     }[];
-    _count: { likes: number };
-    likes?: { userId: string }[] | false;
+    likes?: { type: string }[] | false;
   }
 
   const serializePost = (
     p: SerializablePost,
     identities: Awaited<ReturnType<typeof identitiesForUsers>>,
     meId?: string,
+    reactionCounts: Record<string, number> = {},
   ): PostNode => ({
     id: p.id,
     parentId: p.parentId,
     body: p.body,
+    kind: p.kind,
+    rating: p.rating,
     isSpoiler: p.isSpoiler,
     createdAt: p.createdAt,
     author: identities.get(p.userId) ?? null,
     username: identities.get(p.userId)?.username ?? "Removed Reader",
     level: identities.get(p.userId)?.level ?? null,
-    likeCount: p._count.likes,
-    likedByMe: !!meId && Array.isArray(p.likes) && p.likes.length > 0,
+    reactions: reactionCounts,
+    myReaction: Array.isArray(p.likes) && p.likes[0] ? p.likes[0].type : null,
     mine: !!meId && p.userId === meId,
     chapterNumber: p.chapterNumber,
     series: p.canonical
@@ -1108,12 +1115,32 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     commentCount: 0,
   });
 
+  // Per-post reaction counts, e.g. Map<postId, { endorse: 42, hype: 8 }>.
+  const reactionsForPosts = async (
+    postIds: string[],
+  ): Promise<Map<string, Record<string, number>>> => {
+    const map = new Map<string, Record<string, number>>();
+    if (postIds.length === 0) return map;
+    const groups = await prisma.postLike.groupBy({
+      by: ["postId", "type"],
+      where: { postId: { in: postIds } },
+      _count: true,
+    });
+    for (const g of groups) {
+      const rec = map.get(g.postId) ?? {};
+      rec[g.type] = g._count;
+      map.set(g.postId, rec);
+    }
+    return map;
+  };
+
   app.get("/posts", async (req) => {
-    const { page, canonicalId, feed } = z
+    const { page, canonicalId, feed, kind } = z
       .object({
         page: z.coerce.number().int().min(1).default(1),
         canonicalId: z.string().optional(),
         feed: z.enum(["global", "following"]).default("global"),
+        kind: z.enum(["theory", "review"]).optional(),
       })
       .parse(req.query);
     const me = await getUser(req);
@@ -1134,6 +1161,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         moderationStatus: "visible",
         userId: { notIn: blockedIds },
         ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
+        ...(kind ? { kind } : {}),
         ...(canonicalId
           ? { OR: [{ canonicalId }, { seriesTags: { some: { canonicalId } } }] }
           : {}),
@@ -1153,9 +1181,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         })
       : [];
     const countByRoot = new Map(counts.map((c) => [c.rootId, c._count]));
-    const identities = await identitiesForUsers(rows.map((p) => p.userId), me?.id);
+    const [identities, reactionMap] = await Promise.all([
+      identitiesForUsers(rows.map((p) => p.userId), me?.id),
+      reactionsForPosts(rootIds),
+    ]);
     return rows.map((p) => ({
-      ...serializePost(p, identities, me?.id),
+      ...serializePost(p, identities, me?.id, reactionMap.get(p.id) ?? {}),
       commentCount: countByRoot.get(p.id) ?? 0,
     }));
   });
@@ -1181,12 +1212,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       include: postInclude(me?.id),
     });
     const all = [rootPost, ...descendants];
-    const identities = await identitiesForUsers(all.map((p) => p.userId), me?.id);
+    const [identities, reactionMap] = await Promise.all([
+      identitiesForUsers(all.map((p) => p.userId), me?.id),
+      reactionsForPosts(all.map((p) => p.id)),
+    ]);
 
     // Build the tree: attach each reply under its parent (oldest-first). A
     // reply whose parent was removed/blocked reattaches to the root so it isn't
     // silently lost.
-    const nodes = new Map(all.map((p) => [p.id, serializePost(p, identities, me?.id)]));
+    const nodes = new Map(
+      all.map((p) => [p.id, serializePost(p, identities, me?.id, reactionMap.get(p.id) ?? {})]),
+    );
     for (const p of descendants) {
       const node = nodes.get(p.id);
       if (!node) continue;
@@ -1205,13 +1241,15 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     "/posts",
     { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } },
     async (req) => {
-    const { body, canonicalId, chapterNumber, parentId, isSpoiler, seriesTags } = z
+    const { body, canonicalId, chapterNumber, parentId, isSpoiler, seriesTags, kind, rating } = z
       .object({
         body: z.string().trim().min(1).max(1000),
         canonicalId: z.string().optional(),
         chapterNumber: z.coerce.number().optional(),
         parentId: z.string().optional(),
         isSpoiler: z.boolean().optional(),
+        kind: z.enum(["record", "theory", "review", "spoiler_intel"]).optional(),
+        rating: z.coerce.number().int().min(1).max(5).optional(),
         seriesTags: z
           .array(
             z.object({ canonicalId: z.string().min(1), chapterNumber: z.coerce.number().optional() }),
@@ -1222,7 +1260,13 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       .parse(req.body);
     const user = await requireAcceptedTerms(req);
     validateUserContent(body);
+    // Replies are always plain records; a post's type only applies to top-level.
+    const postKind = parentId ? "record" : (kind ?? "record");
     const requestedTags = seriesTags ?? (canonicalId ? [{ canonicalId, chapterNumber }] : []);
+    if (postKind === "review") {
+      if (rating === undefined) throw httpError(400, "A review needs a 1–5 rating");
+      if (requestedTags.length !== 1) throw httpError(400, "Pick exactly one series to review");
+    }
     const uniqueTags = [...new Map(requestedTags.map((tag) => [tag.canonicalId, tag])).values()];
     if (uniqueTags.length > 0) {
       const count = await prisma.canonicalSeries.count({
@@ -1256,7 +1300,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       data: {
         userId: user.id,
         body,
-        isSpoiler: isSpoiler ?? false,
+        kind: postKind,
+        rating: postKind === "review" ? (rating ?? null) : null,
+        isSpoiler: postKind === "spoiler_intel" ? true : (isSpoiler ?? false),
         canonicalId: root ? root.canonicalId : (primaryTag?.canonicalId ?? null),
         chapterNumber: root ? root.chapterNumber : (primaryTag?.chapterNumber ?? null),
         parentId: parent?.id,
@@ -1306,13 +1352,15 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       id: post.id,
       parentId: post.parentId,
       body: post.body,
+      kind: post.kind,
+      rating: post.rating,
       isSpoiler: post.isSpoiler,
       createdAt: post.createdAt,
       author: identity,
       username: user.username,
       level: identity?.level ?? levelAfter,
-      likeCount: 0,
-      likedByMe: false,
+      reactions: {},
+      myReaction: null,
       mine: true,
       chapterNumber: post.chapterNumber,
       series: post.canonical
@@ -1346,8 +1394,13 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
-  app.post<{ Params: { id: string } }>("/posts/:id/like", async (req) => {
+  // React to a post. One reaction per reader per post — sending the same type
+  // again clears it, a different type swaps it. Only "endorse" grants the
+  // author EXP (and feeds quests + guild contribution).
+  app.post<{ Params: { id: string } }>("/posts/:id/react", async (req) => {
     const user = await requireActiveUser(req);
+    const { type } = z.object({ type: z.string() }).parse(req.body);
+    if (!isReactionType(type)) throw httpError(400, "Unknown reaction");
     const post = await prisma.post.findUnique({ where: { id: req.params.id } });
     if (!post || post.moderationStatus !== "visible") throw httpError(404, "No such post");
     if ((await hiddenUserIds(user.id)).includes(post.userId)) {
@@ -1355,26 +1408,41 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     }
     const key = { userId: user.id, postId: post.id };
     const existing = await prisma.postLike.findUnique({ where: { userId_postId: key } });
-    if (existing) await prisma.postLike.delete({ where: { userId_postId: key } });
-    else await prisma.postLike.create({ data: key });
-    if (post.userId !== user.id) {
+    const action = !existing ? "create" : existing.type === type ? "remove" : "switch";
+    if (action === "create") await prisma.postLike.create({ data: { ...key, type } });
+    else if (action === "remove") await prisma.postLike.delete({ where: { userId_postId: key } });
+    else await prisma.postLike.update({ where: { userId_postId: key }, data: { type } });
+
+    // EXP only tracks the "endorse" reaction (mirrors the old like path).
+    const wasEndorse = existing?.type === "endorse";
+    const nowEndorse = action !== "remove" && type === "endorse";
+    const endorseDelta = (nowEndorse ? 5 : 0) - (wasEndorse ? 5 : 0);
+    let activity: Awaited<ReturnType<typeof recordActivity>> = {
+      completedQuests: [],
+      levelUp: null,
+    };
+    if (post.userId !== user.id && endorseDelta !== 0) {
       await prisma.user.update({
         where: { id: post.userId },
-        data: { xp: { increment: existing ? -5 : 5 } },
+        data: { xp: { increment: endorseDelta } },
       });
-      if (!existing) {
+      if (endorseDelta > 0) {
         await creditGuild(post.userId, 5);
         await evaluateBadges(post.userId);
         await createNotification({
           userId: post.userId,
           actorId: user.id,
-          kind: "post_like",
-          title: "Your post got a like",
-          safeBody: `@${user.username} liked your post.`,
+          kind: "post_endorse",
+          title: "Your record was endorsed",
+          safeBody: `@${user.username} endorsed your post.`,
           targetUrl: `/post/${post.rootId ?? post.id}`,
           metadata: { postId: post.id },
           dedupeKey: `post-like:${post.id}:${user.id}`,
           postId: post.id,
+        });
+        await recordActivity(post.userId, {
+          type: "like_received",
+          eventKey: `post:${post.id}:${user.id}`,
         });
       } else {
         await prisma.notification.updateMany({
@@ -1383,14 +1451,44 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         });
       }
     }
-    const likeCount = await prisma.postLike.count({ where: { postId: post.id } });
-    const activity = !existing
-      ? await recordActivity(user.id, { type: "like_given", eventKey: `post:${post.id}` })
-      : { completedQuests: [], levelUp: null };
-    if (!existing && post.userId !== user.id) {
-      await recordActivity(post.userId, { type: "like_received", eventKey: `post:${post.id}:${user.id}` });
+    if (nowEndorse && !wasEndorse) {
+      activity = await recordActivity(user.id, { type: "like_given", eventKey: `post:${post.id}` });
     }
-    return { liked: !existing, likeCount, ...activity };
+    const groups = await prisma.postLike.groupBy({
+      by: ["type"],
+      where: { postId: post.id },
+      _count: true,
+    });
+    const reactions = Object.fromEntries(groups.map((g) => [g.type, g._count]));
+    return { reactions, myReaction: action === "remove" ? null : type, ...activity };
+  });
+
+  // Community review summary for a series: average rating, count, letter rank,
+  // and the viewer's own review if they've filed one.
+  app.get<{ Params: { id: string } }>("/canonical/:id/reviews", async (req) => {
+    const me = await getUser(req);
+    const canonicalId = req.params.id;
+    const agg = await prisma.post.aggregate({
+      where: { kind: "review", canonicalId, moderationStatus: "visible", rating: { not: null } },
+      _avg: { rating: true },
+      _count: true,
+    });
+    const count = agg._count;
+    const average = agg._avg.rating ?? 0;
+    const myReview = me
+      ? await prisma.post.findFirst({
+          where: { kind: "review", canonicalId, userId: me.id, moderationStatus: "visible" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, rating: true, body: true },
+        })
+      : null;
+    return {
+      canonicalId,
+      count,
+      average,
+      rank: count > 0 ? seriesRankForAverage(average) : null,
+      myReview: myReview ? { id: myReview.id, rating: myReview.rating ?? 0, body: myReview.body } : null,
+    };
   });
 
   // ── Notifications ─────────────────────────────────────────────────────
