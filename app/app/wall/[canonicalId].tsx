@@ -1,6 +1,6 @@
 // A single series' wall — posts filtered to one canonical series.
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Plus } from "lucide-react-native";
 import { useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
@@ -17,7 +17,6 @@ export default function SeriesWallScreen() {
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const queryClient = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
-  const [replyTo, setReplyTo] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const feed = useInfiniteQuery({
@@ -75,11 +74,9 @@ export default function SeriesWallScreen() {
           renderItem={({ item }) => (
             <PostCard
               post={item}
+              preview
+              onOpen={(p) => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
               onLike={like}
-              onReply={(p) => {
-                setReplyTo(p);
-                setComposerOpen(true);
-              }}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
@@ -87,7 +84,7 @@ export default function SeriesWallScreen() {
               viewerSignedIn={!!user}
             />
           )}
-          contentContainerStyle={{ paddingBottom: 90 }}
+          contentContainerStyle={{ paddingBottom: 90, paddingTop: 2 }}
           onEndReached={() => {
             if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
           }}
@@ -103,10 +100,7 @@ export default function SeriesWallScreen() {
       {user ? (
         <Pressable
           style={(s) => [styles.fab, pressFx(s)]}
-          onPress={() => {
-            setReplyTo(null);
-            setComposerOpen(true);
-          }}
+          onPress={() => setComposerOpen(true)}
         >
           <Plus color={colors.accentText} size={26} strokeWidth={2.4} />
         </Pressable>
@@ -115,12 +109,7 @@ export default function SeriesWallScreen() {
       <PostComposer
         visible={composerOpen}
         onClose={() => setComposerOpen(false)}
-        replyTo={replyTo ?? undefined}
-        context={
-          !replyTo && canonicalId
-            ? { canonicalId, title: title ?? "this series" }
-            : undefined
-        }
+        context={canonicalId ? { canonicalId, title: title ?? "this series" } : undefined}
       />
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
     </View>

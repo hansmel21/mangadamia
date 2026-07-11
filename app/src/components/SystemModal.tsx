@@ -3,7 +3,15 @@
 //   close — the window squeezes flat into a line, contracts, and puffs out
 // The close animation plays BEFORE unmount, so dismissals feel deliberate.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Easing, Modal, Pressable, StyleSheet } from "react-native";
+import {
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+} from "react-native";
 import { SystemWindow } from "./SystemWindow";
 
 export function SystemModal({
@@ -80,9 +88,17 @@ export function SystemModal({
   if (!rendered) return null;
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <Animated.View style={[styles.backdrop, { opacity: backdrop }]}>
-        <Pressable style={styles.fill} onPress={onClose}>
+        {/* Full-screen tap layer behind the content closes the modal. */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        {/* Lifts the centered window above the keyboard so inputs and the
+            action buttons stay visible while typing. */}
+        <KeyboardAvoidingView
+          style={styles.fill}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          pointerEvents="box-none"
+        >
           <Animated.View
             style={{
               width: "100%",
@@ -95,7 +111,7 @@ export function SystemModal({
               <SystemWindow title={title}>{children}</SystemWindow>
             </Pressable>
           </Animated.View>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Animated.View>
     </Modal>
   );

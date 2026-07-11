@@ -97,6 +97,16 @@ export interface AuthResponse {
   };
 }
 
+export interface GuildCrestInfo {
+  id: string;
+  name: string;
+  tag: string;
+  emblemKey: string;
+  primaryColor: string;
+  secondaryColor: string | null;
+  level: number;
+}
+
 export interface PublicIdentity {
   id: string | null;
   username: string;
@@ -104,8 +114,62 @@ export interface PublicIdentity {
   avatar: CosmeticMini | null;
   frame: CosmeticMini | null;
   title: { id: string; name: string; rarity: Rarity } | null;
+  guild: GuildCrestInfo | null;
   staffMarker: { label: string; role: string } | null;
   anonymized: boolean;
+}
+
+export type GuildRole = "guildmaster" | "officer" | "member";
+export type GuildJoinPolicy = "open" | "request" | "invite";
+
+export interface GuildSummary {
+  id: string;
+  name: string;
+  tag: string;
+  emblemKey: string;
+  primaryColor: string;
+  secondaryColor: string | null;
+  motto: string | null;
+  level: number;
+  xp: number;
+  memberCount: number;
+  memberCap: number;
+  joinPolicy: GuildJoinPolicy;
+  rank: number | null;
+  mine: boolean;
+}
+
+export interface GuildMemberInfo {
+  role: GuildRole;
+  contributionXp: number;
+  weeklyXp: number;
+  joinedAt: string;
+  identity: PublicIdentity | null;
+}
+
+export interface GuildDetail {
+  id: string;
+  name: string;
+  tag: string;
+  emblemKey: string;
+  primaryColor: string;
+  secondaryColor: string | null;
+  motto: string | null;
+  description: string | null;
+  joinPolicy: GuildJoinPolicy;
+  guildmasterId: string;
+  level: number;
+  xp: number;
+  xpFloor: number;
+  xpForNextLevel: number;
+  power: number;
+  memberCount: number;
+  memberCap: number;
+  myRole: GuildRole | null;
+  inAnotherGuild: boolean;
+  joinRequestPending: boolean;
+  members: GuildMemberInfo[];
+  pendingRequests: { identity: PublicIdentity | null; requestedAt: string }[];
 }
 
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "mythic";
@@ -337,6 +401,9 @@ export interface PostInfo {
     chapterNumber: number | null;
   }[];
   replies: PostInfo[];
+  // Total comments in the whole thread (all nesting levels). Present on feed
+  // preview cards and the thread root; absent on freshly created replies.
+  commentCount?: number;
   completedQuests?: QuestCompletion[];
   levelUp?: number | null;
 }
@@ -472,7 +539,7 @@ export const api = {
     parentId?: string,
     isSpoiler = false,
   ) =>
-    request<CommentInfo & { newBadges: BadgeMini[]; levelUp: number | null }>(
+    request<CommentInfo & { newBadges: BadgeMini[]; levelUp: number | null; xpAwarded?: number }>(
       `/comments/${encodeURIComponent(canonicalId)}/${chapterNumber}`,
       "POST",
       { body, parentId, isSpoiler },
@@ -508,6 +575,7 @@ export const api = {
     get<PostInfo[]>(
       `/posts?page=${page}&feed=${feed}${canonicalId ? `&canonicalId=${canonicalId}` : ""}`,
     ),
+  post: (id: string) => get<PostInfo>(`/posts/${encodeURIComponent(id)}`),
   createPost: (
     body: string,
     opts?: {
@@ -518,10 +586,11 @@ export const api = {
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];
     },
   ) =>
-    request<PostInfo & { levelUp: number | null; newBadges?: BadgeMini[] }>("/posts", "POST", {
-      body,
-      ...opts,
-    }),
+    request<PostInfo & { levelUp: number | null; newBadges?: BadgeMini[]; xpAwarded?: number }>(
+      "/posts",
+      "POST",
+      { body, ...opts },
+    ),
   deletePost: (id: string) => request<{ ok: boolean }>(`/posts/${encodeURIComponent(id)}`, "DELETE"),
   togglePostLike: (id: string) =>
     request<{ liked: boolean; likeCount: number }>(
@@ -564,6 +633,54 @@ export const api = {
     ),
   report: (targetType: "post" | "comment" | "user", targetId: string, reason?: string) =>
     request<{ ok: boolean }>("/report", "POST", { targetType, targetId, reason }),
+
+  // ── Guilds ──────────────────────────────────────────────────────────────
+  guilds: (sort: "level" | "new" = "level", q?: string) =>
+    get<GuildSummary[]>(`/guilds?sort=${sort}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
+  guild: (id: string) => get<GuildDetail>(`/guilds/${encodeURIComponent(id)}`),
+  myGuild: () => get<{ guildId: string | null; role: GuildRole | null }>("/me/guild"),
+  createGuild: (body: {
+    name: string;
+    tag: string;
+    emblemKey: string;
+    primaryColor: string;
+    secondaryColor?: string | null;
+    motto?: string | null;
+  }) => request<{ id: string }>("/guilds", "POST", body),
+  joinGuild: (id: string) =>
+    request<{ status: "joined" | "requested" }>(`/guilds/${encodeURIComponent(id)}/join`, "POST"),
+  leaveGuild: (id: string) =>
+    request<{ status: "left" | "dissolved" }>(`/guilds/${encodeURIComponent(id)}/leave`, "POST"),
+  answerGuildRequest: (id: string, userId: string, action: "accept" | "reject") =>
+    request<{ ok: boolean; status: string }>(
+      `/guilds/${encodeURIComponent(id)}/requests/${encodeURIComponent(userId)}`,
+      "POST",
+      { action },
+    ),
+  kickGuildMember: (id: string, userId: string) =>
+    request<{ ok: boolean }>(
+      `/guilds/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      "DELETE",
+    ),
+  setGuildRole: (id: string, userId: string, role: GuildRole) =>
+    request<{ ok: boolean; role: GuildRole }>(
+      `/guilds/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/role`,
+      "POST",
+      { role },
+    ),
+  updateGuild: (
+    id: string,
+    body: Partial<{
+      name: string;
+      tag: string;
+      emblemKey: string;
+      primaryColor: string;
+      secondaryColor: string | null;
+      motto: string | null;
+      description: string | null;
+      joinPolicy: GuildJoinPolicy;
+    }>,
+  ) => request<{ ok: boolean }>(`/guilds/${encodeURIComponent(id)}`, "PATCH", body),
 
   notifications: (cursor?: string) =>
     get<NotificationPage>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),

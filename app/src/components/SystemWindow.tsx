@@ -11,6 +11,7 @@ export function SystemWindow({
   style,
   compact = false,
   dim = false,
+  translucent = false,
 }: {
   title?: string;
   children: ReactNode;
@@ -18,10 +19,18 @@ export function SystemWindow({
   compact?: boolean;
   // Quieter treatment for windows that live permanently on a screen
   dim?: boolean;
+  // See-through treatment for reward pops so they don't cover what you're reading
+  translucent?: boolean;
 }) {
   return (
     <View
-      style={[styles.window, compact && styles.windowCompact, dim && styles.windowDim, style]}
+      style={[
+        styles.window,
+        compact && styles.windowCompact,
+        dim && styles.windowDim,
+        translucent && styles.windowTranslucent,
+        style,
+      ]}
     >
       <View style={[styles.corner, styles.tl]} />
       <View style={[styles.corner, styles.tr]} />
@@ -62,6 +71,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 9,
     elevation: 4,
+  },
+  windowTranslucent: {
+    backgroundColor: "rgba(13,15,20,0.66)",
+    borderColor: "rgba(124,92,255,0.45)",
+    shadowOpacity: 0.28,
   },
   corner: {
     position: "absolute",

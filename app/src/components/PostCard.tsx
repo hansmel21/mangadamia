@@ -1,7 +1,10 @@
-// Shared post card for the Feed and series Walls. Handles:
-//  - tappable username → public profile
-//  - manual Reddit-style spoiler shield, revealed for the whole thread
-//  - like / reply / delete / report
+// Shared post card for the Dungeons feed, series Walls, and the post thread.
+// Two modes:
+//   • preview (feed/wall): the whole card is tappable and opens the full
+//     conversation; replies are summarised, not expanded inline.
+//   • thread (post detail): replies render nested beneath the post.
+// Handles tappable usernames, spoiler shields, and like / reply / delete /
+// report with comfortable touch targets.
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { EyeOff, Flag, Heart, MessageSquare, Trash2 } from "lucide-react-native";
@@ -42,6 +45,9 @@ export function PostCard({
   viewerSignedIn = false,
   threadRevealed,
   onRevealThread,
+  preview = false,
+  onOpen,
+  depth = 0,
 }: {
   post: PostInfo;
   isReply?: boolean;
@@ -52,14 +58,31 @@ export function PostCard({
   viewerSignedIn?: boolean;
   threadRevealed?: boolean;
   onRevealThread?: () => void;
+  // Feed/wall list item: the whole card opens the thread instead of expanding.
+  preview?: boolean;
+  onOpen?: (p: PostInfo) => void;
+  // Nesting level in a thread; caps how far replies keep indenting.
+  depth?: number;
 }) {
   const [localRevealed, setLocalRevealed] = useState(false);
   const revealed = threadRevealed ?? localRevealed;
   const revealThread = onRevealThread ?? (() => setLocalRevealed(true));
   const shielded = viewerSignedIn && !post.mine && post.isSpoiler && !revealed;
+  // Preview cards show the whole thread's comment count; a reply pill shows how
+  // many direct replies it has.
+  const threadCount = post.commentCount ?? post.replies.length;
+  const directReplies = post.replies.length;
+  const canReply = !preview && !!onReply;
 
-  return (
-    <View style={[styles.card, isReply && styles.replyCard]}>
+  const seriesChips =
+    post.seriesTags.length > 0
+      ? post.seriesTags
+      : post.series
+        ? [{ ...post.series, chapterNumber: post.chapterNumber }]
+        : [];
+
+  const inner = (
+    <>
       <View style={styles.headerRow}>
         {post.author ? (
           <UserIdentity
@@ -71,34 +94,32 @@ export function PostCard({
         <Text style={styles.time}>· {timeAgo(post.createdAt)}</Text>
         <View style={styles.headerActions}>
           {post.mine ? (
-            <Pressable hitSlop={8} onPress={() => onDelete(post)}>
-              <Trash2 color={colors.danger} size={15} strokeWidth={1.8} />
+            <Pressable hitSlop={10} onPress={() => onDelete(post)}>
+              <Trash2 color={colors.danger} size={16} strokeWidth={1.8} />
             </Pressable>
           ) : (
-            <Pressable hitSlop={8} onPress={() => onReport(post)}>
-              <Flag color={colors.muted} size={14} strokeWidth={1.8} />
+            <Pressable hitSlop={10} onPress={() => onReport(post)}>
+              <Flag color={colors.muted} size={15} strokeWidth={1.8} />
             </Pressable>
           )}
         </View>
       </View>
 
-      {(post.seriesTags.length > 0 ? post.seriesTags : post.series ? [{ ...post.series, chapterNumber: post.chapterNumber }] : []).map(
-        (series) => (
-          <Pressable
-            key={series.canonicalId}
-            style={(s) => [styles.ctxChip, pressFx(s)]}
-            onPress={() => openSeries(series)}
-          >
-            {series.coverUrl ? (
-              <Image source={{ uri: series.coverUrl }} style={styles.ctxCover} contentFit="cover" />
-            ) : null}
-            <Text style={styles.ctxText} numberOfLines={1}>
-              {series.title}
-              {series.chapterNumber != null ? ` · Ch. ${series.chapterNumber}` : ""}
-            </Text>
-          </Pressable>
-        ),
-      )}
+      {seriesChips.map((series) => (
+        <Pressable
+          key={series.canonicalId}
+          style={(s) => [styles.ctxChip, pressFx(s)]}
+          onPress={() => openSeries(series)}
+        >
+          {series.coverUrl ? (
+            <Image source={{ uri: series.coverUrl }} style={styles.ctxCover} contentFit="cover" />
+          ) : null}
+          <Text style={styles.ctxText} numberOfLines={1}>
+            {series.title}
+            {series.chapterNumber != null ? ` · Ch. ${series.chapterNumber}` : ""}
+          </Text>
+        </Pressable>
+      ))}
 
       {shielded ? (
         <Pressable style={styles.shield} onPress={revealThread}>
@@ -110,88 +131,152 @@ export function PostCard({
           <Text style={styles.shieldReveal}>TAP TO REVEAL</Text>
         </Pressable>
       ) : (
-        <Text style={styles.body}>{post.body}</Text>
+        <Text style={styles.body} numberOfLines={preview && !isReply ? 8 : undefined}>
+          {post.body}
+        </Text>
       )}
 
       <View style={styles.actionsRow}>
-        <Pressable style={(s) => [styles.action, pressFx(s)]} onPress={() => onLike(post)}>
+        <Pressable
+          style={(s) => [styles.actionPill, post.likedByMe && styles.actionPillOn, pressFx(s)]}
+          onPress={() => onLike(post)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={post.likedByMe ? "Unlike post" : "Like post"}
+        >
           <Heart
             color={post.likedByMe ? colors.danger : colors.muted}
             fill={post.likedByMe ? colors.danger : "transparent"}
-            size={15}
-            strokeWidth={1.8}
+            size={17}
+            strokeWidth={1.9}
           />
-          {post.likeCount > 0 ? <Text style={styles.actionText}>{post.likeCount}</Text> : null}
+          <Text style={[styles.actionText, post.likedByMe && styles.actionTextOn]}>
+            {post.likeCount > 0 ? post.likeCount : "Like"}
+          </Text>
         </Pressable>
-        {!isReply && onReply ? (
-          <Pressable style={(s) => [styles.action, pressFx(s)]} onPress={() => onReply(post)}>
-            <MessageSquare color={colors.muted} size={15} strokeWidth={1.8} />
-            {post.replies.length > 0 ? (
-              <Text style={styles.actionText}>{post.replies.length}</Text>
-            ) : null}
+
+        {preview && !isReply ? (
+          <Pressable
+            style={(s) => [styles.actionPill, pressFx(s)]}
+            onPress={() => onOpen?.(post)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Open thread"
+          >
+            <MessageSquare color={colors.muted} size={16} strokeWidth={1.9} />
+            <Text style={styles.actionText}>{threadCount > 0 ? threadCount : "Reply"}</Text>
           </Pressable>
+        ) : canReply ? (
+          <Pressable
+            style={(s) => [styles.actionPill, pressFx(s)]}
+            onPress={() => onReply?.(post)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Reply"
+          >
+            <MessageSquare color={colors.muted} size={16} strokeWidth={1.9} />
+            <Text style={styles.actionText}>
+              {directReplies > 0 ? `${directReplies} · Reply` : "Reply"}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {preview && !isReply ? (
+          <Text style={styles.openHint}>
+            {threadCount > 0
+              ? `${threadCount} ${threadCount === 1 ? "comment" : "comments"} ›`
+              : "Comment ›"}
+          </Text>
         ) : null}
       </View>
 
-      {post.replies.map((r) => (
-        <PostCard
-          key={r.id}
-          post={r}
-          isReply
-          onLike={onLike}
-          onDelete={onDelete}
-          onReport={onReport}
-          viewerSignedIn={viewerSignedIn}
-          threadRevealed={revealed}
-          onRevealThread={revealThread}
-        />
-      ))}
-    </View>
+      {!preview
+        ? post.replies.map((r) => (
+            <PostCard
+              key={r.id}
+              post={r}
+              isReply
+              depth={depth + 1}
+              onLike={onLike}
+              onReply={onReply}
+              onDelete={onDelete}
+              onReport={onReport}
+              viewerSignedIn={viewerSignedIn}
+              threadRevealed={revealed}
+              onRevealThread={revealThread}
+            />
+          ))
+        : null}
+    </>
   );
+
+  if (isReply) {
+    // Cap how far replies keep stepping right so deep threads stay readable.
+    return <View style={[styles.replyCard, depth > 5 && styles.replyCardFlat]}>{inner}</View>;
+  }
+
+  if (preview) {
+    return (
+      <Pressable
+        onPress={() => onOpen?.(post)}
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Open post thread"
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+
+  return <View style={styles.card}>{inner}</View>;
 }
 
 const styles = StyleSheet.create({
   card: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    marginHorizontal: 12,
+    marginTop: 10,
   },
+  cardPressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
   replyCard: {
-    borderBottomWidth: 0,
     borderLeftWidth: 2,
     borderLeftColor: "rgba(124,92,255,0.3)",
-    marginLeft: 8,
-    marginTop: 10,
-    paddingVertical: 6,
-    paddingRight: 0,
+    marginTop: 12,
+    paddingLeft: 12,
   },
+  // Deep replies stop stepping right so the thread doesn't run off screen.
+  replyCardFlat: { paddingLeft: 6, borderLeftColor: "rgba(124,92,255,0.15)" },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   time: { color: colors.muted, fontSize: 12 },
-  headerActions: { marginLeft: "auto" },
+  headerActions: { marginLeft: "auto", paddingLeft: 8 },
   ctxChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: colors.card,
+    backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: "rgba(124,92,255,0.4)",
-    borderRadius: 4,
+    borderRadius: 8,
     paddingRight: 10,
-    marginTop: 8,
+    marginTop: 10,
     alignSelf: "flex-start",
     maxWidth: "100%",
     overflow: "hidden",
   },
-  ctxCover: { width: 26, height: 34 },
+  ctxCover: { width: 28, height: 38 },
   ctxText: { color: colors.accentSoft, fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
-  body: { color: colors.text, fontSize: 14.5, lineHeight: 20, marginTop: 8 },
+  body: { color: colors.text, fontSize: 15, lineHeight: 21, marginTop: 10 },
   shield: {
-    marginTop: 8,
+    marginTop: 10,
     borderWidth: 1.5,
     borderColor: "rgba(124,92,255,0.5)",
     borderStyle: "dashed",
-    borderRadius: 6,
+    borderRadius: 8,
     paddingVertical: 16,
     paddingHorizontal: 12,
     alignItems: "center",
@@ -213,7 +298,31 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     marginTop: 4,
   },
-  actionsRow: { flexDirection: "row", gap: 20, marginTop: 10 },
-  action: { flexDirection: "row", alignItems: "center", gap: 5 },
-  actionText: { color: colors.muted, fontSize: 12, fontVariant: ["tabular-nums"] },
+  actionsRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
+  actionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  actionPillOn: { borderColor: "rgba(229,72,77,0.55)", backgroundColor: "rgba(229,72,77,0.08)" },
+  actionText: {
+    color: colors.muted,
+    fontSize: 12.5,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  actionTextOn: { color: colors.danger },
+  openHint: {
+    marginLeft: "auto",
+    color: colors.accentSoft,
+    fontSize: 11.5,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
 });

@@ -1,7 +1,8 @@
-// Feed tab — the social wall. Reader posts newest-first via the shared
-// PostCard (tappable users, spoiler shields, like/reply/report). The + button
-// (or a chapter's Post button) opens the composer.
+// Dungeons tab — the social wall. Reader posts newest-first via the shared
+// PostCard in preview mode: tap a post to open the full conversation. The +
+// button opens the composer for a new post.
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
 import { Plus } from "lucide-react-native";
 import { useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
@@ -13,11 +14,14 @@ import { ReportModal, type ReportTarget } from "../../src/components/ReportModal
 import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors } from "../../src/theme";
 
+function openThread(post: PostInfo) {
+  router.push({ pathname: "/post/[id]", params: { id: post.id } });
+}
+
 export default function FeedScreen() {
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const queryClient = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
-  const [replyTo, setReplyTo] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [feedMode, setFeedMode] = useState<"global" | "following">("global");
   const queryKey = ["feed", feedMode] as const;
@@ -97,11 +101,9 @@ export default function FeedScreen() {
           renderItem={({ item }) => (
             <PostCard
               post={item}
+              preview
+              onOpen={openThread}
               onLike={like}
-              onReply={(p) => {
-                setReplyTo(p);
-                setComposerOpen(true);
-              }}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
@@ -109,7 +111,7 @@ export default function FeedScreen() {
               viewerSignedIn={!!user}
             />
           )}
-          contentContainerStyle={{ paddingBottom: 90 }}
+          contentContainerStyle={{ paddingBottom: 90, paddingTop: 2 }}
           onEndReached={() => {
             if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
           }}
@@ -118,7 +120,7 @@ export default function FeedScreen() {
           onRefresh={() => feed.refetch()}
           ListEmptyComponent={
             <Text style={styles.empty}>
-              The wall is quiet.{"\n"}Be the first to post something.
+              The dungeon is silent.{"\n"}Be the first to post something.
             </Text>
           }
         />
@@ -127,10 +129,7 @@ export default function FeedScreen() {
       {user ? (
         <Pressable
           style={(s) => [styles.fab, pressFx(s)]}
-          onPress={() => {
-            setReplyTo(null);
-            setComposerOpen(true);
-          }}
+          onPress={() => setComposerOpen(true)}
         >
           <Plus color={colors.accentText} size={26} strokeWidth={2.4} />
         </Pressable>
@@ -140,11 +139,7 @@ export default function FeedScreen() {
         </View>
       )}
 
-      <PostComposer
-        visible={composerOpen}
-        onClose={() => setComposerOpen(false)}
-        replyTo={replyTo ?? undefined}
-      />
+      <PostComposer visible={composerOpen} onClose={() => setComposerOpen(false)} />
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
     </View>
   );

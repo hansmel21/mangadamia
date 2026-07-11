@@ -21,6 +21,7 @@ import {
 import { prisma } from "../db/client.js";
 import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../identity.js";
 import { createNotification } from "../notifications.js";
+import { creditGuild } from "../guilds.js";
 import { CURRENT_TERMS_VERSION, validateUserContent } from "../policy.js";
 import { questListForUser, recordActivity } from "../quests.js";
 import { deleteUserCompletely } from "../accounts.js";
@@ -726,6 +727,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       });
       const after = levelForXp(updated.xp);
       if (after > before) levelUp = after;
+      await creditGuild(user.id, 2);
       newBadges = (await evaluateBadges(user.id)).map((b) => ({
         id: b.id,
         name: b.name,
@@ -872,6 +874,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       });
       const levelAfter = levelForXp(updated.xp);
       const levelUp = levelAfter > levelBefore ? levelAfter : null;
+      await creditGuild(user.id, 10);
       const newBadges = (await evaluateBadges(user.id)).map((b) => ({
         id: b.id,
         name: b.name,
@@ -897,6 +900,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         likedByMe: false,
         mine: true,
         replies: [],
+        xpAwarded: 10,
         newBadges,
         levelUp: activity.levelUp ?? levelUp,
         completedQuests: activity.completedQuests,
@@ -1040,6 +1044,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       chapterNumber: number | null;
     }[];
     replies: PostNode[];
+    // Total comments in this post's whole thread (all nesting levels).
+    commentCount: number;
   }
 
   const postInclude = (meId?: string) =>
@@ -1052,6 +1058,55 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       _count: { select: { likes: true } },
       likes: meId ? { where: { userId: meId }, select: { userId: true } } : false,
     }) as const;
+
+  // Structural shape of a post row loaded with postInclude(); shared by the
+  // feed and the single-post thread endpoint so their output can't drift.
+  interface SerializablePost {
+    id: string;
+    parentId: string | null;
+    body: string;
+    isSpoiler: boolean;
+    createdAt: Date;
+    userId: string;
+    chapterNumber: number | null;
+    canonical: { id: string; title: string; coverUrl: string | null } | null;
+    seriesTags: {
+      canonical: { id: string; title: string; coverUrl: string | null };
+      chapterNumber: number | null;
+    }[];
+    _count: { likes: number };
+    likes?: { userId: string }[] | false;
+  }
+
+  const serializePost = (
+    p: SerializablePost,
+    identities: Awaited<ReturnType<typeof identitiesForUsers>>,
+    meId?: string,
+  ): PostNode => ({
+    id: p.id,
+    parentId: p.parentId,
+    body: p.body,
+    isSpoiler: p.isSpoiler,
+    createdAt: p.createdAt,
+    author: identities.get(p.userId) ?? null,
+    username: identities.get(p.userId)?.username ?? "Removed Reader",
+    level: identities.get(p.userId)?.level ?? null,
+    likeCount: p._count.likes,
+    likedByMe: !!meId && Array.isArray(p.likes) && p.likes.length > 0,
+    mine: !!meId && p.userId === meId,
+    chapterNumber: p.chapterNumber,
+    series: p.canonical
+      ? { canonicalId: p.canonical.id, title: p.canonical.title, coverUrl: p.canonical.coverUrl }
+      : null,
+    seriesTags: p.seriesTags.map((tag) => ({
+      canonicalId: tag.canonical.id,
+      title: tag.canonical.title,
+      coverUrl: tag.canonical.coverUrl,
+      chapterNumber: tag.chapterNumber,
+    })),
+    replies: [],
+    commentCount: 0,
+  });
 
   app.get("/posts", async (req) => {
     const { page, canonicalId, feed } = z
@@ -1086,47 +1141,64 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * 25,
       take: 25,
-      include: {
-        ...postInclude(me?.id),
-        replies: {
-          where: {
-            userId: { notIn: blockedIds },
-            moderationStatus: "visible",
-          },
-          orderBy: { createdAt: "asc" },
-          include: postInclude(me?.id),
-        },
-      },
+      include: postInclude(me?.id),
     });
-    const userIds = [
-      ...new Set([...rows.map((p) => p.userId), ...rows.flatMap((p) => p.replies.map((r) => r.userId))]),
-    ];
-    const identities = await identitiesForUsers(userIds, me?.id);
-    const serialize = (p: (typeof rows)[number]["replies"][number]): PostNode => ({
-      id: p.id,
-      parentId: p.parentId,
-      body: p.body,
-      isSpoiler: p.isSpoiler,
-      createdAt: p.createdAt,
-      author: identities.get(p.userId) ?? null,
-      username: identities.get(p.userId)?.username ?? "Removed Reader",
-      level: identities.get(p.userId)?.level ?? null,
-      likeCount: p._count.likes,
-      likedByMe: me ? p.likes.length > 0 : false,
-      mine: me ? p.userId === me.id : false,
-      chapterNumber: p.chapterNumber,
-      series: p.canonical
-        ? { canonicalId: p.canonical.id, title: p.canonical.title, coverUrl: p.canonical.coverUrl }
-        : null,
-      seriesTags: p.seriesTags.map((tag) => ({
-        canonicalId: tag.canonical.id,
-        title: tag.canonical.title,
-        coverUrl: tag.canonical.coverUrl,
-        chapterNumber: tag.chapterNumber,
-      })),
-      replies: [],
+    // Preview cards show the whole thread's comment count, not just direct replies.
+    const rootIds = rows.map((p) => p.id);
+    const counts = rootIds.length
+      ? await prisma.post.groupBy({
+          by: ["rootId"],
+          where: { rootId: { in: rootIds }, moderationStatus: "visible", userId: { notIn: blockedIds } },
+          _count: true,
+        })
+      : [];
+    const countByRoot = new Map(counts.map((c) => [c.rootId, c._count]));
+    const identities = await identitiesForUsers(rows.map((p) => p.userId), me?.id);
+    return rows.map((p) => ({
+      ...serializePost(p, identities, me?.id),
+      commentCount: countByRoot.get(p.id) ?? 0,
+    }));
+  });
+
+  // A single post plus its whole nested reply thread (Reddit-style): the root
+  // post, its top-level comments, and every reply beneath them. Opening any
+  // reply resolves to the root post the conversation hangs off.
+  app.get<{ Params: { id: string } }>("/posts/:id", async (req) => {
+    const me = await getUser(req);
+    const blockedIds = me ? await hiddenUserIds(me.id) : [];
+    const tapped = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!tapped || tapped.moderationStatus !== "visible") throw httpError(404, "No such post");
+    const rootId = tapped.rootId ?? tapped.id;
+    const rootPost = await prisma.post.findUnique({
+      where: { id: rootId },
+      include: postInclude(me?.id),
     });
-    return rows.map((p) => ({ ...serialize(p), replies: p.replies.map(serialize) }));
+    if (!rootPost || rootPost.moderationStatus !== "visible") throw httpError(404, "No such post");
+    if (me && blockedIds.includes(rootPost.userId)) throw httpError(404, "No such post");
+    const descendants = await prisma.post.findMany({
+      where: { rootId, moderationStatus: "visible", userId: { notIn: blockedIds } },
+      orderBy: { createdAt: "asc" },
+      include: postInclude(me?.id),
+    });
+    const all = [rootPost, ...descendants];
+    const identities = await identitiesForUsers(all.map((p) => p.userId), me?.id);
+
+    // Build the tree: attach each reply under its parent (oldest-first). A
+    // reply whose parent was removed/blocked reattaches to the root so it isn't
+    // silently lost.
+    const nodes = new Map(all.map((p) => [p.id, serializePost(p, identities, me?.id)]));
+    for (const p of descendants) {
+      const node = nodes.get(p.id);
+      if (!node) continue;
+      const parent = (p.parentId && nodes.get(p.parentId)) || nodes.get(rootId);
+      parent?.replies.push(node);
+    }
+    const root = nodes.get(rootId);
+    if (!root) throw httpError(404, "No such post");
+    // Newest top-level comments first; nested replies stay chronological.
+    root.replies.reverse();
+    root.commentCount = descendants.length;
+    return root;
   });
 
   app.post(
@@ -1158,40 +1230,41 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       });
       if (count !== uniqueTags.length) throw httpError(404, "One or more tagged series do not exist");
     }
-    // Replies flatten to the top-level post, same as comments
+    // Replies nest under their actual parent (Reddit-style). A reply's thread
+    // root is the parent's root — or the parent itself, if it's a top-level post.
     let parent = null;
+    let root = null;
     if (parentId) {
-      parent = await prisma.post.findUnique({ where: { id: parentId }, include: { seriesTags: true } });
+      parent = await prisma.post.findUnique({ where: { id: parentId } });
       if (!parent || parent.moderationStatus !== "visible") {
         throw httpError(404, "No such post to reply to");
       }
-      if (parent.parentId) {
-        parent = await prisma.post.findUnique({
-          where: { id: parent.parentId },
-          include: { seriesTags: true },
-        });
-        if (!parent) throw httpError(404, "No such post to reply to");
+      root = parent.rootId
+        ? await prisma.post.findUnique({ where: { id: parent.rootId } })
+        : parent;
+      if (!root || root.moderationStatus !== "visible") {
+        throw httpError(404, "No such post to reply to");
       }
       if ((await hiddenUserIds(user.id)).includes(parent.userId)) {
         throw httpError(403, "You cannot interact with this user");
       }
     }
-    const finalTags = parent
-      ? parent.seriesTags.map((tag) => ({ canonicalId: tag.canonicalId, chapterNumber: tag.chapterNumber }))
-      : uniqueTags;
-    const primaryTag = finalTags[0];
+    // Top-level posts carry the series tags; replies inherit the thread's
+    // series context from the root but don't repeat the chips.
+    const primaryTag = uniqueTags[0];
     const post = await prisma.post.create({
       data: {
         userId: user.id,
         body,
         isSpoiler: isSpoiler ?? false,
-        canonicalId: parent ? parent.canonicalId : (primaryTag?.canonicalId ?? null),
-        chapterNumber: parent ? parent.chapterNumber : (primaryTag?.chapterNumber ?? null),
+        canonicalId: root ? root.canonicalId : (primaryTag?.canonicalId ?? null),
+        chapterNumber: root ? root.chapterNumber : (primaryTag?.chapterNumber ?? null),
         parentId: parent?.id,
+        rootId: parent ? (parent.rootId ?? parent.id) : null,
         seriesTags:
-          finalTags.length > 0
+          !parent && uniqueTags.length > 0
             ? {
-                create: finalTags.map((tag, position) => ({
+                create: uniqueTags.map((tag, position) => ({
                   canonicalId: tag.canonicalId,
                   chapterNumber: tag.chapterNumber,
                   position,
@@ -1206,9 +1279,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         userId: parent.userId,
         actorId: user.id,
         kind: "post_reply",
-        title: "New wall reply",
-        safeBody: `@${user.username} replied to your post.`,
-        targetUrl: "/(tabs)/feed",
+        title: "New reply",
+        safeBody: `@${user.username} replied to you.`,
+        targetUrl: `/post/${(root ?? parent).id}`,
         metadata: { postId: post.id, parentId: parent.id },
         dedupeKey: `post-reply:${post.id}`,
         postId: post.id,
@@ -1220,6 +1293,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       data: { xp: { increment: 8 } },
       select: { xp: true },
     });
+    await creditGuild(user.id, 8);
     const levelAfter = levelForXp(updated.xp);
     const identity = await identityForUser(user.id, user.id);
     const activity = await recordActivity(user.id, {
@@ -1255,6 +1329,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         chapterNumber: tag.chapterNumber,
       })),
       replies: [],
+      commentCount: 0,
+      xpAwarded: 8,
       levelUp: activity.levelUp ?? (levelAfter > levelBefore ? levelAfter : null),
       completedQuests: activity.completedQuests,
     };
@@ -1287,6 +1363,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         data: { xp: { increment: existing ? -5 : 5 } },
       });
       if (!existing) {
+        await creditGuild(post.userId, 5);
         await evaluateBadges(post.userId);
         await createNotification({
           userId: post.userId,
@@ -1294,7 +1371,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           kind: "post_like",
           title: "Your post got a like",
           safeBody: `@${user.username} liked your post.`,
-          targetUrl: "/(tabs)/feed",
+          targetUrl: `/post/${post.rootId ?? post.id}`,
           metadata: { postId: post.id },
           dedupeKey: `post-like:${post.id}:${user.id}`,
           postId: post.id,
@@ -1555,6 +1632,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         data: { xp: { increment: existing ? -5 : 5 } },
       });
       if (!existing) {
+        await creditGuild(comment.userId, 5);
         await evaluateBadges(comment.userId);
         await createNotification({
           userId: comment.userId,

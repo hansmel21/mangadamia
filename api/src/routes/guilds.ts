@@ -1,0 +1,473 @@
+// Guilds: small reader groups with a hall, roster, level, and (via the post
+// routes) a members-only wall. See GUILDS_PLAN.md.
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { getUser, requireAcceptedTerms, requireActiveUser } from "../auth.js";
+import { prisma } from "../db/client.js";
+import {
+  currentWeekKey,
+  guildLevelForXp,
+  guildMemberCap,
+  guildPower,
+  guildXpForLevel,
+  isGuildEmblem,
+} from "../guilds.js";
+import { identitiesForUsers } from "../identity.js";
+import { createNotification } from "../notifications.js";
+import { validateUserContent } from "../policy.js";
+
+function httpError(statusCode: number, message: string): Error {
+  return Object.assign(new Error(message), { statusCode });
+}
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+const createBody = z.object({
+  name: z.string().trim().min(3).max(30),
+  tag: z
+    .string()
+    .trim()
+    .min(2)
+    .max(5)
+    .regex(/^[a-zA-Z0-9]+$/, "letters and numbers only"),
+  emblemKey: z.string().min(1),
+  primaryColor: z.string().regex(HEX),
+  secondaryColor: z.string().regex(HEX).nullable().optional(),
+  motto: z.string().trim().max(80).nullable().optional(),
+});
+
+const editBody = z.object({
+  name: z.string().trim().min(3).max(30).optional(),
+  tag: z.string().trim().min(2).max(5).regex(/^[a-zA-Z0-9]+$/).optional(),
+  emblemKey: z.string().min(1).optional(),
+  primaryColor: z.string().regex(HEX).optional(),
+  secondaryColor: z.string().regex(HEX).nullable().optional(),
+  motto: z.string().trim().max(80).nullable().optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+  joinPolicy: z.enum(["open", "request", "invite"]).optional(),
+});
+
+export function registerGuildRoutes(app: FastifyInstance): void {
+  const officerRoles = ["guildmaster", "officer"];
+
+  async function requireMembership(userId: string) {
+    const m = await prisma.guildMember.findUnique({ where: { userId } });
+    if (!m) throw httpError(404, "You're not in a guild");
+    return m;
+  }
+
+  // ── Create ────────────────────────────────────────────────────────────
+  app.post(
+    "/guilds",
+    { config: { rateLimit: { max: 5, timeWindow: "1 hour" } } },
+    async (req) => {
+      const user = await requireAcceptedTerms(req);
+      const { name, tag, emblemKey, primaryColor, secondaryColor, motto } = createBody.parse(
+        req.body,
+      );
+      validateUserContent(name);
+      if (motto) validateUserContent(motto);
+      if (!isGuildEmblem(emblemKey)) throw httpError(400, "Unknown emblem");
+      const existing = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+      if (existing) throw httpError(409, "You're already in a guild — leave it first");
+      const clash = await prisma.guild.findFirst({
+        where: {
+          OR: [
+            { name: { equals: name, mode: "insensitive" } },
+            { tag: { equals: tag, mode: "insensitive" } },
+          ],
+        },
+      });
+      if (clash) {
+        throw httpError(
+          409,
+          clash.name.toLowerCase() === name.toLowerCase()
+            ? "That guild name is taken"
+            : "That guild tag is taken",
+        );
+      }
+      const guild = await prisma.guild.create({
+        data: {
+          name,
+          tag: tag.toUpperCase(),
+          emblemKey,
+          primaryColor,
+          secondaryColor: secondaryColor ?? null,
+          motto: motto ?? null,
+          guildmasterId: user.id,
+          members: {
+            create: { userId: user.id, role: "guildmaster", weekKey: currentWeekKey() },
+          },
+        },
+      });
+      return { id: guild.id };
+    },
+  );
+
+  // ── Browse + leaderboard ──────────────────────────────────────────────
+  app.get("/guilds", async (req) => {
+    const me = await getUser(req);
+    const { q, sort } = z
+      .object({
+        q: z.string().trim().max(60).optional(),
+        sort: z.enum(["level", "new"]).default("level"),
+      })
+      .parse(req.query);
+    const guilds = await prisma.guild.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { tag: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {},
+      orderBy: sort === "new" ? { createdAt: "desc" } : { xp: "desc" },
+      take: 50,
+      include: { _count: { select: { members: true } } },
+    });
+    const myMembership = me ? await prisma.guildMember.findUnique({ where: { userId: me.id } }) : null;
+    return guilds.map((g, index) => {
+      const level = guildLevelForXp(g.xp);
+      return {
+        id: g.id,
+        name: g.name,
+        tag: g.tag,
+        emblemKey: g.emblemKey,
+        primaryColor: g.primaryColor,
+        secondaryColor: g.secondaryColor,
+        motto: g.motto,
+        level,
+        xp: g.xp,
+        memberCount: g._count.members,
+        memberCap: guildMemberCap(level),
+        joinPolicy: g.joinPolicy,
+        rank: sort === "level" ? index + 1 : null,
+        mine: myMembership?.guildId === g.id,
+      };
+    });
+  });
+
+  // ── Hall detail ───────────────────────────────────────────────────────
+  app.get<{ Params: { id: string } }>("/guilds/:id", async (req) => {
+    const me = await getUser(req);
+    const guild = await prisma.guild.findUnique({
+      where: { id: req.params.id },
+      include: { members: { orderBy: [{ contributionXp: "desc" }] } },
+    });
+    if (!guild) throw httpError(404, "No such guild");
+    const memberIds = guild.members.map((m) => m.userId);
+    const [identities, memberUsers, myMembership] = await Promise.all([
+      identitiesForUsers(memberIds, me?.id),
+      prisma.user.findMany({ where: { id: { in: memberIds } }, select: { id: true, xp: true } }),
+      me ? prisma.guildMember.findUnique({ where: { userId: me.id } }) : null,
+    ]);
+    const level = guildLevelForXp(guild.xp);
+    const isMember = myMembership?.guildId === guild.id;
+    const canManage = isMember && officerRoles.includes(myMembership!.role);
+    const [myRequest, requests] = await Promise.all([
+      me && !isMember
+        ? prisma.guildJoinRequest.findUnique({
+            where: { guildId_userId: { guildId: guild.id, userId: me.id } },
+          })
+        : null,
+      canManage
+        ? prisma.guildJoinRequest.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: "asc" } })
+        : [],
+    ]);
+    const requestIdentities = requests.length
+      ? await identitiesForUsers(requests.map((r) => r.userId), me?.id)
+      : new Map();
+    const rankOrder: Record<string, number> = { guildmaster: 0, officer: 1, member: 2 };
+    return {
+      id: guild.id,
+      name: guild.name,
+      tag: guild.tag,
+      emblemKey: guild.emblemKey,
+      primaryColor: guild.primaryColor,
+      secondaryColor: guild.secondaryColor,
+      motto: guild.motto,
+      description: guild.description,
+      joinPolicy: guild.joinPolicy,
+      guildmasterId: guild.guildmasterId,
+      level,
+      xp: guild.xp,
+      xpFloor: guildXpForLevel(level),
+      xpForNextLevel: guildXpForLevel(level + 1),
+      power: guildPower(memberUsers.map((u) => u.xp)),
+      memberCount: guild.members.length,
+      memberCap: guildMemberCap(level),
+      myRole: isMember ? myMembership!.role : null,
+      inAnotherGuild: !!myMembership && !isMember,
+      joinRequestPending: !!myRequest,
+      members: guild.members
+        .map((m) => ({
+          role: m.role,
+          contributionXp: m.contributionXp,
+          weeklyXp: m.weeklyXp,
+          joinedAt: m.joinedAt,
+          identity: identities.get(m.userId) ?? null,
+        }))
+        .sort(
+          (a, b) =>
+            (rankOrder[a.role] ?? 3) - (rankOrder[b.role] ?? 3) ||
+            b.contributionXp - a.contributionXp,
+        ),
+      pendingRequests: requests.map((r) => ({
+        identity: requestIdentities.get(r.userId) ?? null,
+        requestedAt: r.createdAt,
+      })),
+    };
+  });
+
+  // ── Join ──────────────────────────────────────────────────────────────
+  app.post<{ Params: { id: string } }>("/guilds/:id/join", async (req) => {
+    const user = await requireActiveUser(req);
+    const guild = await prisma.guild.findUnique({
+      where: { id: req.params.id },
+      include: { _count: { select: { members: true } } },
+    });
+    if (!guild) throw httpError(404, "No such guild");
+    const existing = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+    if (existing) {
+      throw httpError(
+        409,
+        existing.guildId === guild.id ? "You're already in this guild" : "You're already in a guild",
+      );
+    }
+    if (guild.joinPolicy === "invite") {
+      throw httpError(403, "This guild is invite-only");
+    }
+    if (guild.joinPolicy === "request") {
+      await prisma.guildJoinRequest.upsert({
+        where: { guildId_userId: { guildId: guild.id, userId: user.id } },
+        create: { guildId: guild.id, userId: user.id },
+        update: {},
+      });
+      await createNotification({
+        userId: guild.guildmasterId,
+        actorId: user.id,
+        kind: "guild_join_request",
+        title: "Guild join request",
+        safeBody: `@${user.username} asked to join ${guild.name}.`,
+        targetUrl: `/guild/${guild.id}`,
+        dedupeKey: `guild-req:${guild.id}:${user.id}`,
+      });
+      return { status: "requested" };
+    }
+    // open
+    if (guild._count.members >= guildMemberCap(guildLevelForXp(guild.xp))) {
+      throw httpError(409, "This guild is full");
+    }
+    await prisma.guildMember.create({
+      data: { userId: user.id, guildId: guild.id, role: "member", weekKey: currentWeekKey() },
+    });
+    return { status: "joined" };
+  });
+
+  // ── Leave (self) ──────────────────────────────────────────────────────
+  app.post<{ Params: { id: string } }>("/guilds/:id/leave", async (req) => {
+    const user = await requireActiveUser(req);
+    const membership = await requireMembership(user.id);
+    if (membership.guildId !== req.params.id) throw httpError(400, "You're not in this guild");
+    if (membership.role === "guildmaster") {
+      const others = await prisma.guildMember.findMany({
+        where: { guildId: membership.guildId, userId: { not: user.id } },
+        orderBy: [{ joinedAt: "asc" }],
+      });
+      if (others.length === 0) {
+        // Last one out dissolves the guild.
+        await prisma.guild.delete({ where: { id: membership.guildId } });
+        return { status: "dissolved" };
+      }
+      const heir = others.find((m) => m.role === "officer") ?? others[0];
+      await prisma.$transaction([
+        prisma.guildMember.update({ where: { userId: heir.userId }, data: { role: "guildmaster" } }),
+        prisma.guild.update({
+          where: { id: membership.guildId },
+          data: { guildmasterId: heir.userId },
+        }),
+        prisma.guildMember.delete({ where: { userId: user.id } }),
+      ]);
+      await createNotification({
+        userId: heir.userId,
+        actorId: user.id,
+        kind: "guild_promoted",
+        title: "You're the Guildmaster",
+        safeBody: `@${user.username} left and passed you leadership.`,
+        targetUrl: `/guild/${membership.guildId}`,
+        dedupeKey: `guild-gm:${membership.guildId}:${heir.userId}:${Date.now()}`,
+      });
+      return { status: "left" };
+    }
+    await prisma.guildMember.delete({ where: { userId: user.id } });
+    return { status: "left" };
+  });
+
+  // ── Approve / reject a join request (officers) ────────────────────────
+  app.post<{ Params: { id: string; userId: string } }>(
+    "/guilds/:id/requests/:userId",
+    async (req) => {
+      const user = await requireActiveUser(req);
+      const { action } = z.object({ action: z.enum(["accept", "reject"]) }).parse(req.body);
+      const membership = await requireMembership(user.id);
+      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
+        throw httpError(403, "You can't manage this guild");
+      }
+      const request = await prisma.guildJoinRequest.findUnique({
+        where: { guildId_userId: { guildId: req.params.id, userId: req.params.userId } },
+      });
+      if (!request) throw httpError(404, "No such request");
+      if (action === "reject") {
+        await prisma.guildJoinRequest.delete({
+          where: { guildId_userId: { guildId: req.params.id, userId: req.params.userId } },
+        });
+        return { ok: true, status: "rejected" };
+      }
+      const already = await prisma.guildMember.findUnique({ where: { userId: req.params.userId } });
+      if (already) {
+        await prisma.guildJoinRequest.delete({
+          where: { guildId_userId: { guildId: req.params.id, userId: req.params.userId } },
+        });
+        throw httpError(409, "That reader already joined a guild");
+      }
+      const guild = await prisma.guild.findUniqueOrThrow({
+        where: { id: req.params.id },
+        include: { _count: { select: { members: true } } },
+      });
+      if (guild._count.members >= guildMemberCap(guildLevelForXp(guild.xp))) {
+        throw httpError(409, "Your guild is full");
+      }
+      await prisma.$transaction([
+        prisma.guildMember.create({
+          data: {
+            userId: req.params.userId,
+            guildId: req.params.id,
+            role: "member",
+            weekKey: currentWeekKey(),
+          },
+        }),
+        prisma.guildJoinRequest.delete({
+          where: { guildId_userId: { guildId: req.params.id, userId: req.params.userId } },
+        }),
+      ]);
+      await createNotification({
+        userId: req.params.userId,
+        actorId: user.id,
+        kind: "guild_accepted",
+        title: "Guild request accepted",
+        safeBody: `You joined ${guild.name}.`,
+        targetUrl: `/guild/${guild.id}`,
+        dedupeKey: `guild-accept:${guild.id}:${req.params.userId}`,
+      });
+      return { ok: true, status: "accepted" };
+    },
+  );
+
+  // ── Kick a member (officers) ──────────────────────────────────────────
+  app.delete<{ Params: { id: string; userId: string } }>(
+    "/guilds/:id/members/:userId",
+    async (req) => {
+      const user = await requireActiveUser(req);
+      if (req.params.userId === user.id) throw httpError(400, "Use leave to exit your own guild");
+      const membership = await requireMembership(user.id);
+      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
+        throw httpError(403, "You can't manage this guild");
+      }
+      const target = await prisma.guildMember.findUnique({ where: { userId: req.params.userId } });
+      if (!target || target.guildId !== req.params.id) throw httpError(404, "Not a member");
+      if (target.role === "guildmaster") throw httpError(403, "You can't remove the Guildmaster");
+      if (target.role === "officer" && membership.role !== "guildmaster") {
+        throw httpError(403, "Only the Guildmaster can remove an officer");
+      }
+      await prisma.guildMember.delete({ where: { userId: req.params.userId } });
+      return { ok: true };
+    },
+  );
+
+  // ── Change a member's role (guildmaster) ──────────────────────────────
+  app.post<{ Params: { id: string; userId: string } }>(
+    "/guilds/:id/members/:userId/role",
+    async (req) => {
+      const user = await requireActiveUser(req);
+      const { role } = z
+        .object({ role: z.enum(["officer", "member", "guildmaster"]) })
+        .parse(req.body);
+      const membership = await requireMembership(user.id);
+      if (membership.guildId !== req.params.id || membership.role !== "guildmaster") {
+        throw httpError(403, "Only the Guildmaster can change roles");
+      }
+      const target = await prisma.guildMember.findUnique({ where: { userId: req.params.userId } });
+      if (!target || target.guildId !== req.params.id) throw httpError(404, "Not a member");
+      if (req.params.userId === user.id) throw httpError(400, "You already lead this guild");
+      if (role === "guildmaster") {
+        // Transfer leadership; current master becomes an officer.
+        await prisma.$transaction([
+          prisma.guildMember.update({ where: { userId: req.params.userId }, data: { role: "guildmaster" } }),
+          prisma.guildMember.update({ where: { userId: user.id }, data: { role: "officer" } }),
+          prisma.guild.update({ where: { id: req.params.id }, data: { guildmasterId: req.params.userId } }),
+        ]);
+        await createNotification({
+          userId: req.params.userId,
+          actorId: user.id,
+          kind: "guild_promoted",
+          title: "You're the Guildmaster",
+          safeBody: `@${user.username} passed you leadership.`,
+          targetUrl: `/guild/${req.params.id}`,
+          dedupeKey: `guild-gm:${req.params.id}:${req.params.userId}:${Date.now()}`,
+        });
+        return { ok: true, role };
+      }
+      await prisma.guildMember.update({ where: { userId: req.params.userId }, data: { role } });
+      return { ok: true, role };
+    },
+  );
+
+  // ── Edit guild (officers) ─────────────────────────────────────────────
+  app.patch<{ Params: { id: string } }>("/guilds/:id", async (req) => {
+    const user = await requireActiveUser(req);
+    const patch = editBody.parse(req.body);
+    const membership = await requireMembership(user.id);
+    if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
+      throw httpError(403, "You can't edit this guild");
+    }
+    if (patch.name) validateUserContent(patch.name);
+    if (patch.motto) validateUserContent(patch.motto);
+    if (patch.description) validateUserContent(patch.description);
+    if (patch.emblemKey && !isGuildEmblem(patch.emblemKey)) throw httpError(400, "Unknown emblem");
+    if (patch.name || patch.tag) {
+      const clash = await prisma.guild.findFirst({
+        where: {
+          id: { not: req.params.id },
+          OR: [
+            ...(patch.name ? [{ name: { equals: patch.name, mode: "insensitive" as const } }] : []),
+            ...(patch.tag ? [{ tag: { equals: patch.tag, mode: "insensitive" as const } }] : []),
+          ],
+        },
+      });
+      if (clash) throw httpError(409, "That guild name or tag is taken");
+    }
+    const updated = await prisma.guild.update({
+      where: { id: req.params.id },
+      data: {
+        ...(patch.name ? { name: patch.name } : {}),
+        ...(patch.tag ? { tag: patch.tag.toUpperCase() } : {}),
+        ...(patch.emblemKey ? { emblemKey: patch.emblemKey } : {}),
+        ...(patch.primaryColor ? { primaryColor: patch.primaryColor } : {}),
+        ...(patch.secondaryColor !== undefined ? { secondaryColor: patch.secondaryColor } : {}),
+        ...(patch.motto !== undefined ? { motto: patch.motto } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+        ...(patch.joinPolicy ? { joinPolicy: patch.joinPolicy } : {}),
+      },
+    });
+    return { ok: true, guild: { id: updated.id, name: updated.name, tag: updated.tag } };
+  });
+
+  // ── My guild shortcut ─────────────────────────────────────────────────
+  app.get("/me/guild", async (req) => {
+    const user = await getUser(req);
+    if (!user) return { guildId: null };
+    const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+    return { guildId: membership?.guildId ?? null, role: membership?.role ?? null };
+  });
+}

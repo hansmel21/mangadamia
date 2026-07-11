@@ -1,0 +1,73 @@
+# Mangadamia — Roadmap & Progress
+
+Living status doc. Updated after each milestone so work can resume cleanly.
+Design docs: `GUILDS_PLAN.md`, `ARENA_PLAN.md`.
+
+_Last updated: 2026-07-11._
+
+## ✅ Shipped
+
+### Social / Dungeons UX
+- Renamed **Feed → Dungeons** (swords icon).
+- **Reddit-style post threads**: nested replies via `Post.rootId`
+  (migration `20260711030000_post_thread_nesting`), tap a feed card to open the
+  full conversation, per-comment reply, thread comment counts.
+- **PostCard** visual rework, bigger like/reply tap targets, translucent reward
+  pops (badge/quest/EXP), EXP-gain toast on posting.
+- **Hamburger menu** (top-right, all tabs) → Notifications, Quests, Guilds,
+  Arena; replaced the standalone notification bell.
+
+### Reader
+- **Continuous reading**: reaching a chapter's end loads the next chapter
+  inline (vertical mode).
+- **Quest-completion fix**: chapters now reliably report completion (on
+  crossing into the next chapter / reaching the end), fixing "finish a chapter"
+  and daily/weekly reading quests.
+
+### Account & Library
+- **Account tab overhaul**: Collection tiles, Titles moved into a scrollable
+  modal, cleaner Account / Staff / Legal sections.
+- **Library + History merged** into one tab with a top switcher.
+
+### Quests
+- Quest cards are clickable → detail modal (rewards explained); Quest Window
+  always refetches on open so completions show immediately.
+
+### Guilds — Phase 1 (see `GUILDS_PLAN.md`)
+- Migration `20260711184927_guilds` (applied).
+- Create/browse/level-leaderboard, **Guild Hall** (HALL + ROSTER),
+  join/leave with guildmaster succession, request approval, kick, role changes.
+- **Hybrid XP**: level = contribution flow (`creditGuild` hooked into
+  read/comment/post/like); **power** = Σ member levels.
+- **One guild per reader**; `GuildCrest` (`[TAG]` + emblem) next to names.
+- Backend: `api/src/guilds.ts`, `api/src/routes/guilds.ts`, guild crest in
+  `identity.ts`. Client: `guilds`, `guild/[id]`, `guild/create`.
+
+### Fixes
+- **SystemModal keyboard avoidance** (composer/inputs no longer hidden behind
+  the keyboard).
+
+## 🔨 In progress
+
+### Social rework → "The System" in-world social (Core scope)
+Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`. Posts become typed
+**System Records** (record / theory / review / spoiler_intel), reactions
+become **⚡ Endorse (EXP) + free emotes**, and **Reviews** roll up into a
+community **series rank** (E→S) shown on the series screen.
+
+- [ ] Schema: `Post.kind`, `Post.rating`, `PostLike.type` + migration
+- [ ] Backend: post kind/rating, reaction endpoint (`/posts/:id/react`),
+      reaction aggregation in serialize, reviews summary endpoint, `ranks.ts`
+- [ ] Client: reaction bar, rank badge, review rating, System Record card,
+      composer type picker, feed type filter, series rank badge
+- [ ] Verify end-to-end + typecheck
+
+## 🗺️ Deferred / next
+
+- **Guilds** next slice: members-only **guild wall** (`Post.guildId`),
+  edit-guild-after-creation UI, then guild **events** + leaderboard snapshots.
+- **Social** fast-follow: auto-generated **Achievement** System Records
+  (finish series / level up / badge) with an opt-in toggle; reactions on chapter
+  comments.
+- **The Arena** (weekly games, leaderboards, pools) — deferred to far future
+  (`ARENA_PLAN.md`).

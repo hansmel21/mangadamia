@@ -92,6 +92,9 @@ model User {
   appeals              Appeal[]                @relation("AppealingUser")
   reviewedAppeals      Appeal[]                @relation("AppealReviewer")
   usernameChanges      UsernameChange[]
+  guildMembership      GuildMember?
+  guildJoinRequests    GuildJoinRequest[]
+  guildXpContributions GuildXpTransaction[]
 }
 
 // Titles are independent social identity rewards. They never grant authority;
@@ -349,11 +352,21 @@ model Post {
   parentId         String?
   parent           Post?            @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies          Post[]           @relation("PostReplies")
+  // Top-level post this reply belongs to (null for a top-level post). Lets the
+  // whole conversation be fetched in one query for Reddit-style nested threads.
+  rootId           String?
+  root             Post?            @relation("PostThread", fields: [rootId], references: [id], onDelete: Cascade)
+  threadReplies    Post[]           @relation("PostThread")
+  // When set, this is a post on a guild's members-only wall (not the public feed).
+  guildId          String?
+  guild            Guild?           @relation(fields: [guildId], references: [id], onDelete: Cascade)
   notifications    Notification[]
   seriesTags       PostSeriesTag[]
 
   @@index([canonicalId, createdAt])
   @@index([createdAt])
+  @@index([rootId])
+  @@index([guildId, createdAt])
 }
 
 model PostSeriesTag {
@@ -604,4 +617,67 @@ model Page {
   imageUrl  String
 
   @@unique([chapterId, index])
+}
+
+// ── Guilds ────────────────────────────────────────────────────────────────
+// Small reader groups with their own hall, wall, level, and events.
+// Guild level is driven by contribution flow (XP members earn while joined,
+// which never drops); "power" (sum of member levels) is computed on read.
+model Guild {
+  id             String               @id @default(cuid())
+  name           String               @unique
+  tag            String               @unique // 2–5 chars, shown as [TAG]
+  emblemKey      String               @default("crest") // app-owned SVG asset
+  primaryColor   String               @default("#7C5CFF")
+  secondaryColor String?
+  motto          String?
+  description    String?
+  joinPolicy     String               @default("open") // open | request | invite
+  xp             Int                  @default(0) // contribution flow (never drops)
+  guildmasterId  String
+  createdAt      DateTime             @default(now())
+  members        GuildMember[]
+  joinRequests   GuildJoinRequest[]
+  xpTransactions GuildXpTransaction[]
+  posts          Post[]
+
+  @@index([xp])
+}
+
+model GuildMember {
+  userId         String   @id // one guild per reader
+  guildId        String
+  role           String   @default("member") // guildmaster | officer | member
+  contributionXp Int      @default(0) // all-time, this guild
+  weeklyXp       Int      @default(0)
+  weekKey        String   @default("")
+  joinedAt       DateTime @default(now())
+  guild          Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, weeklyXp])
+  @@index([guildId, role])
+}
+
+model GuildJoinRequest {
+  guildId   String
+  userId    String
+  createdAt DateTime @default(now())
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, userId])
+}
+
+model GuildXpTransaction {
+  id         String   @id @default(cuid())
+  guildId    String
+  userId     String
+  delta      Int
+  sourceType String   @default("activity")
+  createdAt  DateTime @default(now())
+  guild      Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, createdAt])
 }

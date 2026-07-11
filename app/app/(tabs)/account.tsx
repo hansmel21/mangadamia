@@ -1,7 +1,19 @@
 // Account tab: sign in / create account when logged out, profile when in.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  Bell,
+  ChevronRight,
+  Crown,
+  FileText,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  SquarePen,
+  UserPlus,
+  Users,
+} from "lucide-react-native";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,7 +25,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { api, type BadgeInfo, type MeResponse } from "../../src/api";
+import { api, type BadgeInfo, type MeResponse, type TitleInfo } from "../../src/api";
 import { BadgeMedallion, badgeTierName } from "../../src/components/BadgeMedallion";
 import { SystemModal } from "../../src/components/SystemModal";
 import { SystemWindow } from "../../src/components/SystemWindow";
@@ -53,7 +65,26 @@ function Profile() {
   const badges = me.data?.badges ?? BADGE_CATALOG;
   const [selectedBadge, setSelectedBadge] = useState<BadgeInfo | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [titlesOpen, setTitlesOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const canModerate = user?.capabilities?.includes("view_reports");
+  const canManageUsers = user?.capabilities?.includes("manage_rewards");
+
+  const equippedTitle = me.data?.titles.find((title) => title.id === equippedId) ?? null;
+  const titleCount = me.data?.titles.length ?? 0;
+  const titlesValue = equippedTitle
+    ? equippedTitle.name
+    : titleCount > 0
+      ? `${titleCount} unlocked`
+      : "None yet";
+  const cosmeticsValue = me.data?.cosmetics.length
+    ? `${me.data.cosmetics.length} owned`
+    : "Customize";
+
+  const equipTitle = async (titleId: string | null) => {
+    await api.equipTitle(titleId);
+    await queryClient.invalidateQueries({ queryKey: ["me"] });
+  };
 
   const signOut = async () => {
     try {
@@ -143,51 +174,23 @@ function Profile() {
         </SystemWindow>
       )}
 
-      <Text style={styles.sectionTitle}>Titles</Text>
-      <Text style={styles.sectionHint}>Equip one flair. Titles are earned separately from badges.</Text>
-      <View style={styles.titleGrid}>
-        {(me.data?.titles ?? []).map((title) => (
-          <Pressable
-            key={title.id}
-            style={[styles.titleCard, equippedId === title.id && styles.titleCardEquipped]}
-            onPress={async () => {
-              await api.equipTitle(equippedId === title.id ? null : title.id);
-              await queryClient.invalidateQueries({ queryKey: ["me"] });
-            }}
-          >
-            <TitleFlair title={title} />
-            <Text style={styles.titleDesc} numberOfLines={2}>{title.description}</Text>
-            <Text style={styles.titleState}>{equippedId === title.id ? "EQUIPPED" : "UNLOCKED"}</Text>
-          </Pressable>
-        ))}
+      <Text style={styles.sectionTitle}>Collection</Text>
+      <View style={styles.tileRow}>
+        <CollectionTile
+          icon={<Crown color={colors.foil} size={22} strokeWidth={1.9} />}
+          label="Titles"
+          value={titlesValue}
+          onPress={() => setTitlesOpen(true)}
+        />
+        <CollectionTile
+          icon={<Sparkles color={colors.accentSoft} size={22} strokeWidth={1.9} />}
+          label="Avatars & Frames"
+          value={cosmeticsValue}
+          onPress={() => router.push("/account/appearance")}
+        />
       </View>
 
-      <View style={styles.accountLinks}>
-        <Pressable style={styles.accountLink} onPress={() => router.push("/account/edit") }>
-          <Text style={styles.accountLinkText}>EDIT PROFILE & PRIVACY</Text>
-        </Pressable>
-        <Pressable style={styles.accountLink} onPress={() => router.push("/account/appearance") }>
-          <Text style={styles.accountLinkText}>AVATARS & FRAMES</Text>
-        </Pressable>
-        <Pressable style={styles.accountLink} onPress={() => router.push("/quests") }>
-          <Text style={styles.accountLinkText}>QUEST WINDOW</Text>
-        </Pressable>
-        <Pressable style={styles.accountLink} onPress={() => router.push("/notifications") }>
-          <Text style={styles.accountLinkText}>NOTIFICATIONS</Text>
-        </Pressable>
-        {me.data?.pendingFollowCount ? (
-          <Pressable style={styles.accountLink} onPress={() => router.push("/account/follow-requests") }>
-            <Text style={styles.accountLinkText}>FOLLOW REQUESTS · {me.data.pendingFollowCount}</Text>
-          </Pressable>
-        ) : null}
-        {me.data?.pendingNoticeCount ? (
-          <Pressable style={[styles.accountLink, { borderColor: colors.danger }]} onPress={() => router.push("/appeals") }>
-            <Text style={[styles.accountLinkText, { color: colors.danger }]}>MODERATION NOTICE · {me.data.pendingNoticeCount}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      <Text style={styles.sectionTitle}>Badges</Text>
+      <Text style={styles.sectionSubTitle}>Badges</Text>
       <View style={styles.badgeGrid}>
         {badges.map((b) => (
           <Pressable
@@ -209,34 +212,87 @@ function Profile() {
         ))}
       </View>
 
-      <BadgeDetailModal
-        badge={selectedBadge}
-        onClose={() => setSelectedBadge(null)}
-      />
-      <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} me={me.data} />
+      <Text style={styles.sectionTitle}>Account</Text>
+      <View style={styles.menuList}>
+        <MenuRow
+          icon={<SquarePen color={colors.accentSoft} size={18} strokeWidth={1.9} />}
+          label="Edit profile & privacy"
+          onPress={() => router.push("/account/edit")}
+        />
+        <MenuRow
+          icon={<Bell color={colors.accentSoft} size={18} strokeWidth={1.9} />}
+          label="Notifications"
+          onPress={() => router.push("/notifications")}
+        />
+        {me.data?.pendingFollowCount ? (
+          <MenuRow
+            icon={<UserPlus color={colors.accentSoft} size={18} strokeWidth={1.9} />}
+            label="Follow requests"
+            badge={String(me.data.pendingFollowCount)}
+            onPress={() => router.push("/account/follow-requests")}
+          />
+        ) : null}
+        {me.data?.pendingNoticeCount ? (
+          <MenuRow
+            icon={<ShieldAlert color={colors.danger} size={18} strokeWidth={1.9} />}
+            label="Moderation notice"
+            tone="danger"
+            badge={String(me.data.pendingNoticeCount)}
+            onPress={() => router.push("/appeals")}
+          />
+        ) : null}
+      </View>
+
+      {canModerate || canManageUsers ? (
+        <>
+          <Text style={styles.sectionTitle}>Staff</Text>
+          <View style={styles.menuList}>
+            {canModerate ? (
+              <MenuRow
+                icon={<ShieldCheck color={colors.foil} size={18} strokeWidth={1.9} />}
+                label="Moderation queue"
+                onPress={() => router.push("/admin/moderation")}
+              />
+            ) : null}
+            {canManageUsers ? (
+              <MenuRow
+                icon={<Users color={colors.foil} size={18} strokeWidth={1.9} />}
+                label="User administration"
+                onPress={() => router.push("/admin/users")}
+              />
+            ) : null}
+          </View>
+        </>
+      ) : null}
 
       <Text style={styles.sectionTitle}>Legal & safety</Text>
-      <View style={styles.legalLinks}>
-        <Pressable onPress={() => router.push("/legal/terms")}>
-          <Text style={styles.legalLink}>Terms of Use</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push("/legal/privacy")}>
-          <Text style={styles.legalLink}>Privacy Policy</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push("/legal/community")}>
-          <Text style={styles.legalLink}>Community Guidelines</Text>
-        </Pressable>
+      <View style={styles.menuList}>
+        <MenuRow
+          icon={<FileText color={colors.muted} size={18} strokeWidth={1.9} />}
+          label="Terms of Use"
+          onPress={() => router.push("/legal/terms")}
+        />
+        <MenuRow
+          icon={<FileText color={colors.muted} size={18} strokeWidth={1.9} />}
+          label="Privacy Policy"
+          onPress={() => router.push("/legal/privacy")}
+        />
+        <MenuRow
+          icon={<FileText color={colors.muted} size={18} strokeWidth={1.9} />}
+          label="Community Guidelines"
+          onPress={() => router.push("/legal/community")}
+        />
       </View>
-      {user?.capabilities?.includes("view_reports") ? (
-        <Pressable style={styles.moderationBtn} onPress={() => router.push("/admin/moderation")}>
-          <Text style={styles.moderationText}>Open moderation queue</Text>
-        </Pressable>
-      ) : null}
-      {user?.capabilities?.includes("manage_rewards") ? (
-        <Pressable style={styles.moderationBtn} onPress={() => router.push("/admin/users")}>
-          <Text style={styles.moderationText}>Open user administration</Text>
-        </Pressable>
-      ) : null}
+
+      <TitlesModal
+        open={titlesOpen}
+        onClose={() => setTitlesOpen(false)}
+        titles={me.data?.titles ?? []}
+        equippedId={equippedId}
+        onEquip={equipTitle}
+      />
+      <BadgeDetailModal badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
+      <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} me={me.data} />
 
       <Pressable style={styles.signOutBtn} onPress={signOut}>
         <Text style={styles.signOutText}>Sign out</Text>
@@ -558,6 +614,130 @@ function DeleteAccountModal({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
+// A square tile in the Collection row (Titles, Avatars & Frames).
+function CollectionTile({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.tileIcon}>{icon}</View>
+      <Text style={styles.tileLabel}>{label}</Text>
+      <Text style={styles.tileValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </Pressable>
+  );
+}
+
+// A consistent list row for the Account / Staff / Legal menus.
+function MenuRow({
+  icon,
+  label,
+  badge,
+  tone,
+  onPress,
+}: {
+  icon: ReactNode;
+  label: string;
+  badge?: string;
+  tone?: "danger";
+  onPress: () => void;
+}) {
+  const danger = tone === "danger";
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.menuIcon}>{icon}</View>
+      <Text style={[styles.menuLabel, danger && { color: colors.danger }]}>{label}</Text>
+      {badge ? (
+        <View style={[styles.menuBadge, danger && { backgroundColor: colors.danger }]}>
+          <Text style={styles.menuBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
+      <ChevronRight color={danger ? colors.danger : colors.muted} size={18} strokeWidth={1.8} />
+    </Pressable>
+  );
+}
+
+// The Titles collection — a scrollable list you equip one flair from.
+function TitlesModal({
+  open,
+  onClose,
+  titles,
+  equippedId,
+  onEquip,
+}: {
+  open: boolean;
+  onClose: () => void;
+  titles: TitleInfo[];
+  equippedId: string | null;
+  onEquip: (id: string | null) => void | Promise<void>;
+}) {
+  return (
+    <SystemModal visible={open} onClose={onClose} title="Titles">
+      <Text style={styles.titlesIntro}>
+        Equip one flair beside your name. Titles are earned from quests and events.
+      </Text>
+      <ScrollView style={styles.titlesScroll} contentContainerStyle={{ gap: 9 }}>
+        <Pressable
+          style={[styles.titleRow, !equippedId && styles.titleRowEquipped]}
+          onPress={() => onEquip(null)}
+        >
+          <Text style={styles.titleNone}>No title</Text>
+          <Text style={styles.titleState}>{!equippedId ? "ACTIVE" : "SET"}</Text>
+        </Pressable>
+        {titles.map((title) => {
+          const equipped = equippedId === title.id;
+          return (
+            <Pressable
+              key={title.id}
+              style={[styles.titleRow, equipped && styles.titleRowEquipped]}
+              onPress={() => onEquip(equipped ? null : title.id)}
+            >
+              <View style={styles.titleRowBody}>
+                <TitleFlair title={title} />
+                <Text style={styles.titleDesc} numberOfLines={2}>
+                  {title.description}
+                </Text>
+              </View>
+              <Text style={[styles.titleState, equipped && { color: colors.foil }]}>
+                {equipped ? "EQUIPPED" : "EQUIP"}
+              </Text>
+            </Pressable>
+          );
+        })}
+        {titles.length === 0 ? (
+          <Text style={styles.titlesEmpty}>
+            No titles yet. Complete quests and events to earn them.
+          </Text>
+        ) : null}
+      </ScrollView>
+      <View style={{ alignItems: "center" }}>
+        <Pressable style={styles.modalClose} onPress={onClose} hitSlop={8}>
+          <Text style={styles.modalCloseText}>CLOSE</Text>
+        </Pressable>
+      </View>
+    </SystemModal>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   formWrap: { padding: 24, paddingTop: 48, gap: 12 },
@@ -670,6 +850,87 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   sectionHint: { color: colors.muted, paddingHorizontal: 24, fontSize: 11, marginBottom: 8 },
+  sectionSubTitle: {
+    color: colors.muted,
+    fontWeight: "800",
+    fontSize: 10,
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+    paddingHorizontal: 24,
+    paddingTop: 22,
+    paddingBottom: 8,
+  },
+  tileRow: { flexDirection: "row", gap: 10, paddingHorizontal: 24 },
+  tile: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+  },
+  tilePressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
+  tileIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 11,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  tileValue: { color: colors.muted, fontSize: 11.5 },
+  menuList: { paddingHorizontal: 24, gap: 8 },
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  menuRowPressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
+  menuIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuLabel: { color: colors.text, fontSize: 14, fontWeight: "600", flex: 1 },
+  menuBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuBadgeText: { color: "#fff", fontSize: 10, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  titlesIntro: { color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: 12 },
+  titlesScroll: { maxHeight: 360 },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 12,
+  },
+  titleRowEquipped: { borderColor: colors.foil, backgroundColor: "rgba(245,184,76,0.07)" },
+  titleRowBody: { flex: 1, gap: 5 },
+  titleNone: { color: colors.text, fontSize: 14, fontWeight: "700", flex: 1 },
+  titlesEmpty: { color: colors.muted, fontSize: 12, textAlign: "center", paddingVertical: 18, lineHeight: 18 },
   titleGrid: { gap: 9, paddingHorizontal: 24 },
   titleCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 11, gap: 7 },
   titleCardEquipped: { borderColor: colors.foil, backgroundColor: "rgba(245,184,76,0.07)" },

@@ -38,7 +38,7 @@ export function QuestToastHost() {
   if (!quest) return null;
   return (
     <Animated.View pointerEvents="none" style={[styles.host, { transform: [{ translateY: y }] }]}>
-      <SystemWindow title="Quest Complete" compact>
+      <SystemWindow title="Quest Complete" compact translucent>
         <Text style={styles.name}>{quest.name}</Text>
         <Text style={styles.rewards}>{quest.rewards.map((reward) => reward.name).join(" · ")}</Text>
       </SystemWindow>

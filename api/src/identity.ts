@@ -1,6 +1,7 @@
 import { levelForXp } from "./badges.js";
 import { normalizeRole } from "./auth.js";
 import { prisma } from "./db/client.js";
+import { guildLevelForXp } from "./guilds.js";
 
 export const DEFAULT_TITLE_ID = "e-rank-hunter";
 export const DEFAULT_AVATAR_ID = "avatar-origin";
@@ -24,6 +25,15 @@ export interface PublicIdentity {
     secondaryColor: string | null;
   } | null;
   title: { id: string; name: string; rarity: string } | null;
+  guild: {
+    id: string;
+    name: string;
+    tag: string;
+    emblemKey: string;
+    primaryColor: string;
+    secondaryColor: string | null;
+    level: number;
+  } | null;
   staffMarker: { label: string; role: string } | null;
   anonymized: boolean;
 }
@@ -92,6 +102,21 @@ export async function identitiesForUsers(
           secondaryColor: true,
         },
       },
+      guildMembership: {
+        select: {
+          guild: {
+            select: {
+              id: true,
+              name: true,
+              tag: true,
+              emblemKey: true,
+              primaryColor: true,
+              secondaryColor: true,
+              xp: true,
+            },
+          },
+        },
+      },
     },
   });
   const result = new Map<string, PublicIdentity>();
@@ -104,6 +129,7 @@ export async function identitiesForUsers(
         avatar: null,
         frame: null,
         title: null,
+        guild: null,
         staffMarker: null,
         anonymized: true,
       });
@@ -111,6 +137,7 @@ export async function identitiesForUsers(
     }
     const self = viewerId === user.id;
     const role = normalizeRole(user.role);
+    const guild = user.guildMembership?.guild ?? null;
     result.set(user.id, {
       id: user.id,
       username: user.username,
@@ -118,6 +145,17 @@ export async function identitiesForUsers(
       avatar: user.equippedAvatar,
       frame: user.equippedFrame,
       title: self || user.showTitle ? user.equippedTitle : null,
+      guild: guild
+        ? {
+            id: guild.id,
+            name: guild.name,
+            tag: guild.tag,
+            emblemKey: guild.emblemKey,
+            primaryColor: guild.primaryColor,
+            secondaryColor: guild.secondaryColor,
+            level: guildLevelForXp(guild.xp),
+          }
+        : null,
       staffMarker: staffLabels[role] ? { label: staffLabels[role], role } : null,
       anonymized: false,
     });

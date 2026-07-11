@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Tabs } from "expo-router";
-import { CircleUserRound, History, LibraryBig, MessagesSquare, Search } from "lucide-react-native";
+import { CircleUserRound, LibraryBig, Search, Swords } from "lucide-react-native";
 import { useSyncExternalStore } from "react";
 import { api } from "../../src/api";
+import { HeaderMenu } from "../../src/components/HeaderMenu";
 import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors } from "../../src/theme";
 
 export default function TabsLayout() {
-  // Unread reply notifications badge the Account tab (polled while signed in)
+  // Unread notifications badge the Account tab (polled while signed in)
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const count = useQuery({
     queryKey: ["notifCount"],
@@ -23,6 +24,7 @@ export default function TabsLayout() {
         animation: "shift",
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,
+        headerRight: () => <HeaderMenu />,
         tabBarStyle: {
           backgroundColor: colors.bg,
           borderTopWidth: 1.5,
@@ -49,15 +51,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="feed"
         options={{
-          title: "Feed",
-          tabBarIcon: ({ color }) => <MessagesSquare color={color} size={23} strokeWidth={1.8} />,
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: "History",
-          tabBarIcon: ({ color }) => <History color={color} size={23} strokeWidth={1.8} />,
+          title: "Dungeons",
+          tabBarIcon: ({ color }) => <Swords color={color} size={23} strokeWidth={1.8} />,
         }}
       />
       <Tabs.Screen

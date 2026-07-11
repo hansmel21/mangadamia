@@ -10,6 +10,7 @@ import * as Notifications from "expo-notifications";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { BadgeToastHost } from "../src/components/BadgeToast";
+import { ExpToastHost } from "../src/components/ExpToast";
 import { LevelUpHost } from "../src/components/LevelUp";
 import { QuestToastHost } from "../src/components/QuestToast";
 import { pullCloud } from "../src/sync";
@@ -62,6 +63,7 @@ export default function RootLayout() {
         <Stack.Screen name="series/[src]/[id]" options={{ title: "" }} />
         <Stack.Screen name="user/[username]" options={{ title: "" }} />
         <Stack.Screen name="wall/[canonicalId]" options={{ title: "" }} />
+        <Stack.Screen name="post/[id]" options={{ title: "" }} />
         <Stack.Screen name="legal/terms" options={{ title: "Terms of Use" }} />
         <Stack.Screen name="legal/privacy" options={{ title: "Privacy Policy" }} />
         <Stack.Screen name="legal/community" options={{ title: "Community Guidelines" }} />
@@ -69,6 +71,10 @@ export default function RootLayout() {
         <Stack.Screen name="admin/users" options={{ title: "User Administration" }} />
         <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
         <Stack.Screen name="quests" options={{ title: "Quest Window" }} />
+        <Stack.Screen name="arena" options={{ title: "The Arena" }} />
+        <Stack.Screen name="guilds" options={{ title: "Guilds" }} />
+        <Stack.Screen name="guild/[id]" options={{ title: "" }} />
+        <Stack.Screen name="guild/create" options={{ title: "Found a Guild" }} />
         <Stack.Screen name="account/edit" options={{ title: "Edit Profile" }} />
         <Stack.Screen name="account/appearance" options={{ title: "Appearance" }} />
         <Stack.Screen name="account/follow-requests" options={{ title: "Follow Requests" }} />
@@ -82,6 +88,7 @@ export default function RootLayout() {
       <BadgeToastHost />
       <LevelUpHost />
       <QuestToastHost />
+      <ExpToastHost />
     </QueryClientProvider>
   );
 }

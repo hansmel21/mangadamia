@@ -21,6 +21,7 @@ import { celebrateBadges } from "../badges";
 import { getSessionUser, subscribeSession } from "../session";
 import { colors } from "../theme";
 import { UserIdentity } from "./UserIdentity";
+import { showExpGain } from "./ExpToast";
 import { showLevelUp } from "./LevelUp";
 import { TermsAcceptance } from "./TermsAcceptance";
 import { EyeOff, Flag } from "lucide-react-native";
@@ -104,6 +105,7 @@ export function CommentsSheet({
       setDraft("");
       setReplyTo(null);
       setSpoiler(false);
+      showExpGain(created.xpAwarded);
       celebrateBadges(created.newBadges);
       showQuestCompletions(created.completedQuests);
       if (created.levelUp) showLevelUp(created.levelUp);
@@ -199,13 +201,24 @@ export function CommentsSheet({
         <Text style={styles.commentBody}>{item.body}</Text>
       )}
       <View style={styles.actionsRow}>
-        <Pressable onPress={() => (user ? toggleLike(item) : undefined)} hitSlop={8}>
+        <Pressable
+          style={styles.likeBtn}
+          onPress={() => (user ? toggleLike(item) : undefined)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={item.likedByMe ? "Unlike comment" : "Like comment"}
+        >
           <Text style={[styles.likeText, item.likedByMe && styles.likedText]}>
-            {item.likedByMe ? "♥" : "♡"} {item.likeCount > 0 ? item.likeCount : ""}
+            {item.likedByMe ? "♥" : "♡"}
           </Text>
+          {item.likeCount > 0 ? (
+            <Text style={[styles.likeCount, item.likedByMe && styles.likedText]}>
+              {item.likeCount}
+            </Text>
+          ) : null}
         </Pressable>
         {user && (
-          <Pressable onPress={() => setReplyTo(item)} hitSlop={8}>
+          <Pressable style={styles.replyBtnWrap} onPress={() => setReplyTo(item)} hitSlop={12}>
             <Text style={styles.replyBtn}>Reply</Text>
           </Pressable>
         )}
@@ -353,11 +366,24 @@ const styles = StyleSheet.create({
   userRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
   commentWhen: { color: colors.muted, fontWeight: "400", fontSize: 12 },
   delete: { color: colors.danger, fontSize: 12 },
-  commentBody: { color: colors.text, marginTop: 4, lineHeight: 19 },
-  actionsRow: { flexDirection: "row", gap: 18, marginTop: 6, alignItems: "center" },
-  likeText: { color: colors.muted, fontSize: 14 },
+  commentBody: { color: colors.text, marginTop: 5, lineHeight: 20, fontSize: 14.5 },
+  actionsRow: { flexDirection: "row", gap: 8, marginTop: 8, alignItems: "center" },
+  likeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  likeText: { color: colors.muted, fontSize: 16, lineHeight: 18 },
+  likeCount: { color: colors.muted, fontSize: 12.5, fontWeight: "700", fontVariant: ["tabular-nums"] },
   likedText: { color: colors.danger },
-  replyBtn: { color: colors.muted, fontSize: 13, fontWeight: "600" },
+  replyBtnWrap: { paddingVertical: 5, paddingHorizontal: 10 },
+  replyBtn: { color: colors.accentSoft, fontSize: 13, fontWeight: "700" },
   error: { color: colors.danger, paddingHorizontal: 16, paddingTop: 6 },
   replyingBar: {
     flexDirection: "row",

@@ -50,7 +50,7 @@ export function BadgeToastHost() {
       pointerEvents="none"
       style={[styles.wrap, { top: insets.top + 8, transform: [{ translateY: slide }] }]}
     >
-      <SystemWindow title="Notification" compact style={styles.toast}>
+      <SystemWindow title="Notification" compact translucent style={styles.toast}>
         <View style={styles.row}>
           <BadgeMedallion badgeId={first.id} fallbackIcon={first.icon} size={40} glow />
           <View style={{ flex: 1 }}>

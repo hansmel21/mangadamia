@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { PublicIdentity } from "../api";
 import { colors, fonts } from "../theme";
+import { GuildCrest } from "./GuildCrest";
 import { ReaderAvatar } from "./ReaderAvatar";
 import { TitleFlair } from "./TitleFlair";
 
@@ -25,6 +26,9 @@ export function UserIdentity({
           </Text>
           {identity.level != null ? <Text style={styles.level}>LV {identity.level}</Text> : null}
         </View>
+        {identity.guild ? (
+          <GuildCrest guild={identity.guild} size={profile ? 20 : 16} />
+        ) : null}
         {identity.title ? <TitleFlair title={identity.title} compact={compact} /> : null}
         {identity.staffMarker ? (
           <Text style={styles.staff}>◆ {identity.staffMarker.label.toUpperCase()}</Text>

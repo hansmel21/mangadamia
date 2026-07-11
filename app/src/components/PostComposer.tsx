@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { api, type PostInfo, type UnifiedCard } from "../api";
 import { celebrateBadges } from "../badges";
+import { showExpGain } from "./ExpToast";
 import { showLevelUp } from "./LevelUp";
 import { showQuestCompletions } from "./QuestToast";
 import { SystemModal } from "./SystemModal";
@@ -59,6 +60,7 @@ export function PostComposer({
                 .map((series) => ({ canonicalId: series.canonicalId! }))
             : undefined,
       });
+      showExpGain(created.xpAwarded);
       celebrateBadges(created.newBadges);
       showQuestCompletions(created.completedQuests);
       if (created.levelUp) showLevelUp(created.levelUp);
