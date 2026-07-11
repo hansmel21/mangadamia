@@ -2,6 +2,7 @@
 // series' canonical id + chapter number, so it's shared across servers).
 // Single-level threading: replies render indented under top-level comments.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
 import { useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
@@ -19,11 +20,12 @@ import { api, type CommentInfo } from "../api";
 import { celebrateBadges } from "../badges";
 import { getSessionUser, subscribeSession } from "../session";
 import { colors } from "../theme";
-import { BadgeMedallion } from "./BadgeMedallion";
+import { UserIdentity } from "./UserIdentity";
 import { showLevelUp } from "./LevelUp";
 import { TermsAcceptance } from "./TermsAcceptance";
-import { Flag } from "lucide-react-native";
+import { EyeOff, Flag } from "lucide-react-native";
 import { ReportModal, type ReportTarget } from "./ReportModal";
+import { showQuestCompletions } from "./QuestToast";
 
 function timeAgo(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -75,6 +77,8 @@ export function CommentsSheet({
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [spoiler, setSpoiler] = useState(false);
+  const [revealedThreads, setRevealedThreads] = useState<Set<string>>(() => new Set());
 
   const queryKey = ["comments", canonicalId, chapterNumber];
   const comments = useQuery({
@@ -90,10 +94,18 @@ export function CommentsSheet({
     setPosting(true);
     setError("");
     try {
-      const created = await api.postComment(canonicalId, chapterNumber, body, replyTo?.id);
+      const created = await api.postComment(
+        canonicalId,
+        chapterNumber,
+        body,
+        replyTo?.id,
+        spoiler,
+      );
       setDraft("");
       setReplyTo(null);
+      setSpoiler(false);
       celebrateBadges(created.newBadges);
+      showQuestCompletions(created.completedQuests);
       if (created.levelUp) showLevelUp(created.levelUp);
       queryClient.setQueryData<CommentInfo[]>(queryKey, (old) => {
         if (!created.parentId) return [created, ...(old ?? [])];
@@ -135,18 +147,29 @@ export function CommentsSheet({
     }
   };
 
-  const CommentRow = ({ item, isReply }: { item: CommentInfo; isReply?: boolean }) => (
+  const CommentRow = ({
+    item,
+    isReply,
+    threadId = item.id,
+  }: {
+    item: CommentInfo;
+    isReply?: boolean;
+    threadId?: string;
+  }) => (
     <View style={[styles.comment, isReply && styles.reply]}>
       <View style={styles.commentTop}>
         <View style={styles.userRow}>
-          {(item.badgeId || item.badgeIcon) && (
-            <BadgeMedallion badgeId={item.badgeId} fallbackIcon={item.badgeIcon} size={17} />
-          )}
-          <Text style={styles.commentUser} numberOfLines={1}>
-            {item.username}
-            <Text style={styles.levelTag}>  Lv {item.level}</Text>
-            <Text style={styles.commentWhen}>  {timeAgo(item.createdAt)}</Text>
-          </Text>
+          {item.author ? (
+            <UserIdentity
+              identity={item.author}
+              compact
+              onPress={() =>
+                item.author?.id &&
+                router.push({ pathname: "/user/[username]", params: { username: item.author.username } })
+              }
+            />
+          ) : null}
+          <Text style={styles.commentWhen}>{timeAgo(item.createdAt)}</Text>
         </View>
         {item.mine ? (
           <Pressable onPress={() => remove(item)} hitSlop={8}>
@@ -164,7 +187,17 @@ export function CommentsSheet({
           </Pressable>
         ) : null}
       </View>
-      <Text style={styles.commentBody}>{item.body}</Text>
+      {user && !item.mine && item.isSpoiler && !revealedThreads.has(threadId) ? (
+        <Pressable
+          style={styles.spoilerShield}
+          onPress={() => setRevealedThreads((old) => new Set(old).add(threadId))}
+        >
+          <EyeOff color={colors.accentSoft} size={15} />
+          <Text style={styles.spoilerText}>SPOILER · TAP TO REVEAL THREAD</Text>
+        </Pressable>
+      ) : (
+        <Text style={styles.commentBody}>{item.body}</Text>
+      )}
       <View style={styles.actionsRow}>
         <Pressable onPress={() => (user ? toggleLike(item) : undefined)} hitSlop={8}>
           <Text style={[styles.likeText, item.likedByMe && styles.likedText]}>
@@ -178,7 +211,7 @@ export function CommentsSheet({
         )}
       </View>
       {(item.replies ?? []).map((r) => (
-        <CommentRow key={r.id} item={r} isReply />
+        <CommentRow key={r.id} item={r} isReply threadId={threadId} />
       ))}
     </View>
   );
@@ -246,6 +279,12 @@ export function CommentsSheet({
                   <Text style={styles.sendText}>{posting ? "…" : "Send"}</Text>
                 </Pressable>
               </View>
+              <Pressable style={styles.spoilerToggle} onPress={() => setSpoiler((value) => !value)}>
+                <View style={[styles.spoilerCheck, spoiler && styles.spoilerCheckOn]}>
+                  {spoiler ? <EyeOff color={colors.accentText} size={11} /> : null}
+                </View>
+                <Text style={styles.spoilerToggleText}>Mark as spoiler</Text>
+              </Pressable>
             </View></TermsAcceptance>
           ) : (
             <Text style={styles.signInHint}>
@@ -312,8 +351,6 @@ const styles = StyleSheet.create({
   },
   commentTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   userRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
-  commentUser: { color: colors.accent, fontWeight: "700", fontSize: 13, flexShrink: 1 },
-  levelTag: { color: colors.foil, fontWeight: "700", fontSize: 11 },
   commentWhen: { color: colors.muted, fontWeight: "400", fontSize: 12 },
   delete: { color: colors.danger, fontSize: 12 },
   commentBody: { color: colors.text, marginTop: 4, lineHeight: 19 },
@@ -355,4 +392,19 @@ const styles = StyleSheet.create({
   },
   sendText: { color: colors.accentText, fontWeight: "700" },
   signInHint: { color: colors.muted, textAlign: "center", paddingTop: 12, paddingHorizontal: 24 },
+  spoilerShield: {
+    marginTop: 6,
+    padding: 10,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.accent,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  spoilerText: { color: colors.accentSoft, fontSize: 9.5, fontWeight: "800", letterSpacing: 1 },
+  spoilerToggle: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 8 },
+  spoilerCheck: { width: 18, height: 18, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  spoilerCheckOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  spoilerToggleText: { color: colors.muted, fontSize: 12 },
 });

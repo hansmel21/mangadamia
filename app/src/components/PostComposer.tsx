@@ -1,12 +1,13 @@
 // Shared post composer (new post, or reply). System-styled modal. Optionally
 // carries a series/chapter context chip. On success, celebrates badges/levels.
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff } from "lucide-react-native";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { api, type PostInfo } from "../api";
+import { api, type PostInfo, type UnifiedCard } from "../api";
 import { celebrateBadges } from "../badges";
 import { showLevelUp } from "./LevelUp";
+import { showQuestCompletions } from "./QuestToast";
 import { SystemModal } from "./SystemModal";
 import { TermsAcceptance } from "./TermsAcceptance";
 import { colors } from "../theme";
@@ -30,7 +31,15 @@ export function PostComposer({
   const [spoiler, setSpoiler] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [seriesQuery, setSeriesQuery] = useState("");
+  const [selectedSeries, setSelectedSeries] = useState<UnifiedCard[]>([]);
   const queryClient = useQueryClient();
+  const seriesResults = useQuery({
+    queryKey: ["composerSeries", seriesQuery],
+    queryFn: () => api.searchAll(seriesQuery.trim(), 1),
+    enabled: visible && !replyTo && !context && seriesQuery.trim().length >= 2,
+    staleTime: 60_000,
+  });
 
   const submit = async () => {
     const text = body.trim();
@@ -43,11 +52,20 @@ export function PostComposer({
         chapterNumber: replyTo ? undefined : context?.chapterNumber,
         parentId: replyTo?.id,
         isSpoiler: spoiler,
+        seriesTags:
+          !replyTo && !context
+            ? selectedSeries
+                .filter((series) => !!series.canonicalId)
+                .map((series) => ({ canonicalId: series.canonicalId! }))
+            : undefined,
       });
       celebrateBadges(created.newBadges);
+      showQuestCompletions(created.completedQuests);
       if (created.levelUp) showLevelUp(created.levelUp);
       setBody("");
       setSpoiler(false);
+      setSelectedSeries([]);
+      setSeriesQuery("");
       queryClient.invalidateQueries({ queryKey: ["feed"] });
       onPosted?.(created);
       onClose();
@@ -73,6 +91,38 @@ export function PostComposer({
           <Text style={styles.chipText} numberOfLines={1}>
             ◆ {chip}
           </Text>
+        </View>
+      ) : null}
+      {!replyTo && !context ? (
+        <View style={styles.seriesPicker}>
+          <TextInput
+            style={styles.seriesInput}
+            value={seriesQuery}
+            onChangeText={setSeriesQuery}
+            placeholder="Tag up to 5 manga (optional)"
+            placeholderTextColor={colors.muted}
+          />
+          {selectedSeries.length > 0 ? (
+            <View style={styles.selectedSeries}>
+              {selectedSeries.map((series) => (
+                <Pressable key={series.canonicalId} style={styles.selectedChip} onPress={() => setSelectedSeries((old) => old.filter((item) => item.canonicalId !== series.canonicalId))}>
+                  <Text style={styles.selectedChipText} numberOfLines={1}>{series.title} ×</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {seriesQuery.trim().length >= 2 ? (
+            <View style={styles.results}>
+              {(seriesResults.data ?? []).filter((series) => series.canonicalId && !selectedSeries.some((item) => item.canonicalId === series.canonicalId)).slice(0, 4).map((series) => (
+                <Pressable key={series.canonicalId} style={styles.result} disabled={selectedSeries.length >= 5} onPress={() => {
+                  setSelectedSeries((old) => [...old, series]);
+                  setSeriesQuery("");
+                }}>
+                  <Text style={styles.resultText} numberOfLines={1}>+ {series.title}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : null}
       <TextInput
@@ -117,6 +167,14 @@ export function PostComposer({
 }
 
 const styles = StyleSheet.create({
+  seriesPicker: { marginBottom: 10 },
+  seriesInput: { color: colors.text, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
+  selectedSeries: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 6 },
+  selectedChip: { borderWidth: 1, borderColor: colors.accent, paddingHorizontal: 6, paddingVertical: 3, maxWidth: "48%" },
+  selectedChipText: { color: colors.accentSoft, fontSize: 9.5 },
+  results: { borderWidth: 1, borderColor: colors.border, marginTop: 4 },
+  result: { paddingHorizontal: 8, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  resultText: { color: colors.text, fontSize: 11 },
   chip: {
     alignSelf: "flex-start",
     borderWidth: 1,

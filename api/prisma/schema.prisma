@@ -13,39 +13,61 @@ datasource db {
 // One row per real-world series, shared by every source that carries it.
 // normTitles collects every normalized title/alt-title seen — the match keys.
 model CanonicalSeries {
-  id         String         @id @default(cuid())
+  id         String          @id @default(cuid())
   title      String
   coverUrl   String?
   normTitles String[]
-  createdAt  DateTime       @default(now())
+  createdAt  DateTime        @default(now())
   series     Series[]
   comments   Comment[]
   readEvents ReadChapter[]
   library    LibraryEntry[]
   progress   Progress[]
   posts      Post[]
+  postTags   PostSeriesTag[]
 }
 
 model User {
-  id                   String             @id @default(cuid())
-  email                String             @unique
-  username             String             @unique
+  id                   String                  @id @default(cuid())
+  email                String                  @unique
+  username             String                  @unique
   passwordHash         String
-  createdAt            DateTime           @default(now())
-  role                 String             @default("user") // user | moderator | admin
-  status               String             @default("active") // active | suspended | banned
+  createdAt            DateTime                @default(now())
+  role                 String                  @default("user") // user | moderator | admin
+  status               String                  @default("active") // active | suspended | banned
   suspendedUntil       DateTime?
   acceptedTermsVersion String?
   acceptedTermsAt      DateTime?
   // Denormalized XP: comment +10, like received +5, chapter read +2.
   // Level is derived: floor(sqrt(xp/100)) + 1.
-  xp                   Int                @default(0)
+  xp                   Int                     @default(0)
   // Earned badge the user displays as their Title (validated on equip)
+  // Legacy only. Badges remain collectible, but are no longer social Titles.
   equippedBadgeId      String?
+  bio                  String?
+  ageConfirmedAt       DateTime?
+  usernameChangesLeft  Int                     @default(1)
+  profileVisibility    String                  @default("public") // public | private
+  showLevel            Boolean                 @default(true)
+  showTitle            Boolean                 @default(true)
+  showBadges           Boolean                 @default(true)
+  showStats            Boolean                 @default(true)
+  showPosts            Boolean                 @default(true)
+  showFavorites        Boolean                 @default(false)
+  showReadingHistory   Boolean                 @default(false)
+  showFollows          Boolean                 @default(true)
+  showJoinDate         Boolean                 @default(true)
+  equippedTitleId      String?
+  equippedAvatarId     String?
+  equippedFrameId      String?
+  equippedTitle        TitleDefinition?        @relation("EquippedTitle", fields: [equippedTitleId], references: [id], onDelete: SetNull)
+  equippedAvatar       CosmeticDefinition?     @relation("EquippedAvatar", fields: [equippedAvatarId], references: [id], onDelete: SetNull)
+  equippedFrame        CosmeticDefinition?     @relation("EquippedFrame", fields: [equippedFrameId], references: [id], onDelete: SetNull)
   sessions             Session[]
   comments             Comment[]
   likes                CommentLike[]
-  notifications        Notification[]
+  notifications        Notification[]          @relation("NotificationRecipient")
+  actedNotifications   Notification[]          @relation("NotificationActor")
   badges               UserBadge[]
   readChapters         ReadChapter[]
   library              LibraryEntry[]
@@ -53,9 +75,115 @@ model User {
   posts                Post[]
   postLikes            PostLike[]
   reports              Report[]
-  blocking             Block[]            @relation("Blocker")
-  blockedBy            Block[]            @relation("Blocked")
-  moderationActions    ModerationAction[] @relation("ModeratorActions")
+  blocking             Block[]                 @relation("Blocker")
+  blockedBy            Block[]                 @relation("Blocked")
+  moderationActions    ModerationAction[]      @relation("ModeratorActions")
+  titles               UserTitle[]
+  cosmetics            UserCosmetic[]
+  following            Follow[]                @relation("Follower")
+  followers            Follow[]                @relation("Following")
+  activityEvents       ActivityEvent[]
+  questProgress        UserQuestProgress[]
+  xpTransactions       XpTransaction[]
+  rewardGrants         RewardGrant[]
+  pushDevices          PushDevice[]
+  notificationPrefs    NotificationPreference?
+  moderationNotices    ModerationNotice[]
+  appeals              Appeal[]                @relation("AppealingUser")
+  reviewedAppeals      Appeal[]                @relation("AppealReviewer")
+  usernameChanges      UsernameChange[]
+}
+
+// Titles are independent social identity rewards. They never grant authority;
+// staff capability comes only from User.role.
+model TitleDefinition {
+  id             String            @id
+  name           String
+  description    String
+  rarity         String            @default("common") // common | rare | epic | legendary | mythic
+  sourceType     String            @default("quest") // default | quest | event | staff | admin
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  isActive       Boolean           @default(true)
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  owners         UserTitle[]
+  equippedBy     User[]            @relation("EquippedTitle")
+  rewardedBy     QuestDefinition[] @relation("QuestTitleReward")
+}
+
+model UserTitle {
+  userId     String
+  titleId    String
+  source     String          @default("quest")
+  grantedBy  String?
+  unlockedAt DateTime        @default(now())
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      TitleDefinition @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, titleId])
+  @@index([titleId, unlockedAt])
+}
+
+// Curated, app-owned profile art only. User image uploads intentionally remain
+// unsupported until an image moderation pipeline exists.
+model CosmeticDefinition {
+  id             String            @id
+  name           String
+  description    String
+  kind           String // avatar | frame
+  rarity         String            @default("common")
+  assetKey       String
+  primaryColor   String?
+  secondaryColor String?
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  isActive       Boolean           @default(true)
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  owners         UserCosmetic[]
+  avatarUsers    User[]            @relation("EquippedAvatar")
+  frameUsers     User[]            @relation("EquippedFrame")
+  rewardedBy     QuestDefinition[] @relation("QuestCosmeticReward")
+}
+
+model UserCosmetic {
+  userId     String
+  cosmeticId String
+  source     String             @default("quest")
+  grantedBy  String?
+  unlockedAt DateTime           @default(now())
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cosmetic   CosmeticDefinition @relation(fields: [cosmeticId], references: [id], onDelete: Cascade)
+
+  @@id([userId, cosmeticId])
+  @@index([cosmeticId, unlockedAt])
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  status      String    @default("accepted") // pending | accepted
+  createdAt   DateTime  @default(now())
+  acceptedAt  DateTime?
+  follower    User      @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User      @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId, status, createdAt])
+  @@index([followerId, status, createdAt])
+}
+
+model UsernameChange {
+  id               String   @id @default(cuid())
+  userId           String
+  previousUsername String
+  newUsername      String
+  grantedByAdmin   Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 // Cloud copy of the on-device library (followed series), canonical-keyed so
@@ -130,6 +258,7 @@ model Comment {
   canonical        CanonicalSeries @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
   chapterNumber    Float
   body             String
+  isSpoiler        Boolean         @default(false)
   createdAt        DateTime        @default(now())
   moderationStatus String          @default("visible") // visible | removed
   moderationReason String?
@@ -146,17 +275,59 @@ model Comment {
 
 // In-app inbox: created when someone replies to your comment or post
 model Notification {
-  id        String    @id @default(cuid())
-  userId    String // recipient
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  commentId String? // the comment reply that triggered it
-  comment   Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  postId    String? // or the post reply that triggered it
-  post      Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
-  readAt    DateTime?
+  id           String    @id @default(cuid())
+  userId       String // recipient
+  user         User      @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actorId      String?
+  actor        User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  kind         String    @default("reply")
+  title        String?
+  safeBody     String?
+  targetUrl    String?
+  metadata     Json?
+  dedupeKey    String?
+  priority     String    @default("normal")
+  expiresAt    DateTime?
+  commentId    String? // legacy source link; generic notifications need neither
+  comment      Comment?  @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  postId       String?
+  post         Post?     @relation(fields: [postId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  seenAt       DateTime?
+  readAt       DateTime?
+  dismissedAt  DateTime?
+  pushQueuedAt DateTime?
 
+  @@unique([userId, dedupeKey])
   @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+model NotificationPreference {
+  userId        String  @id
+  pushEnabled   Boolean @default(false)
+  replies       Boolean @default(true)
+  reactions     Boolean @default(true)
+  follows       Boolean @default(true)
+  quests        Boolean @default(true)
+  newChapters   Boolean @default(false)
+  announcements Boolean @default(true)
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PushDevice {
+  id         String    @id @default(cuid())
+  userId     String
+  expoToken  String    @unique
+  platform   String
+  locale     String?
+  deviceName String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
 }
 
 // The social wall: reader posts, optionally anchored to a series/chapter.
@@ -179,9 +350,22 @@ model Post {
   parent           Post?            @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies          Post[]           @relation("PostReplies")
   notifications    Notification[]
+  seriesTags       PostSeriesTag[]
 
   @@index([canonicalId, createdAt])
   @@index([createdAt])
+}
+
+model PostSeriesTag {
+  postId        String
+  canonicalId   String
+  chapterNumber Float?
+  position      Int             @default(0)
+  post          Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  canonical     CanonicalSeries @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
+
+  @@id([postId, canonicalId])
+  @@index([canonicalId, position])
 }
 
 model PostLike {
@@ -212,17 +396,149 @@ model Report {
 }
 
 model ModerationAction {
-  id          String   @id @default(cuid())
-  moderatorId String
-  moderator   User     @relation("ModeratorActions", fields: [moderatorId], references: [id], onDelete: Cascade)
-  targetType  String
-  targetId    String
-  action      String
-  reason      String?
-  createdAt   DateTime @default(now())
+  id                String             @id @default(cuid())
+  moderatorId       String?
+  moderator         User?              @relation("ModeratorActions", fields: [moderatorId], references: [id], onDelete: SetNull)
+  moderatorSnapshot String
+  reportId          String?
+  targetType        String
+  targetId          String
+  action            String
+  reasonCode        String             @default("other")
+  reason            String?
+  beforeSnapshot    Json?
+  afterSnapshot     Json?
+  requestId         String?
+  createdAt         DateTime           @default(now())
+  notices           ModerationNotice[]
+  appeals           Appeal[]
 
   @@index([targetType, targetId])
   @@index([createdAt])
+}
+
+model ModerationNotice {
+  id                      String            @id @default(cuid())
+  userId                  String
+  moderationActionId      String?
+  kind                    String // warning | suspension | ban | content_removed
+  message                 String
+  requiresAcknowledgement Boolean           @default(true)
+  acknowledgedAt          DateTime?
+  createdAt               DateTime          @default(now())
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moderationAction        ModerationAction? @relation(fields: [moderationActionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, acknowledgedAt, createdAt])
+}
+
+model Appeal {
+  id                 String           @id @default(cuid())
+  userId             String
+  moderationActionId String
+  message            String
+  status             String           @default("pending") // pending | upheld | overturned
+  response           String?
+  reviewerId         String?
+  createdAt          DateTime         @default(now())
+  reviewedAt         DateTime?
+  user               User             @relation("AppealingUser", fields: [userId], references: [id], onDelete: Cascade)
+  moderationAction   ModerationAction @relation(fields: [moderationActionId], references: [id], onDelete: Cascade)
+  reviewer           User?            @relation("AppealReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, moderationActionId])
+  @@index([status, createdAt])
+}
+
+// Server-authoritative activity and quest ledger. UTC period keys make daily
+// and weekly progress deterministic across devices and time zones.
+model ActivityEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  type          String
+  eventKey      String?
+  canonicalId   String?
+  chapterNumber Float?
+  value         Int      @default(1)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  reversedAt    DateTime?
+  reversalReason String?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, createdAt])
+  @@index([userId, type, eventKey, createdAt])
+  @@index([userId, reversedAt])
+}
+
+model QuestDefinition {
+  id               String              @id
+  name             String
+  description      String
+  cadence          String              @default("permanent") // daily | weekly | permanent | seasonal | hidden
+  eventType        String
+  target           Int
+  xpReward         Int                 @default(0)
+  badgeRewardId    String?
+  titleRewardId    String?
+  cosmeticRewardId String?
+  canonicalId      String?
+  distinctEvents   Boolean             @default(false)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  isActive         Boolean             @default(true)
+  sortOrder        Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  titleReward      TitleDefinition?    @relation("QuestTitleReward", fields: [titleRewardId], references: [id], onDelete: SetNull)
+  cosmeticReward   CosmeticDefinition? @relation("QuestCosmeticReward", fields: [cosmeticRewardId], references: [id], onDelete: SetNull)
+  progress         UserQuestProgress[]
+
+  @@index([eventType, isActive])
+}
+
+model UserQuestProgress {
+  id          String          @id @default(cuid())
+  userId      String
+  questId     String
+  periodKey   String
+  progress    Int             @default(0)
+  completedAt DateTime?
+  rewardedAt  DateTime?
+  updatedAt   DateTime        @updatedAt
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quest       QuestDefinition @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questId, periodKey])
+  @@index([userId, completedAt])
+}
+
+model XpTransaction {
+  id         String   @id @default(cuid())
+  userId     String
+  delta      Int
+  sourceType String
+  sourceId   String
+  reversalOf String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceType, sourceId])
+  @@index([userId, createdAt])
+}
+
+model RewardGrant {
+  id         String    @id @default(cuid())
+  userId     String
+  rewardType String // badge | title | cosmetic
+  rewardId   String
+  sourceType String
+  sourceId   String
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, rewardType, rewardId, sourceType, sourceId])
+  @@index([userId, createdAt])
 }
 
 // Safety: blocking hides the blocked user's posts/comments from the blocker

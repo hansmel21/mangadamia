@@ -8,7 +8,7 @@ const API = "https://api.mangadex.org";
 const LANG = "en";
 
 // Identify this documented API integration honestly to MangaDex.
-const MD_INIT = { headers: { "user-agent": process.env.APP_USER_AGENT ?? "MangaShelf/1.0" } };
+const MD_INIT = { headers: { "user-agent": process.env.APP_USER_AGENT ?? "Mangadamia/1.0" } };
 
 interface MdManga {
   id: string;

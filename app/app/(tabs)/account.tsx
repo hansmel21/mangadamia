@@ -13,7 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { api, type BadgeInfo, type MeResponse, type NotificationInfo } from "../../src/api";
+import { api, type BadgeInfo, type MeResponse } from "../../src/api";
 import { BadgeMedallion, badgeTierName } from "../../src/components/BadgeMedallion";
 import { SystemModal } from "../../src/components/SystemModal";
 import { SystemWindow } from "../../src/components/SystemWindow";
@@ -23,6 +23,9 @@ import { colors, fonts } from "../../src/theme";
 import { TERMS_VERSION } from "../../src/legal";
 import { clearAllLocalData } from "../../src/library";
 import { BADGE_CATALOG } from "../../src/badges";
+import { UserIdentity } from "../../src/components/UserIdentity";
+import { TitleFlair } from "../../src/components/TitleFlair";
+import { unregisterPushNotifications } from "../../src/push";
 
 function timeAgo(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -46,63 +49,15 @@ function Profile() {
   const user = getSessionUser();
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: api.me, staleTime: 60_000 });
-  const equippedId = me.data?.equippedBadgeId ?? null;
+  const equippedId = me.data?.equippedTitleId ?? null;
   const badges = me.data?.badges ?? BADGE_CATALOG;
-  const notifs = useQuery({
-    queryKey: ["notifications"],
-    queryFn: api.notifications,
-    staleTime: 30_000,
-  });
-  const [opening, setOpening] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<BadgeInfo | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  // Viewing the inbox marks everything read (rows keep their bold state
-  // until the next visit, so you can still see what was new).
-  useEffect(() => {
-    if (notifs.data?.some((n) => !n.read)) {
-      api
-        .markNotificationsRead()
-        .then(() => queryClient.invalidateQueries({ queryKey: ["notifCount"] }))
-        .catch(() => {});
-    }
-  }, [notifs.data, queryClient]);
-
-  // Jump to the chapter (comments open) the reply was left on
-  const openNotification = async (n: NotificationInfo) => {
-    if (opening) return;
-    // Post replies without series context just go to the Feed
-    if (!n.canonicalId || n.chapterNumber == null) {
-      if (n.type === "post") router.push("/(tabs)/feed");
-      return;
-    }
-    setOpening(true);
-    try {
-      const sources = await api.canonicalSources(n.canonicalId);
-      const first = sources[0];
-      if (!first) return;
-      const detail = await api.series(first.src, first.sourceSeriesId);
-      const ch = detail.chapters.find((c) => c.number === n.chapterNumber);
-      if (!ch) return;
-      router.push({
-        pathname: "/reader/[src]/[seriesId]/[chapterId]",
-        params: {
-          src: first.src,
-          seriesId: first.sourceSeriesId,
-          chapterId: ch.sourceChapterId,
-          openComments: "1",
-        },
-      });
-    } catch {
-      // couldn't resolve — stay on the profile
-    } finally {
-      setOpening(false);
-    }
-  };
-
   const signOut = async () => {
     try {
+      await unregisterPushNotifications();
       await api.logout();
     } catch {
       // session is being discarded either way
@@ -113,12 +68,17 @@ function Profile() {
   return (
     <ScrollView style={styles.screen}>
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user?.username?.[0]?.toUpperCase() ?? "?"}</Text>
-        </View>
-        <Text style={styles.username}>{user?.username}</Text>
+        {me.data?.identity ? (
+          <UserIdentity identity={me.data.identity} profile />
+        ) : (
+          <>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{user?.username?.[0]?.toUpperCase() ?? "?"}</Text>
+            </View>
+            <Text style={styles.username}>{user?.username}</Text>
+          </>
+        )}
         <Text style={styles.email}>{user?.email}</Text>
-
       </View>
 
       {me.data ? (
@@ -183,6 +143,50 @@ function Profile() {
         </SystemWindow>
       )}
 
+      <Text style={styles.sectionTitle}>Titles</Text>
+      <Text style={styles.sectionHint}>Equip one flair. Titles are earned separately from badges.</Text>
+      <View style={styles.titleGrid}>
+        {(me.data?.titles ?? []).map((title) => (
+          <Pressable
+            key={title.id}
+            style={[styles.titleCard, equippedId === title.id && styles.titleCardEquipped]}
+            onPress={async () => {
+              await api.equipTitle(equippedId === title.id ? null : title.id);
+              await queryClient.invalidateQueries({ queryKey: ["me"] });
+            }}
+          >
+            <TitleFlair title={title} />
+            <Text style={styles.titleDesc} numberOfLines={2}>{title.description}</Text>
+            <Text style={styles.titleState}>{equippedId === title.id ? "EQUIPPED" : "UNLOCKED"}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.accountLinks}>
+        <Pressable style={styles.accountLink} onPress={() => router.push("/account/edit") }>
+          <Text style={styles.accountLinkText}>EDIT PROFILE & PRIVACY</Text>
+        </Pressable>
+        <Pressable style={styles.accountLink} onPress={() => router.push("/account/appearance") }>
+          <Text style={styles.accountLinkText}>AVATARS & FRAMES</Text>
+        </Pressable>
+        <Pressable style={styles.accountLink} onPress={() => router.push("/quests") }>
+          <Text style={styles.accountLinkText}>QUEST WINDOW</Text>
+        </Pressable>
+        <Pressable style={styles.accountLink} onPress={() => router.push("/notifications") }>
+          <Text style={styles.accountLinkText}>NOTIFICATIONS</Text>
+        </Pressable>
+        {me.data?.pendingFollowCount ? (
+          <Pressable style={styles.accountLink} onPress={() => router.push("/account/follow-requests") }>
+            <Text style={styles.accountLinkText}>FOLLOW REQUESTS · {me.data.pendingFollowCount}</Text>
+          </Pressable>
+        ) : null}
+        {me.data?.pendingNoticeCount ? (
+          <Pressable style={[styles.accountLink, { borderColor: colors.danger }]} onPress={() => router.push("/appeals") }>
+            <Text style={[styles.accountLinkText, { color: colors.danger }]}>MODERATION NOTICE · {me.data.pendingNoticeCount}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
       <Text style={styles.sectionTitle}>Badges</Text>
       <View style={styles.badgeGrid}>
         {badges.map((b) => (
@@ -207,42 +211,9 @@ function Profile() {
 
       <BadgeDetailModal
         badge={selectedBadge}
-        equippedId={equippedId}
-        onEquip={async (badgeId) => {
-          try {
-            await api.equipTitle(badgeId);
-            queryClient.invalidateQueries({ queryKey: ["me"] });
-          } catch {
-            /* ignore */
-          }
-          setSelectedBadge(null);
-        }}
         onClose={() => setSelectedBadge(null)}
       />
       <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} me={me.data} />
-
-      <Text style={styles.sectionTitle}>Notifications</Text>
-      {opening && <ActivityIndicator color={colors.accent} style={{ marginVertical: 8 }} />}
-      {(notifs.data ?? []).length === 0 ? (
-        <Text style={styles.notifEmpty}>No notifications yet — replies to your comments show up here.</Text>
-      ) : (
-        (notifs.data ?? []).map((n) => (
-          <Pressable key={n.id} style={styles.notifRow} onPress={() => openNotification(n)}>
-            <Text style={[styles.notifTitle, !n.read && styles.notifUnread]} numberOfLines={1}>
-              {n.fromUsername} replied
-              {n.seriesTitle && n.chapterNumber != null
-                ? ` · ${n.seriesTitle} Ch. ${formatNum(n.chapterNumber)}`
-                : n.type === "post"
-                  ? " · on the wall"
-                  : ""}
-            </Text>
-            <Text style={styles.notifBody} numberOfLines={2}>
-              {n.body}
-            </Text>
-            <Text style={styles.notifWhen}>{timeAgo(n.createdAt)}</Text>
-          </Pressable>
-        ))
-      )}
 
       <Text style={styles.sectionTitle}>Legal & safety</Text>
       <View style={styles.legalLinks}>
@@ -256,9 +227,14 @@ function Profile() {
           <Text style={styles.legalLink}>Community Guidelines</Text>
         </Pressable>
       </View>
-      {user?.role === "moderator" || user?.role === "admin" ? (
+      {user?.capabilities?.includes("view_reports") ? (
         <Pressable style={styles.moderationBtn} onPress={() => router.push("/admin/moderation")}>
           <Text style={styles.moderationText}>Open moderation queue</Text>
+        </Pressable>
+      ) : null}
+      {user?.capabilities?.includes("manage_rewards") ? (
+        <Pressable style={styles.moderationBtn} onPress={() => router.push("/admin/users")}>
+          <Text style={styles.moderationText}>Open user administration</Text>
         </Pressable>
       ) : null}
 
@@ -286,6 +262,8 @@ function StatsModal({
   if (!me) return null;
   const earned = me.badges.filter((b) => b.earned).length;
   const rows: [string, string, boolean?][] = [
+    ["Account", me.user.status.toUpperCase(), true],
+    ["Role", me.user.role.replaceAll("_", " ").toUpperCase()],
     ["Level", `LV. ${me.level}`, true],
     ["Total XP", `${me.xp}`],
     ["Next level", `${Math.max(0, me.xpForNextLevel - me.xp)} XP to go`],
@@ -315,13 +293,9 @@ function StatsModal({
 
 function BadgeDetailModal({
   badge,
-  equippedId,
-  onEquip,
   onClose,
 }: {
   badge: BadgeInfo | null;
-  equippedId: string | null;
-  onEquip: (badgeId: string | null) => void;
   onClose: () => void;
 }) {
   // Keep the last badge on screen so the close animation has content
@@ -333,7 +307,6 @@ function BadgeDetailModal({
   if (!b) return null;
   const tier = badgeTierName(b.id);
   const pct = Math.min(100, Math.round((b.progress.current / b.progress.target) * 100));
-  const isEquipped = equippedId === b.id;
   return (
     <SystemModal visible={!!badge} onClose={onClose} title="Badge Info">
       <View style={styles.modalBody}>
@@ -373,17 +346,6 @@ function BadgeDetailModal({
           </View>
         )}
 
-        {b.earned ? (
-          <Pressable
-            style={(s) => [styles.equipBtn, { opacity: s.pressed ? 0.6 : 1 }]}
-            onPress={() => onEquip(isEquipped ? null : b.id)}
-          >
-            <Text style={styles.equipText}>
-              {isEquipped ? "★ UNEQUIP TITLE" : "EQUIP AS TITLE"}
-            </Text>
-          </Pressable>
-        ) : null}
-
         <Pressable style={styles.modalClose} onPress={onClose} hitSlop={8}>
           <Text style={styles.modalCloseText}>CLOSE</Text>
         </Pressable>
@@ -422,6 +384,15 @@ function AuthForm() {
     email.includes("@") &&
     password.length >= 8 &&
     (mode === "login" || (username.length >= 3 && accepted));
+  const requirementHint = !email.includes("@")
+    ? "Enter your email address."
+    : password.length < 8
+      ? "Password must be at least 8 characters."
+      : mode === "register" && username.length < 3
+        ? "Username must be at least 3 characters."
+        : mode === "register" && !accepted
+          ? "Confirm the 13+ Terms and Community Guidelines agreement."
+          : "";
 
   return (
     <KeyboardAvoidingView
@@ -474,8 +445,8 @@ function AuthForm() {
                 <Text style={styles.checkboxMark}>{accepted ? "✓" : ""}</Text>
               </View>
               <Text style={styles.consentText}>
-                I agree to the Terms of Use and Community Guidelines and acknowledge the Privacy
-                Policy.
+                I confirm I am at least 13 years old, agree to the Terms of Use and Community
+                Guidelines, and acknowledge the Privacy Policy.
               </Text>
             </Pressable>
             <View style={styles.authLegalLinks}>
@@ -510,6 +481,8 @@ function AuthForm() {
           style={[styles.submitBtn, (!canSubmit || busy) && styles.submitBtnDisabled]}
           disabled={!canSubmit || busy}
           onPress={submit}
+          accessibilityRole="button"
+          accessibilityLabel={mode === "login" ? "Sign in" : "Create account"}
         >
           {busy ? (
             <ActivityIndicator color={colors.accentText} />
@@ -519,6 +492,7 @@ function AuthForm() {
             </Text>
           )}
         </Pressable>
+        {!canSubmit && requirementHint ? <Text style={styles.requirementHint}>{requirementHint}</Text> : null}
 
         <Pressable
           onPress={() => {
@@ -615,6 +589,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   submitBtnDisabled: { opacity: 0.4 },
+  requirementHint: { color: colors.muted, fontSize: 11, textAlign: "center", marginTop: -4 },
   submitText: {
     color: colors.accentSoft,
     fontWeight: "800",
@@ -694,6 +669,15 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     paddingBottom: 6,
   },
+  sectionHint: { color: colors.muted, paddingHorizontal: 24, fontSize: 11, marginBottom: 8 },
+  titleGrid: { gap: 9, paddingHorizontal: 24 },
+  titleCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 11, gap: 7 },
+  titleCardEquipped: { borderColor: colors.foil, backgroundColor: "rgba(245,184,76,0.07)" },
+  titleDesc: { color: colors.muted, fontSize: 11, lineHeight: 15 },
+  titleState: { color: colors.foil, fontSize: 8.5, fontWeight: "900", letterSpacing: 1.2 },
+  accountLinks: { paddingHorizontal: 24, paddingTop: 22, gap: 8 },
+  accountLink: { borderWidth: 1, borderColor: colors.border, padding: 11, alignItems: "center" },
+  accountLinkText: { color: colors.accentSoft, fontWeight: "900", fontSize: 10, letterSpacing: 1.2 },
   notifEmpty: { color: colors.muted, paddingHorizontal: 24, paddingVertical: 8, lineHeight: 19 },
   notifRow: {
     paddingHorizontal: 24,

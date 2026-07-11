@@ -7,6 +7,87 @@ import { CURRENT_TERMS_VERSION } from "./policy.js";
 
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
+export const ROLES = [
+  "user",
+  "community_moderator",
+  "moderator",
+  "senior_moderator",
+  "admin",
+  "owner",
+] as const;
+export type Role = (typeof ROLES)[number];
+
+export type Capability =
+  | "view_reports"
+  | "correct_spoilers"
+  | "warn_users"
+  | "remove_content"
+  | "suspend_users"
+  | "ban_users"
+  | "review_appeals"
+  | "view_audit"
+  | "manage_rewards"
+  | "manage_roles";
+
+const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
+  user: [],
+  community_moderator: ["view_reports", "correct_spoilers", "warn_users"],
+  moderator: [
+    "view_reports",
+    "correct_spoilers",
+    "warn_users",
+    "remove_content",
+    "suspend_users",
+  ],
+  senior_moderator: [
+    "view_reports",
+    "correct_spoilers",
+    "warn_users",
+    "remove_content",
+    "suspend_users",
+    "ban_users",
+    "review_appeals",
+    "view_audit",
+  ],
+  admin: [
+    "view_reports",
+    "correct_spoilers",
+    "warn_users",
+    "remove_content",
+    "suspend_users",
+    "ban_users",
+    "review_appeals",
+    "view_audit",
+    "manage_rewards",
+  ],
+  owner: [
+    "view_reports",
+    "correct_spoilers",
+    "warn_users",
+    "remove_content",
+    "suspend_users",
+    "ban_users",
+    "review_appeals",
+    "view_audit",
+    "manage_rewards",
+    "manage_roles",
+  ],
+};
+
+export function normalizeRole(role: string): Role {
+  // Existing databases used "moderator" and "admin"; unknown values receive
+  // no authority instead of accidentally becoming privileged.
+  return (ROLES as readonly string[]).includes(role) ? (role as Role) : "user";
+}
+
+export function capabilitiesFor(role: string): readonly Capability[] {
+  return ROLE_CAPABILITIES[normalizeRole(role)];
+}
+
+export function hasCapability(role: string, capability: Capability): boolean {
+  return capabilitiesFor(role).includes(capability);
+}
+
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
@@ -78,9 +159,18 @@ export async function requireAcceptedTerms(req: FastifyRequest): Promise<User> {
 }
 
 export async function requireModerator(req: FastifyRequest): Promise<User> {
+  return requireCapability(req, "view_reports");
+}
+
+export async function requireCapability(
+  req: FastifyRequest,
+  capability: Capability,
+): Promise<User> {
   const user = await requireActiveUser(req);
-  if (user.role !== "moderator" && user.role !== "admin") {
-    throw Object.assign(new Error("Moderator access required"), { statusCode: 403 });
+  if (!hasCapability(user.role, capability)) {
+    throw Object.assign(new Error("You do not have permission to perform this action"), {
+      statusCode: 403,
+    });
   }
   return user;
 }
@@ -92,6 +182,7 @@ export function publicUser(u: User) {
     email: u.email,
     acceptedTermsVersion: u.acceptedTermsVersion,
     role: u.role,
+    capabilities: capabilitiesFor(u.role),
     status: u.status,
   };
 }

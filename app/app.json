@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MangaShelf",
-    "slug": "mangashelf",
+    "name": "Mangadamia",
+    "slug": "mangadamia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -31,11 +31,18 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "scheme": "mangashelf",
+    "scheme": "mangadamia",
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#7C5CFF",
+          "defaultChannel": "social"
+        }
+      ]
     ]
   }
 }

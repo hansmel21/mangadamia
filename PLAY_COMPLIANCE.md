@@ -32,8 +32,11 @@ AAB and deployed production service.
 Declare and verify at minimum:
 
 - Personal info: email address and user ID/username.
-- App activity: app interactions, library, reading progress, and chapters read.
-- User-generated content: posts, comments, reports, and moderation records.
+- App activity: app interactions, follows, quests, rewards, library, reading
+  progress, and chapters read.
+- User-generated content: profile bios, posts, comments, reports, appeals, and
+  moderation records.
+- Device identifiers: Expo/FCM push tokens when a reader opts into push.
 - Authentication information: password-derived hash and sessions.
 - Diagnostics/security: IP address and request/security logs where applicable.
 - Third-party processing by hosting, database, email, crash-reporting, or push
@@ -44,7 +47,7 @@ Declare and verify at minimum:
 
 ## Play Console
 
-- [ ] App name and branding have been cleared; existing MangaShelf listings
+- [ ] App name and branding have been cleared; existing Mangadamia listings
       have been considered to avoid confusion.
 - [ ] Package `com.mangadamia.mangashelf` is confirmed available and registered
       before the first upload. It becomes permanent after publication.
@@ -71,8 +74,9 @@ Declare and verify at minimum:
       overlay, legacy external-storage, system-settings, and vibration
       permissions are absent.
 - [ ] Confirm Android backup cannot export session or personal databases.
-- [ ] Run production API, account deletion, reporting, blocking, moderation,
-      legal-page, offline/error, and regional network tests.
+- [ ] Run production API, account deletion, reporting, blocking, private
+      follows, quest reversal, appeals, push, legal-page, offline/error, and
+      regional network tests.
 
 ## Google services
 
@@ -82,6 +86,7 @@ not general Play-publication requirements. Add only services the product uses:
 - Play App Signing is required for release management.
 - Play Integrity/App Check may be added for abuse prevention after backend
   verification is implemented.
-- FCM is appropriate only when push notifications are implemented.
+- FCM/Expo Push is implemented in code; complete the EAS/Firebase credentials
+  in `GOOGLE_SERVICES_SETUP.md` and test a production-signed build.
 - Crashlytics is optional and must be reflected in Data Safety and Privacy.
 - Analytics and Ads are intentionally omitted to minimize collected data.

@@ -7,7 +7,14 @@ export interface SessionUser {
   username: string;
   email: string;
   acceptedTermsVersion: string | null;
-  role: "user" | "moderator" | "admin";
+  role:
+    | "user"
+    | "community_moderator"
+    | "moderator"
+    | "senior_moderator"
+    | "admin"
+    | "owner";
+  capabilities: string[];
   status: "active" | "suspended" | "banned";
 }
 

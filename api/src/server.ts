@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { registerRoutes } from "./routes/index.js";
+import { dispatchPendingPushes } from "./notifications.js";
 
 if (process.env.NODE_ENV === "production") {
   const required = ["DATABASE_URL", "SUPPORT_EMAIL", "DEVELOPER_LEGAL_NAME", "APP_USER_AGENT"];
@@ -49,6 +50,11 @@ app.setErrorHandler((error, req, reply) => {
 });
 
 registerRoutes(app);
+
+// Best-effort delivery for queued, spoiler-safe pushes. Database notifications
+// remain the source of truth if the provider or network is unavailable.
+void dispatchPendingPushes();
+setInterval(() => void dispatchPendingPushes(), 30_000).unref();
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });

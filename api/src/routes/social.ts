@@ -15,12 +15,15 @@ import {
   BADGES,
   evaluateBadges,
   getStats,
-  displayBadges,
   levelForXp,
   xpForLevel,
 } from "../badges.js";
 import { prisma } from "../db/client.js";
+import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../identity.js";
+import { createNotification } from "../notifications.js";
 import { CURRENT_TERMS_VERSION, validateUserContent } from "../policy.js";
+import { questListForUser, recordActivity } from "../quests.js";
+import { deleteUserCompletely } from "../accounts.js";
 
 const registerBody = z.object({
   email: z.string().email().max(200),
@@ -31,6 +34,7 @@ const registerBody = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, "letters, numbers and _ only"),
   password: z.string().min(8).max(200),
   acceptedTermsVersion: z.literal(CURRENT_TERMS_VERSION),
+  ageConfirmed: z.literal(true),
 });
 
 const loginBody = z.object({
@@ -41,6 +45,7 @@ const loginBody = z.object({
 const commentBody = z.object({
   body: z.string().trim().min(1).max(1000),
   parentId: z.string().optional(),
+  isSpoiler: z.boolean().optional().default(false),
 });
 
 const commentParams = z.object({
@@ -68,7 +73,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     async (req) => {
     const { email, username, password, acceptedTermsVersion } = registerBody.parse(req.body);
     const clash = await prisma.user.findFirst({
-      where: { OR: [{ email: email.toLowerCase() }, { username }] },
+      where: {
+        OR: [
+          { email: email.toLowerCase() },
+          { username: { equals: username, mode: "insensitive" } },
+        ],
+      },
     });
     if (clash) {
       throw httpError(
@@ -83,8 +93,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         passwordHash: hashPassword(password),
         acceptedTermsVersion,
         acceptedTermsAt: new Date(),
+        ageConfirmedAt: new Date(),
       },
     });
+    await ensureDefaultIdentity(user.id);
     return { token: await createSession(user.id), user: publicUser(user) };
     },
   );
@@ -98,6 +110,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (!user || !verifyPassword(password, user.passwordHash)) {
       throw httpError(401, "Wrong email or password");
     }
+    if (user.status === "banned") throw httpError(403, "This account has been banned");
     return { token: await createSession(user.id), user: publicUser(user) };
     },
   );
@@ -114,23 +127,76 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const user = await requireUser(req);
     // Evaluate here too — it's what eventually grants account-age badges
     await evaluateBadges(user.id);
-    const [stats, owned, fresh] = await Promise.all([
+    const [stats, owned, fresh, followerCount, followingCount, pendingFollowCount, identity] = await Promise.all([
       getStats(user.id),
       prisma.userBadge.findMany({ where: { userId: user.id } }),
       prisma.user.findUniqueOrThrow({
         where: { id: user.id },
-        select: { xp: true, equippedBadgeId: true },
+        include: {
+          titles: { include: { title: true }, orderBy: { unlockedAt: "asc" } },
+          cosmetics: { include: { cosmetic: true }, orderBy: { unlockedAt: "asc" } },
+          moderationNotices: {
+            where: { requiresAcknowledgement: true, acknowledgedAt: null },
+            select: { id: true },
+          },
+        },
       }),
+      prisma.follow.count({ where: { followingId: user.id, status: "accepted" } }),
+      prisma.follow.count({ where: { followerId: user.id, status: "accepted" } }),
+      prisma.follow.count({ where: { followingId: user.id, status: "pending" } }),
+      identityForUser(user.id, user.id),
     ]);
     const earnedAt = new Map(owned.map((b) => [b.badgeId, b.earnedAt]));
     const level = levelForXp(fresh.xp);
     return {
       user: publicUser(user),
+      identity,
+      bio: fresh.bio,
       stats,
       xp: fresh.xp,
       level,
       equippedBadgeId: fresh.equippedBadgeId,
+      equippedTitleId: fresh.equippedTitleId,
+      equippedAvatarId: fresh.equippedAvatarId,
+      equippedFrameId: fresh.equippedFrameId,
       xpForNextLevel: xpForLevel(level + 1),
+      usernameChangesLeft: fresh.usernameChangesLeft,
+      followerCount,
+      followingCount,
+      pendingFollowCount,
+      pendingNoticeCount: fresh.moderationNotices.length,
+      privacy: {
+        profileVisibility: fresh.profileVisibility,
+        showLevel: fresh.showLevel,
+        showTitle: fresh.showTitle,
+        showBadges: fresh.showBadges,
+        showStats: fresh.showStats,
+        showPosts: fresh.showPosts,
+        showFavorites: fresh.showFavorites,
+        showReadingHistory: fresh.showReadingHistory,
+        showFollows: fresh.showFollows,
+        showJoinDate: fresh.showJoinDate,
+      },
+      titles: fresh.titles.map(({ title, unlockedAt, source }) => ({
+        id: title.id,
+        name: title.name,
+        description: title.description,
+        rarity: title.rarity,
+        source,
+        unlockedAt,
+      })),
+      cosmetics: fresh.cosmetics.map(({ cosmetic, unlockedAt, source }) => ({
+        id: cosmetic.id,
+        name: cosmetic.name,
+        description: cosmetic.description,
+        kind: cosmetic.kind,
+        rarity: cosmetic.rarity,
+        assetKey: cosmetic.assetKey,
+        primaryColor: cosmetic.primaryColor,
+        secondaryColor: cosmetic.secondaryColor,
+        source,
+        unlockedAt,
+      })),
       badges: BADGES.map((b) => ({
         id: b.id,
         name: b.name,
@@ -159,25 +225,107 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (!verifyPassword(password, user.passwordHash)) {
       throw httpError(403, "Password confirmation failed");
     }
-    await prisma.user.delete({ where: { id: user.id } });
+    await deleteUserCompletely(user.id);
     return { ok: true };
   });
 
-  // Equip an earned badge as your displayed Title (null to unequip)
+  // Equip an unlocked Title. Badges are intentionally a separate collection.
   app.post("/me/title", async (req) => {
     const user = await requireUser(req);
-    const { badgeId } = z.object({ badgeId: z.string().nullable() }).parse(req.body);
-    if (badgeId) {
-      const earned = await prisma.userBadge.findUnique({
-        where: { userId_badgeId: { userId: user.id, badgeId } },
+    const { titleId } = z.object({ titleId: z.string().nullable() }).parse(req.body);
+    if (titleId) {
+      const unlocked = await prisma.userTitle.findUnique({
+        where: { userId_titleId: { userId: user.id, titleId } },
       });
-      if (!earned) throw httpError(403, "You haven't earned that badge yet");
+      if (!unlocked) throw httpError(403, "You haven't unlocked that title yet");
     }
     await prisma.user.update({
       where: { id: user.id },
-      data: { equippedBadgeId: badgeId },
+      data: { equippedTitleId: titleId },
     });
-    return { ok: true, equippedBadgeId: badgeId };
+    return { ok: true, equippedTitleId: titleId };
+  });
+
+  app.post("/me/cosmetic", async (req) => {
+    const user = await requireUser(req);
+    const { slot, cosmeticId } = z
+      .object({ slot: z.enum(["avatar", "frame"]), cosmeticId: z.string().nullable() })
+      .parse(req.body);
+    if (slot === "avatar" && !cosmeticId) throw httpError(400, "An avatar is required");
+    if (cosmeticId) {
+      const owned = await prisma.userCosmetic.findUnique({
+        where: { userId_cosmeticId: { userId: user.id, cosmeticId } },
+        include: { cosmetic: true },
+      });
+      if (!owned || owned.cosmetic.kind !== slot) {
+        throw httpError(403, `You haven't unlocked that ${slot} yet`);
+      }
+    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: slot === "avatar" ? { equippedAvatarId: cosmeticId } : { equippedFrameId: cosmeticId },
+    });
+    return { ok: true, slot, cosmeticId };
+  });
+
+  app.patch("/me/profile", async (req) => {
+    const user = await requireActiveUser(req);
+    const { bio, username } = z
+      .object({
+        bio: z.string().trim().max(240).nullable().optional(),
+        username: z
+          .string()
+          .trim()
+          .min(3)
+          .max(20)
+          .regex(/^[a-zA-Z0-9_]+$/, "letters, numbers and _ only")
+          .optional(),
+      })
+      .parse(req.body);
+    if (bio) validateUserContent(bio);
+    if (username && username !== user.username) {
+      const fresh = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+      if (fresh.usernameChangesLeft < 1) {
+        throw httpError(403, "Your one username change has already been used");
+      }
+      const clash = await prisma.user.findFirst({
+        where: { username: { equals: username, mode: "insensitive" }, id: { not: user.id } },
+      });
+      if (clash) throw httpError(409, "Username taken");
+      await prisma.$transaction([
+        prisma.usernameChange.create({
+          data: { userId: user.id, previousUsername: user.username, newUsername: username },
+        }),
+        prisma.user.update({
+          where: { id: user.id },
+          data: { username, usernameChangesLeft: { decrement: 1 }, bio: bio === undefined ? undefined : bio || null },
+        }),
+      ]);
+    } else if (bio !== undefined) {
+      await prisma.user.update({ where: { id: user.id }, data: { bio: bio || null } });
+    }
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    return { user: publicUser(updated), bio: updated.bio, usernameChangesLeft: updated.usernameChangesLeft };
+  });
+
+  app.patch("/me/privacy", async (req) => {
+    const user = await requireUser(req);
+    const settings = z
+      .object({
+        profileVisibility: z.enum(["public", "private"]).optional(),
+        showLevel: z.boolean().optional(),
+        showTitle: z.boolean().optional(),
+        showBadges: z.boolean().optional(),
+        showStats: z.boolean().optional(),
+        showPosts: z.boolean().optional(),
+        showFavorites: z.boolean().optional(),
+        showReadingHistory: z.boolean().optional(),
+        showFollows: z.boolean().optional(),
+        showJoinDate: z.boolean().optional(),
+      })
+      .parse(req.body);
+    await prisma.user.update({ where: { id: user.id }, data: settings });
+    return { ok: true, privacy: settings };
   });
 
   // ── Public profiles & safety ──────────────────────────────────────────
@@ -185,34 +333,103 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const me = await getUser(req);
     const target = await prisma.user.findUnique({
       where: { username: req.params.username },
-      select: { id: true, username: true, xp: true, createdAt: true },
+      select: {
+        id: true,
+        username: true,
+        bio: true,
+        status: true,
+        createdAt: true,
+        profileVisibility: true,
+        showBadges: true,
+        showStats: true,
+        showPosts: true,
+        showFavorites: true,
+        showReadingHistory: true,
+        showFollows: true,
+        showJoinDate: true,
+      },
     });
     if (!target) throw httpError(404, "No such reader");
-    const [stats, owned, postCount, badges, blocked, recentPosts] = await Promise.all([
+    if (target.status === "banned") {
+      return {
+        id: null,
+        username: "Removed Reader",
+        unavailable: "removed",
+        isMe: false,
+        blockedByMe: false,
+        blockedMe: false,
+      };
+    }
+    const isMe = me?.id === target.id;
+    const [block, follow, followerCount, followingCount] = await Promise.all([
+      me && !isMe
+        ? prisma.block.findFirst({
+            where: {
+              OR: [
+                { blockerId: me.id, blockedId: target.id },
+                { blockerId: target.id, blockedId: me.id },
+              ],
+            },
+          })
+        : null,
+      me && !isMe
+        ? prisma.follow.findUnique({
+            where: { followerId_followingId: { followerId: me.id, followingId: target.id } },
+          })
+        : null,
+      prisma.follow.count({ where: { followingId: target.id, status: "accepted" } }),
+      prisma.follow.count({ where: { followerId: target.id, status: "accepted" } }),
+    ]);
+    const blockedByMe = block?.blockerId === me?.id;
+    const blockedMe = block?.blockedId === me?.id;
+    if (block && !isMe) {
+      return {
+        id: target.id,
+        username: target.username,
+        unavailable: "blocked",
+        isMe: false,
+        blockedByMe,
+        blockedMe,
+        followStatus: null,
+      };
+    }
+    const privateProfile =
+      target.profileVisibility === "private" && !isMe && follow?.status !== "accepted";
+    const [identity, stats, owned, postCount, recentPosts, favorites, recentReads] = await Promise.all([
+      identityForUser(target.id, me?.id),
       getStats(target.id),
       prisma.userBadge.findMany({ where: { userId: target.id }, orderBy: { earnedAt: "asc" } }),
       prisma.post.count({
-        where: { userId: target.id, moderationStatus: "visible", user: { status: { not: "banned" } } },
+        where: { userId: target.id, parentId: null, moderationStatus: "visible" },
       }),
-      displayBadges([target.id]),
-      me
-        ? prisma.block.findUnique({
-            where: { blockerId_blockedId: { blockerId: me.id, blockedId: target.id } },
-          })
-        : null,
       prisma.post.findMany({
         where: {
           userId: target.id,
           parentId: null,
           moderationStatus: "visible",
-          user: { status: { not: "banned" } },
         },
         orderBy: { createdAt: "desc" },
         take: 10,
         include: {
           canonical: { select: { id: true, title: true, coverUrl: true } },
+          seriesTags: {
+            orderBy: { position: "asc" },
+            include: { canonical: { select: { id: true, title: true, coverUrl: true } } },
+          },
           _count: { select: { likes: true, replies: true } },
         },
+      }),
+      prisma.libraryEntry.findMany({
+        where: { userId: target.id },
+        orderBy: { addedAt: "desc" },
+        take: 12,
+        include: { canonical: { select: { id: true, title: true, coverUrl: true } } },
+      }),
+      prisma.readChapter.findMany({
+        where: { userId: target.id },
+        orderBy: { readAt: "desc" },
+        take: 20,
+        include: { canonical: { select: { id: true, title: true, coverUrl: true } } },
       }),
     ]);
     const earnedDefs = owned
@@ -226,14 +443,22 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return {
       id: target.id,
       username: target.username,
-      level: levelForXp(target.xp),
-      memberDays: Math.floor((Date.now() - target.createdAt.getTime()) / 86_400_000),
-      title: badges.get(target.id) ?? null,
-      stats: { ...stats, posts: postCount },
-      badges: earnedDefs,
-      blockedByMe: !!blocked,
-      isMe: me?.id === target.id,
-      recentPosts: recentPosts.map((p) => ({
+      bio: target.bio,
+      identity,
+      private: privateProfile,
+      isMe,
+      blockedByMe,
+      blockedMe,
+      followStatus: follow?.status ?? null,
+      followerCount: target.showFollows || isMe ? followerCount : null,
+      followingCount: target.showFollows || isMe ? followingCount : null,
+      memberDays:
+        target.showJoinDate || isMe
+          ? Math.floor((Date.now() - target.createdAt.getTime()) / 86_400_000)
+          : null,
+      stats: !privateProfile && (target.showStats || isMe) ? { ...stats, posts: postCount } : null,
+      badges: !privateProfile && (target.showBadges || isMe) ? earnedDefs : [],
+      recentPosts: !privateProfile && (target.showPosts || isMe) ? recentPosts.map((p) => ({
         id: p.id,
         body: p.body,
         isSpoiler: p.isSpoiler,
@@ -241,6 +466,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         chapterNumber: p.chapterNumber,
         likeCount: p._count.likes,
         replyCount: p._count.replies,
+        seriesTags: p.seriesTags.map((tag) => ({
+          canonicalId: tag.canonical.id,
+          title: tag.canonical.title,
+          coverUrl: tag.canonical.coverUrl,
+          chapterNumber: tag.chapterNumber,
+        })),
         series: p.canonical
           ? {
               canonicalId: p.canonical.id,
@@ -248,7 +479,25 @@ export function registerSocialRoutes(app: FastifyInstance): void {
               coverUrl: p.canonical.coverUrl,
             }
           : null,
-      })),
+      })) : [],
+      favorites:
+        !privateProfile && (target.showFavorites || isMe)
+          ? favorites.map((entry) => ({
+              canonicalId: entry.canonical.id,
+              title: entry.canonical.title,
+              coverUrl: entry.canonical.coverUrl,
+            }))
+          : [],
+      recentReads:
+        !privateProfile && (target.showReadingHistory || isMe)
+          ? recentReads.map((read) => ({
+              canonicalId: read.canonical.id,
+              title: read.canonical.title,
+              coverUrl: read.canonical.coverUrl,
+              chapterNumber: read.chapterNumber,
+              readAt: read.readAt,
+            }))
+          : [],
     };
   });
 
@@ -261,9 +510,159 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const key = { blockerId: me.id, blockedId: target.id };
     const existing = await prisma.block.findUnique({ where: { blockerId_blockedId: key } });
     if (existing) await prisma.block.delete({ where: { blockerId_blockedId: key } });
-    else await prisma.block.create({ data: key });
+    else {
+      await prisma.$transaction([
+        prisma.block.create({ data: key }),
+        prisma.follow.deleteMany({
+          where: {
+            OR: [
+              { followerId: me.id, followingId: target.id },
+              { followerId: target.id, followingId: me.id },
+            ],
+          },
+        }),
+      ]);
+    }
     return { blocked: !existing };
   });
+
+  app.put<{ Params: { username: string } }>("/users/:username/follow", async (req) => {
+    const me = await requireActiveUser(req);
+    const target = await prisma.user.findUnique({ where: { username: req.params.username } });
+    if (!target || target.status === "banned") throw httpError(404, "No such reader");
+    if (target.id === me.id) throw httpError(400, "You can't follow yourself");
+    if ((await hiddenUserIds(me.id)).includes(target.id)) {
+      throw httpError(403, "You cannot interact with this reader");
+    }
+    const existingFollow = await prisma.follow.findUnique({
+      where: { followerId_followingId: { followerId: me.id, followingId: target.id } },
+    });
+    if (existingFollow) {
+      return { status: existingFollow.status, completedQuests: [], levelUp: null };
+    }
+    const status = target.profileVisibility === "private" ? "pending" : "accepted";
+    const follow = await prisma.follow.upsert({
+      where: { followerId_followingId: { followerId: me.id, followingId: target.id } },
+      create: {
+        followerId: me.id,
+        followingId: target.id,
+        status,
+        acceptedAt: status === "accepted" ? new Date() : null,
+      },
+      update: {},
+    });
+    await createNotification({
+      userId: target.id,
+      actorId: me.id,
+      kind: status === "accepted" ? "new_follower" : "follow_request",
+      title: status === "accepted" ? "New follower" : "New follow request",
+      safeBody:
+        status === "accepted"
+          ? `@${me.username} followed you.`
+          : `@${me.username} requested to follow you.`,
+      targetUrl: `/user/${encodeURIComponent(me.username)}`,
+      dedupeKey: `follow:${me.id}:${target.id}:${status}`,
+    });
+    const activity =
+      follow.status === "accepted"
+        ? await recordActivity(me.id, { type: "follow_created", eventKey: target.id })
+        : { completedQuests: [], levelUp: null };
+    return { status: follow.status, ...activity };
+  });
+
+  app.delete<{ Params: { username: string } }>("/users/:username/follow", async (req) => {
+    const me = await requireActiveUser(req);
+    const target = await prisma.user.findUnique({ where: { username: req.params.username } });
+    if (!target) throw httpError(404, "No such reader");
+    await prisma.follow.deleteMany({ where: { followerId: me.id, followingId: target.id } });
+    return { ok: true };
+  });
+
+  app.get("/me/follow-requests", async (req) => {
+    const me = await requireUser(req);
+    const rows = await prisma.follow.findMany({
+      where: { followingId: me.id, status: "pending" },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    const identities = await identitiesForUsers(rows.map((row) => row.followerId), me.id);
+    return rows.map((row) => ({
+      user: identities.get(row.followerId),
+      requestedAt: row.createdAt,
+    }));
+  });
+
+  app.post<{ Params: { userId: string } }>("/me/follow-requests/:userId", async (req) => {
+    const me = await requireActiveUser(req);
+    const { action } = z.object({ action: z.enum(["accept", "reject"]) }).parse(req.body);
+    const follow = await prisma.follow.findUnique({
+      where: { followerId_followingId: { followerId: req.params.userId, followingId: me.id } },
+      include: { follower: { select: { username: true } } },
+    });
+    if (!follow || follow.status !== "pending") throw httpError(404, "Follow request not found");
+    if (action === "reject") {
+      await prisma.follow.delete({
+        where: { followerId_followingId: { followerId: follow.followerId, followingId: me.id } },
+      });
+      return { ok: true, status: "rejected" };
+    }
+    await prisma.follow.update({
+      where: { followerId_followingId: { followerId: follow.followerId, followingId: me.id } },
+      data: { status: "accepted", acceptedAt: new Date() },
+    });
+    await createNotification({
+      userId: follow.followerId,
+      actorId: me.id,
+      kind: "follow_accepted",
+      title: "Follow request accepted",
+      safeBody: `@${me.username} accepted your follow request.`,
+      targetUrl: `/user/${encodeURIComponent(me.username)}`,
+      dedupeKey: `follow-accepted:${follow.followerId}:${me.id}`,
+    });
+    const activity = await recordActivity(follow.followerId, {
+      type: "follow_created",
+      eventKey: me.id,
+    });
+    return { ok: true, status: "accepted", ...activity };
+  });
+
+  app.get<{ Params: { username: string; direction: string } }>(
+    "/users/:username/:direction(followers|following)",
+    async (req) => {
+      const me = await getUser(req);
+      const target = await prisma.user.findUnique({ where: { username: req.params.username } });
+      if (!target) throw httpError(404, "No such reader");
+      const isMe = me?.id === target.id;
+      const accepted = me
+        ? await prisma.follow.findUnique({
+            where: { followerId_followingId: { followerId: me.id, followingId: target.id } },
+          })
+        : null;
+      if (!target.showFollows && !isMe) throw httpError(403, "This reader keeps follows private");
+      if (target.profileVisibility === "private" && !isMe && accepted?.status !== "accepted") {
+        throw httpError(403, "This profile is private");
+      }
+      const rows =
+        req.params.direction === "followers"
+          ? await prisma.follow.findMany({
+              where: { followingId: target.id, status: "accepted" },
+              orderBy: { createdAt: "desc" },
+              take: 200,
+            })
+          : await prisma.follow.findMany({
+              where: { followerId: target.id, status: "accepted" },
+              orderBy: { createdAt: "desc" },
+              take: 200,
+            });
+      const ids = rows.map((row) =>
+        req.params.direction === "followers" ? row.followerId : row.followingId,
+      );
+      const hidden = me ? new Set(await hiddenUserIds(me.id)) : new Set<string>();
+      const visibleIds = ids.filter((id) => !hidden.has(id));
+      const identities = await identitiesForUsers(visibleIds, me?.id);
+      return visibleIds.map((id) => identities.get(id)).filter(Boolean);
+    },
+  );
 
   app.post(
     "/report",
@@ -288,18 +687,27 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       where: { reporterId: me.id, targetType, targetId, status: "pending" },
     });
     if (existing) return { ok: true, duplicate: true };
-    await prisma.report.create({
+    const report = await prisma.report.create({
       data: { reporterId: me.id, targetType, targetId, reason },
     });
-    return { ok: true };
+    const activity = await recordActivity(me.id, {
+      type: "report_created",
+      eventKey: `${targetType}:${targetId}`,
+      metadata: { reportId: report.id, targetType },
+    });
+    return { ok: true, ...activity };
     },
   );
 
   // Reading activity (signed-in): powers reading badges/XP, and later sync
   app.post("/activity/read", async (req) => {
     const user = await requireUser(req);
-    const { canonicalId, chapterNumber } = z
-      .object({ canonicalId: z.string().min(1), chapterNumber: z.coerce.number() })
+    const { canonicalId, chapterNumber, event } = z
+      .object({
+        canonicalId: z.string().min(1),
+        chapterNumber: z.coerce.number(),
+        event: z.enum(["opened", "completed"]).default("opened"),
+      })
       .parse(req.body);
     const canonical = await prisma.canonicalSeries.findUnique({ where: { id: canonicalId } });
     if (!canonical) throw httpError(404, "Unknown series");
@@ -324,7 +732,23 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         icon: b.icon,
       }));
     }
-    return { ok: true, newBadges, levelUp };
+    const activity = await recordActivity(user.id, {
+      type: event === "completed" ? "chapter_completed" : "chapter_opened",
+      eventKey: `${canonicalId}:${chapterNumber}`,
+      canonicalId,
+      chapterNumber,
+    });
+    return {
+      ok: true,
+      newBadges,
+      levelUp: activity.levelUp ?? levelUp,
+      completedQuests: activity.completedQuests,
+    };
+  });
+
+  app.get("/quests", async (req) => {
+    const user = await requireUser(req);
+    return questListForUser(user.id);
   });
 
   // ── Comments ──────────────────────────────────────────────────────────
@@ -339,26 +763,24 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           canonicalId,
           chapterNumber,
           moderationStatus: "visible",
-          user: { status: { not: "banned" } },
           userId: { notIn: blockedIds },
         },
         orderBy: { createdAt: "desc" },
         take: 500,
         include: {
-          user: { select: { username: true, xp: true } },
           _count: { select: { likes: true } },
           likes: me ? { where: { userId: me.id }, select: { userId: true } } : false,
         },
       });
-      const badges = await displayBadges([...new Set(rows.map((c) => c.userId))]);
+      const identities = await identitiesForUsers(rows.map((c) => c.userId), me?.id);
       interface CommentNode {
         id: string;
         parentId: string | null;
         body: string;
+        isSpoiler: boolean;
+        author: Awaited<ReturnType<typeof identityForUser>>;
         username: string;
-        level: number;
-        badgeId: string | null;
-        badgeIcon: string | null;
+        level: number | null;
         createdAt: Date;
         likeCount: number;
         likedByMe: boolean;
@@ -369,10 +791,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         id: c.id,
         parentId: c.parentId,
         body: c.body,
-        username: c.user.username,
-        level: levelForXp(c.user.xp),
-        badgeId: badges.get(c.userId)?.id ?? null,
-        badgeIcon: badges.get(c.userId)?.icon ?? null,
+        isSpoiler: c.isSpoiler,
+        author: identities.get(c.userId) ?? null,
+        username: identities.get(c.userId)?.username ?? "Removed Reader",
+        level: identities.get(c.userId)?.level ?? null,
         createdAt: c.createdAt,
         likeCount: c._count.likes,
         likedByMe: me ? c.likes.length > 0 : false,
@@ -397,7 +819,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } },
     async (req) => {
       const { canonicalId, chapterNumber } = commentParams.parse(req.params);
-      const { body, parentId } = commentBody.parse(req.body);
+      const { body, parentId, isSpoiler } = commentBody.parse(req.body);
       const user = await requireAcceptedTerms(req);
       validateUserContent(body);
       const canonical = await prisma.canonicalSeries.findUnique({ where: { id: canonicalId } });
@@ -426,12 +848,20 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       }
 
       const comment = await prisma.comment.create({
-        data: { userId: user.id, canonicalId, chapterNumber, body, parentId: parent?.id },
+        data: { userId: user.id, canonicalId, chapterNumber, body, isSpoiler, parentId: parent?.id },
       });
       // Notify the parent's author (not when replying to yourself)
       if (parent && parent.userId !== user.id) {
-        await prisma.notification.create({
-          data: { userId: parent.userId, commentId: comment.id },
+        await createNotification({
+          userId: parent.userId,
+          actorId: user.id,
+          kind: "comment_reply",
+          title: "New reply",
+          safeBody: `@${user.username} replied to your chapter discussion.`,
+          targetUrl: "/notifications",
+          metadata: { canonicalId, chapterNumber, commentId: comment.id },
+          dedupeKey: `comment-reply:${comment.id}`,
+          commentId: comment.id,
         });
       }
       const levelBefore = levelForXp(user.xp);
@@ -447,22 +877,29 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         name: b.name,
         icon: b.icon,
       }));
-      const badges = await displayBadges([user.id]);
+      const identity = await identityForUser(user.id, user.id);
+      const activity = await recordActivity(user.id, {
+        type: "comment_created",
+        eventKey: comment.id,
+        canonicalId,
+        chapterNumber,
+      });
       return {
         id: comment.id,
         parentId: comment.parentId,
         body: comment.body,
+        isSpoiler: comment.isSpoiler,
+        author: identity,
         username: user.username,
-        level: levelForXp(updated.xp),
-        badgeId: badges.get(user.id)?.id ?? null,
-        badgeIcon: badges.get(user.id)?.icon ?? null,
+        level: identity?.level ?? levelForXp(updated.xp),
         createdAt: comment.createdAt,
         likeCount: 0,
         likedByMe: false,
         mine: true,
         replies: [],
         newBadges,
-        levelUp,
+        levelUp: activity.levelUp ?? levelUp,
+        completedQuests: activity.completedQuests,
       };
     },
   );
@@ -588,42 +1025,63 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     body: string;
     isSpoiler: boolean;
     createdAt: Date;
+    author: Awaited<ReturnType<typeof identityForUser>>;
     username: string;
-    level: number;
-    badgeId: string | null;
-    badgeIcon: string | null;
+    level: number | null;
     likeCount: number;
     likedByMe: boolean;
     mine: boolean;
     chapterNumber: number | null;
     series: { canonicalId: string; title: string; coverUrl: string | null } | null;
+    seriesTags: {
+      canonicalId: string;
+      title: string;
+      coverUrl: string | null;
+      chapterNumber: number | null;
+    }[];
     replies: PostNode[];
   }
 
   const postInclude = (meId?: string) =>
     ({
-      user: { select: { username: true, xp: true } },
       canonical: { select: { id: true, title: true, coverUrl: true } },
+      seriesTags: {
+        orderBy: { position: "asc" as const },
+        include: { canonical: { select: { id: true, title: true, coverUrl: true } } },
+      },
       _count: { select: { likes: true } },
       likes: meId ? { where: { userId: meId }, select: { userId: true } } : false,
     }) as const;
 
   app.get("/posts", async (req) => {
-    const { page, canonicalId } = z
+    const { page, canonicalId, feed } = z
       .object({
         page: z.coerce.number().int().min(1).default(1),
         canonicalId: z.string().optional(),
+        feed: z.enum(["global", "following"]).default("global"),
       })
       .parse(req.query);
     const me = await getUser(req);
+    if (feed === "following" && !me) throw httpError(401, "Sign in to view your Following feed");
     const blockedIds = me ? await hiddenUserIds(me.id) : [];
+    const followingIds =
+      feed === "following" && me
+        ? (
+            await prisma.follow.findMany({
+              where: { followerId: me.id, status: "accepted" },
+              select: { followingId: true },
+            })
+          ).map((row) => row.followingId)
+        : null;
     const rows = await prisma.post.findMany({
       where: {
         parentId: null,
         moderationStatus: "visible",
-        user: { status: { not: "banned" } },
         userId: { notIn: blockedIds },
-        ...(canonicalId ? { canonicalId } : {}),
+        ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
+        ...(canonicalId
+          ? { OR: [{ canonicalId }, { seriesTags: { some: { canonicalId } } }] }
+          : {}),
       },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * 25,
@@ -634,7 +1092,6 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           where: {
             userId: { notIn: blockedIds },
             moderationStatus: "visible",
-            user: { status: { not: "banned" } },
           },
           orderBy: { createdAt: "asc" },
           include: postInclude(me?.id),
@@ -644,17 +1101,16 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const userIds = [
       ...new Set([...rows.map((p) => p.userId), ...rows.flatMap((p) => p.replies.map((r) => r.userId))]),
     ];
-    const badges = await displayBadges(userIds);
+    const identities = await identitiesForUsers(userIds, me?.id);
     const serialize = (p: (typeof rows)[number]["replies"][number]): PostNode => ({
       id: p.id,
       parentId: p.parentId,
       body: p.body,
       isSpoiler: p.isSpoiler,
       createdAt: p.createdAt,
-      username: p.user.username,
-      level: levelForXp(p.user.xp),
-      badgeId: badges.get(p.userId)?.id ?? null,
-      badgeIcon: badges.get(p.userId)?.icon ?? null,
+      author: identities.get(p.userId) ?? null,
+      username: identities.get(p.userId)?.username ?? "Removed Reader",
+      level: identities.get(p.userId)?.level ?? null,
       likeCount: p._count.likes,
       likedByMe: me ? p.likes.length > 0 : false,
       mine: me ? p.userId === me.id : false,
@@ -662,6 +1118,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       series: p.canonical
         ? { canonicalId: p.canonical.id, title: p.canonical.title, coverUrl: p.canonical.coverUrl }
         : null,
+      seriesTags: p.seriesTags.map((tag) => ({
+        canonicalId: tag.canonical.id,
+        title: tag.canonical.title,
+        coverUrl: tag.canonical.coverUrl,
+        chapterNumber: tag.chapterNumber,
+      })),
       replies: [],
     });
     return rows.map((p) => ({ ...serialize(p), replies: p.replies.map(serialize) }));
@@ -671,49 +1133,86 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     "/posts",
     { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } },
     async (req) => {
-    const { body, canonicalId, chapterNumber, parentId, isSpoiler } = z
+    const { body, canonicalId, chapterNumber, parentId, isSpoiler, seriesTags } = z
       .object({
         body: z.string().trim().min(1).max(1000),
         canonicalId: z.string().optional(),
         chapterNumber: z.coerce.number().optional(),
         parentId: z.string().optional(),
         isSpoiler: z.boolean().optional(),
+        seriesTags: z
+          .array(
+            z.object({ canonicalId: z.string().min(1), chapterNumber: z.coerce.number().optional() }),
+          )
+          .max(5)
+          .optional(),
       })
       .parse(req.body);
     const user = await requireAcceptedTerms(req);
     validateUserContent(body);
-    if (canonicalId) {
-      const canonical = await prisma.canonicalSeries.findUnique({ where: { id: canonicalId } });
-      if (!canonical) throw httpError(404, "Unknown series");
+    const requestedTags = seriesTags ?? (canonicalId ? [{ canonicalId, chapterNumber }] : []);
+    const uniqueTags = [...new Map(requestedTags.map((tag) => [tag.canonicalId, tag])).values()];
+    if (uniqueTags.length > 0) {
+      const count = await prisma.canonicalSeries.count({
+        where: { id: { in: uniqueTags.map((tag) => tag.canonicalId) } },
+      });
+      if (count !== uniqueTags.length) throw httpError(404, "One or more tagged series do not exist");
     }
     // Replies flatten to the top-level post, same as comments
     let parent = null;
     if (parentId) {
-      parent = await prisma.post.findUnique({ where: { id: parentId } });
+      parent = await prisma.post.findUnique({ where: { id: parentId }, include: { seriesTags: true } });
       if (!parent || parent.moderationStatus !== "visible") {
         throw httpError(404, "No such post to reply to");
       }
       if (parent.parentId) {
-        parent = await prisma.post.findUnique({ where: { id: parent.parentId } });
+        parent = await prisma.post.findUnique({
+          where: { id: parent.parentId },
+          include: { seriesTags: true },
+        });
         if (!parent) throw httpError(404, "No such post to reply to");
       }
       if ((await hiddenUserIds(user.id)).includes(parent.userId)) {
         throw httpError(403, "You cannot interact with this user");
       }
     }
+    const finalTags = parent
+      ? parent.seriesTags.map((tag) => ({ canonicalId: tag.canonicalId, chapterNumber: tag.chapterNumber }))
+      : uniqueTags;
+    const primaryTag = finalTags[0];
     const post = await prisma.post.create({
       data: {
         userId: user.id,
         body,
         isSpoiler: isSpoiler ?? false,
-        canonicalId: parent ? parent.canonicalId : (canonicalId ?? null),
-        chapterNumber: parent ? parent.chapterNumber : (chapterNumber ?? null),
+        canonicalId: parent ? parent.canonicalId : (primaryTag?.canonicalId ?? null),
+        chapterNumber: parent ? parent.chapterNumber : (primaryTag?.chapterNumber ?? null),
         parentId: parent?.id,
+        seriesTags:
+          finalTags.length > 0
+            ? {
+                create: finalTags.map((tag, position) => ({
+                  canonicalId: tag.canonicalId,
+                  chapterNumber: tag.chapterNumber,
+                  position,
+                })),
+              }
+            : undefined,
       },
       include: postInclude(user.id),
     });
     if (parent && parent.userId !== user.id) {
-      await prisma.notification.create({ data: { userId: parent.userId, postId: post.id } });
+      await createNotification({
+        userId: parent.userId,
+        actorId: user.id,
+        kind: "post_reply",
+        title: "New wall reply",
+        safeBody: `@${user.username} replied to your post.`,
+        targetUrl: "/(tabs)/feed",
+        metadata: { postId: post.id, parentId: parent.id },
+        dedupeKey: `post-reply:${post.id}`,
+        postId: post.id,
+      });
     }
     const levelBefore = levelForXp(user.xp);
     const updated = await prisma.user.update({
@@ -722,17 +1221,22 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       select: { xp: true },
     });
     const levelAfter = levelForXp(updated.xp);
-    const badges = await displayBadges([user.id]);
+    const identity = await identityForUser(user.id, user.id);
+    const activity = await recordActivity(user.id, {
+      type: parent ? "post_reply_created" : "post_created",
+      eventKey: post.id,
+      canonicalId: post.canonicalId ?? undefined,
+      chapterNumber: post.chapterNumber ?? undefined,
+    });
     return {
       id: post.id,
       parentId: post.parentId,
       body: post.body,
       isSpoiler: post.isSpoiler,
       createdAt: post.createdAt,
+      author: identity,
       username: user.username,
-      level: levelAfter,
-      badgeId: badges.get(user.id)?.id ?? null,
-      badgeIcon: badges.get(user.id)?.icon ?? null,
+      level: identity?.level ?? levelAfter,
       likeCount: 0,
       likedByMe: false,
       mine: true,
@@ -744,8 +1248,15 @@ export function registerSocialRoutes(app: FastifyInstance): void {
             coverUrl: post.canonical.coverUrl,
           }
         : null,
+      seriesTags: post.seriesTags.map((tag) => ({
+        canonicalId: tag.canonical.id,
+        title: tag.canonical.title,
+        coverUrl: tag.canonical.coverUrl,
+        chapterNumber: tag.chapterNumber,
+      })),
       replies: [],
-      levelUp: levelAfter > levelBefore ? levelAfter : null,
+      levelUp: activity.levelUp ?? (levelAfter > levelBefore ? levelAfter : null),
+      completedQuests: activity.completedQuests,
     };
     },
   );
@@ -775,58 +1286,101 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         where: { id: post.userId },
         data: { xp: { increment: existing ? -5 : 5 } },
       });
-      if (!existing) await evaluateBadges(post.userId);
+      if (!existing) {
+        await evaluateBadges(post.userId);
+        await createNotification({
+          userId: post.userId,
+          actorId: user.id,
+          kind: "post_like",
+          title: "Your post got a like",
+          safeBody: `@${user.username} liked your post.`,
+          targetUrl: "/(tabs)/feed",
+          metadata: { postId: post.id },
+          dedupeKey: `post-like:${post.id}:${user.id}`,
+          postId: post.id,
+        });
+      } else {
+        await prisma.notification.updateMany({
+          where: { userId: post.userId, dedupeKey: `post-like:${post.id}:${user.id}` },
+          data: { dismissedAt: new Date() },
+        });
+      }
     }
     const likeCount = await prisma.postLike.count({ where: { postId: post.id } });
-    return { liked: !existing, likeCount };
+    const activity = !existing
+      ? await recordActivity(user.id, { type: "like_given", eventKey: `post:${post.id}` })
+      : { completedQuests: [], levelUp: null };
+    if (!existing && post.userId !== user.id) {
+      await recordActivity(post.userId, { type: "like_received", eventKey: `post:${post.id}:${user.id}` });
+    }
+    return { liked: !existing, likeCount, ...activity };
   });
 
   // ── Notifications ─────────────────────────────────────────────────────
   app.get("/notifications", async (req) => {
-    const user = await requireActiveUser(req);
+    const user = await requireUser(req);
+    const { cursor } = z.object({ cursor: z.string().optional() }).parse(req.query);
     const rows = await prisma.notification.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        dismissedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 31,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: {
         comment: {
           include: {
-            user: { select: { username: true } },
             canonical: { select: { id: true, title: true } },
           },
         },
         post: {
           include: {
-            user: { select: { username: true } },
             canonical: { select: { id: true, title: true } },
           },
         },
       },
     });
-    return rows
-      .map((n) => {
+    const hasMore = rows.length > 30;
+    const page = rows.slice(0, 30);
+    const identities = await identitiesForUsers(
+      page.map((notification) => notification.actorId).filter((id): id is string => !!id),
+      user.id,
+    );
+    await prisma.notification.updateMany({
+      where: { id: { in: page.map((notification) => notification.id) }, seenAt: null },
+      data: { seenAt: new Date() },
+    });
+    const items = page.map((n) => {
         const item = n.comment ?? n.post;
-        if (!item) return null;
+        const actor = n.actorId ? identities.get(n.actorId) ?? null : null;
         return {
           id: n.id,
-          type: n.comment ? "comment" : "post",
+          kind: n.kind,
+          type: n.comment ? "comment" : n.post ? "post" : "system",
           createdAt: n.createdAt,
           read: n.readAt !== null,
-          fromUsername: item.user.username,
-          body: item.body.slice(0, 140),
-          canonicalId: item.canonical?.id ?? null,
-          seriesTitle: item.canonical?.title ?? null,
-          chapterNumber: item.chapterNumber ?? null,
+          seen: n.seenAt !== null,
+          title: n.title ?? "Notification",
+          body: n.safeBody ?? "Open Mangadamia to view this update.",
+          targetUrl: n.targetUrl,
+          metadata: n.metadata,
+          actor,
+          fromUsername: actor?.username ?? "Mangadamia",
+          canonicalId: item?.canonical?.id ?? null,
+          seriesTitle: item?.canonical?.title ?? null,
+          chapterNumber: item?.chapterNumber ?? null,
         };
-      })
-      .filter((n) => n !== null);
+      });
+    return { items, nextCursor: hasMore ? page.at(-1)?.id ?? null : null };
   });
 
   app.get("/notifications/count", async (req) => {
     const user = await getUser(req);
     if (!user) return { unread: 0 };
     const unread = await prisma.notification.count({
-      where: { userId: user.id, readAt: null },
+      where: { userId: user.id, readAt: null, dismissedAt: null },
     });
     return { unread };
   });
@@ -838,6 +1392,131 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       data: { readAt: new Date() },
     });
     return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/notifications/:id/read", async (req) => {
+    const user = await requireUser(req);
+    const updated = await prisma.notification.updateMany({
+      where: { id: req.params.id, userId: user.id },
+      data: { readAt: new Date(), seenAt: new Date() },
+    });
+    if (updated.count === 0) throw httpError(404, "Notification not found");
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string } }>("/notifications/:id", async (req) => {
+    const user = await requireUser(req);
+    const updated = await prisma.notification.updateMany({
+      where: { id: req.params.id, userId: user.id },
+      data: { dismissedAt: new Date(), readAt: new Date() },
+    });
+    if (updated.count === 0) throw httpError(404, "Notification not found");
+    return { ok: true };
+  });
+
+  app.get("/notifications/preferences", async (req) => {
+    const user = await requireUser(req);
+    return prisma.notificationPreference.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id },
+      update: {},
+    });
+  });
+
+  app.patch("/notifications/preferences", async (req) => {
+    const user = await requireUser(req);
+    const preferences = z
+      .object({
+        pushEnabled: z.boolean().optional(),
+        replies: z.boolean().optional(),
+        reactions: z.boolean().optional(),
+        follows: z.boolean().optional(),
+        quests: z.boolean().optional(),
+        newChapters: z.boolean().optional(),
+        announcements: z.boolean().optional(),
+      })
+      .parse(req.body);
+    return prisma.notificationPreference.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, ...preferences },
+      update: preferences,
+    });
+  });
+
+  app.put("/notifications/devices", async (req) => {
+    const user = await requireUser(req);
+    const { expoToken, platform, locale, deviceName } = z
+      .object({
+        expoToken: z
+          .string()
+          .regex(/^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/),
+        platform: z.enum(["android", "ios"]),
+        locale: z.string().max(20).optional(),
+        deviceName: z.string().max(100).optional(),
+      })
+      .parse(req.body);
+    await prisma.pushDevice.upsert({
+      where: { expoToken },
+      create: { userId: user.id, expoToken, platform, locale, deviceName },
+      update: { userId: user.id, platform, locale, deviceName, revokedAt: null, lastSeenAt: new Date() },
+    });
+    return { ok: true };
+  });
+
+  app.delete("/notifications/devices", async (req) => {
+    const user = await requireUser(req);
+    const { expoToken } = z.object({ expoToken: z.string().min(1) }).parse(req.body);
+    await prisma.pushDevice.updateMany({
+      where: { userId: user.id, expoToken },
+      data: { revokedAt: new Date() },
+    });
+    return { ok: true };
+  });
+
+  app.get("/me/moderation-notices", async (req) => {
+    const user = await requireUser(req);
+    return prisma.moderationNotice.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      include: {
+        moderationAction: {
+          select: { id: true, action: true, reasonCode: true, reason: true, createdAt: true },
+        },
+      },
+    });
+  });
+
+  app.post<{ Params: { id: string } }>("/me/moderation-notices/:id/acknowledge", async (req) => {
+    const user = await requireUser(req);
+    const updated = await prisma.moderationNotice.updateMany({
+      where: { id: req.params.id, userId: user.id },
+      data: { acknowledgedAt: new Date() },
+    });
+    if (updated.count === 0) throw httpError(404, "Notice not found");
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/me/moderation-notices/:id/appeal", async (req) => {
+    const user = await requireUser(req);
+    const { message } = z.object({ message: z.string().trim().min(20).max(2000) }).parse(req.body);
+    validateUserContent(message);
+    const notice = await prisma.moderationNotice.findFirst({
+      where: { id: req.params.id, userId: user.id },
+    });
+    if (!notice?.moderationActionId) throw httpError(404, "Appealable decision not found");
+    const appeal = await prisma.appeal.create({
+      data: { userId: user.id, moderationActionId: notice.moderationActionId, message },
+    });
+    return { ok: true, appeal };
+  });
+
+  app.get("/me/appeals", async (req) => {
+    const user = await requireUser(req);
+    return prisma.appeal.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true, message: true, response: true, createdAt: true, reviewedAt: true },
+    });
   });
 
   app.delete<{ Params: { id: string } }>("/comments/:id", async (req) => {
@@ -875,9 +1554,36 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         where: { id: comment.userId },
         data: { xp: { increment: existing ? -5 : 5 } },
       });
-      if (!existing) await evaluateBadges(comment.userId);
+      if (!existing) {
+        await evaluateBadges(comment.userId);
+        await createNotification({
+          userId: comment.userId,
+          actorId: user.id,
+          kind: "comment_like",
+          title: "Your comment got a like",
+          safeBody: `@${user.username} liked your comment.`,
+          targetUrl: "/notifications",
+          metadata: { commentId: comment.id },
+          dedupeKey: `comment-like:${comment.id}:${user.id}`,
+          commentId: comment.id,
+        });
+      } else {
+        await prisma.notification.updateMany({
+          where: { userId: comment.userId, dedupeKey: `comment-like:${comment.id}:${user.id}` },
+          data: { dismissedAt: new Date() },
+        });
+      }
     }
     const likeCount = await prisma.commentLike.count({ where: { commentId: req.params.id } });
-    return { liked: !existing, likeCount };
+    const activity = !existing
+      ? await recordActivity(user.id, { type: "like_given", eventKey: `comment:${comment.id}` })
+      : { completedQuests: [], levelUp: null };
+    if (!existing && comment.userId !== user.id) {
+      await recordActivity(comment.userId, {
+        type: "like_received",
+        eventKey: `comment:${comment.id}:${user.id}`,
+      });
+    }
+    return { liked: !existing, likeCount, ...activity };
   });
 }

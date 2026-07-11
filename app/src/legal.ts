@@ -1,16 +1,16 @@
-export const TERMS_VERSION = "2026-07-10";
+export const TERMS_VERSION = "2026-07-11";
 
 export const SUPPORT_EMAIL =
   process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? "support@your-domain.example";
 
 export const TERMS_SECTIONS = [
   {
-    title: "Using MangaShelf",
-    body: "You must be at least 13 years old, meet the minimum digital-consent age in your country, and provide accurate account information. MangaShelf uses the documented MangaDex API and does not sell, host, or offer offline downloads of third-party chapters.",
+    title: "Using Mangadamia",
+    body: "You must confirm that you are at least 13 years old, meet the minimum digital-consent age in your country, and provide accurate account information. Mangadamia uses the documented MangaDex API and does not sell, host, or offer offline downloads of third-party chapters.",
   },
   {
     title: "Your content",
-    body: "You keep ownership of posts and comments you create. You grant MangaShelf a limited license to store, display, moderate, and remove that content solely to operate and protect the service.",
+    body: "You keep ownership of posts, comments, and profile text you create. You grant Mangadamia a limited license to store, display, moderate, and remove that content solely to operate and protect the service.",
   },
   {
     title: "Prohibited conduct",
@@ -22,7 +22,7 @@ export const TERMS_SECTIONS = [
   },
   {
     title: "Third-party content",
-    body: "Manga titles, covers, and chapters remain the property of their respective creators and rights holders. Availability through MangaDex does not transfer ownership to MangaShelf or its users.",
+    body: "Manga titles, covers, and chapters remain the property of their respective creators and rights holders. Availability through MangaDex does not transfer ownership to Mangadamia or its users.",
   },
   {
     title: "Contact",
@@ -56,7 +56,7 @@ export const COMMUNITY_SECTIONS = [
 export const PRIVACY_SECTIONS = [
   {
     title: "Data we collect",
-    body: "Account data includes email address, username, password hash, session information, Terms acceptance, and account status. Service data includes library entries, reading progress, chapters read, posts, comments, likes, reports, blocks, notifications, and moderation records. Server security logs may contain IP address, request time, and request metadata.",
+    body: "Account data includes email address, username, password hash, session information, age attestation, Terms acceptance, profile settings, titles, cosmetics, follow relationships, push device tokens, and account status. Service data includes library entries, reading progress, quests, chapters read, posts, comments, likes, reports, blocks, notifications, appeals, and moderation records. Server security logs may contain IP address, request time, and request metadata.",
   },
   {
     title: "How we use data",
@@ -68,7 +68,7 @@ export const PRIVACY_SECTIONS = [
   },
   {
     title: "Retention and deletion",
-    body: "Account data is retained while the account is active. Users can delete their account in the app. Associated personal data is deleted or de-identified, except limited records retained for security, fraud prevention, legal compliance, or documented moderation needs.",
+    body: "Account data is retained while the account is active. Deleting an account removes its profile, content, reading data, social relationships, rewards, device tokens, reports, notifications, appeals, and associated moderation records. The deletion cannot be undone.",
   },
   {
     title: "Security and choices",

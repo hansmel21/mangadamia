@@ -26,6 +26,7 @@ import { api, type PageInfo } from "../../../../src/api";
 import { celebrateBadges } from "../../../../src/badges";
 import { CommentsSheet } from "../../../../src/components/CommentsSheet";
 import { showLevelUp } from "../../../../src/components/LevelUp";
+import { showQuestCompletions } from "../../../../src/components/QuestToast";
 import { PostComposer } from "../../../../src/components/PostComposer";
 import { Slider } from "../../../../src/components/Slider";
 import { getSessionUser } from "../../../../src/session";
@@ -67,6 +68,7 @@ export default function ReaderScreen() {
   });
   // Where the reader currently is — the cascade loader re-anchors to it
   const currentIndexRef = useRef(0);
+  const completionReportedRef = useRef(false);
   // Registered by the active reader; jumps the list to a page (slider)
   const jumpRef = useRef<((index: number) => void) | null>(null);
 
@@ -125,6 +127,20 @@ export default function ReaderScreen() {
       if (canonicalId) {
         setCanonicalProgress(canonicalId, chapter.number, n - 1, pageCount);
         pushProgress(canonicalId, chapter.number, n - 1, pageCount);
+        if (
+          getSessionUser() &&
+          pageCount &&
+          n >= pageCount &&
+          !completionReportedRef.current
+        ) {
+          completionReportedRef.current = true;
+          api.reportRead(canonicalId, chapter.number, "completed").then((result) => {
+            showQuestCompletions(result.completedQuests);
+            if (result.levelUp) showLevelUp(result.levelUp);
+          }).catch(() => {
+            completionReportedRef.current = false;
+          });
+        }
       }
     }
   };
@@ -155,6 +171,7 @@ export default function ReaderScreen() {
             .reportRead(canonicalId, chapter.number)
             .then((r) => {
               celebrateBadges(r.newBadges);
+              showQuestCompletions(r.completedQuests);
               if (r.levelUp) showLevelUp(r.levelUp);
             })
             .catch(() => {});
@@ -163,6 +180,10 @@ export default function ReaderScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, seriesId, chapterId, chapter]);
+
+  useEffect(() => {
+    completionReportedRef.current = false;
+  }, [chapterId]);
 
   // Start the cascade (and the page counter) from the resume point
   useEffect(() => {

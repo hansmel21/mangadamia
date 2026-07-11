@@ -53,15 +53,16 @@ export interface UserStats {
 }
 
 export async function getStats(userId: string): Promise<UserStats> {
-  const [comments, likesReceived, chaptersRead, user] = await Promise.all([
-    prisma.comment.count({ where: { userId } }),
-    prisma.commentLike.count({ where: { comment: { userId } } }),
+  const [comments, commentLikes, postLikes, chaptersRead, user] = await Promise.all([
+    prisma.comment.count({ where: { userId, moderationStatus: "visible" } }),
+    prisma.commentLike.count({ where: { comment: { userId, moderationStatus: "visible" } } }),
+    prisma.postLike.count({ where: { post: { userId, moderationStatus: "visible" } } }),
     prisma.readChapter.count({ where: { userId } }),
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { createdAt: true } }),
   ]);
   return {
     comments,
-    likesReceived,
+    likesReceived: commentLikes + postLikes,
     chaptersRead,
     accountDays: Math.floor((Date.now() - user.createdAt.getTime()) / 86_400_000),
   };
@@ -84,36 +85,25 @@ export async function evaluateBadges(userId: string): Promise<BadgeDef[]> {
   return earned;
 }
 
-/**
- * The badge shown next to a user's name: their equipped Title if set,
- * otherwise their most recently earned badge.
- */
-export async function displayBadges(
-  userIds: string[],
-): Promise<Map<string, { id: string; icon: string; name: string }>> {
-  if (userIds.length === 0) return new Map();
-  const [users, rows] = await Promise.all([
-    prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, equippedBadgeId: true },
-    }),
-    prisma.userBadge.findMany({
-      where: { userId: { in: userIds } },
-      orderBy: { earnedAt: "desc" },
-    }),
+/** Moderation-only exception to permanent badges: abusive removed content
+ * cannot continue satisfying a badge threshold. */
+export async function revokeIneligibleBadges(userId: string): Promise<string[]> {
+  const [stats, owned] = await Promise.all([
+    getStats(userId),
+    prisma.userBadge.findMany({ where: { userId }, select: { badgeId: true } }),
   ]);
-  const result = new Map<string, { id: string; icon: string; name: string }>();
-  for (const row of rows) {
-    if (!result.has(row.userId)) {
-      const def = badgeById.get(row.badgeId);
-      if (def) result.set(row.userId, { id: def.id, icon: def.icon, name: def.name });
-    }
+  const revoke = owned
+    .map((row) => BADGES.find((badge) => badge.id === row.badgeId))
+    .filter((badge): badge is BadgeDef => !!badge && stats[badge.stat] < badge.target)
+    .map((badge) => badge.id);
+  if (revoke.length > 0) {
+    await prisma.$transaction([
+      prisma.userBadge.deleteMany({ where: { userId, badgeId: { in: revoke } } }),
+      prisma.user.updateMany({
+        where: { id: userId, equippedBadgeId: { in: revoke } },
+        data: { equippedBadgeId: null },
+      }),
+    ]);
   }
-  for (const u of users) {
-    if (u.equippedBadgeId) {
-      const def = badgeById.get(u.equippedBadgeId);
-      if (def) result.set(u.id, { id: def.id, icon: def.icon, name: def.name });
-    }
-  }
-  return result;
+  return revoke;
 }

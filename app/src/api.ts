@@ -13,7 +13,9 @@ function resolveBaseUrl(): string {
   if (!__DEV__) {
     throw new Error("EXPO_PUBLIC_API_URL is required for production builds");
   }
-  const host = Constants.expoConfig?.hostUri?.split(":")[0];
+  const debuggerHost =
+    Constants.expoConfig?.hostUri ?? Constants.expoGoConfig?.debuggerHost ?? undefined;
+  const host = debuggerHost?.split(":")[0];
   if (host) return `http://${host}:3000`;
   return "http://localhost:3000";
 }
@@ -83,24 +85,68 @@ export interface AuthResponse {
     username: string;
     email: string;
     acceptedTermsVersion: string | null;
-    role: "user" | "moderator" | "admin";
+    role:
+      | "user"
+      | "community_moderator"
+      | "moderator"
+      | "senior_moderator"
+      | "admin"
+      | "owner";
+    capabilities: string[];
     status: "active" | "suspended" | "banned";
   };
+}
+
+export interface PublicIdentity {
+  id: string | null;
+  username: string;
+  level: number | null;
+  avatar: CosmeticMini | null;
+  frame: CosmeticMini | null;
+  title: { id: string; name: string; rarity: Rarity } | null;
+  staffMarker: { label: string; role: string } | null;
+  anonymized: boolean;
+}
+
+export type Rarity = "common" | "rare" | "epic" | "legendary" | "mythic";
+
+export interface CosmeticMini {
+  id: string;
+  assetKey: string;
+  rarity: Rarity;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+}
+
+export interface RewardInfo {
+  type: "xp" | "badge" | "title" | "cosmetic";
+  id?: string;
+  name: string;
+  amount?: number;
+  rarity?: Rarity;
+}
+
+export interface QuestCompletion {
+  id: string;
+  name: string;
+  rewards: RewardInfo[];
 }
 
 export interface CommentInfo {
   id: string;
   parentId?: string | null;
   body: string;
+  isSpoiler: boolean;
+  author: PublicIdentity | null;
   username: string;
-  level: number;
-  badgeId?: string | null;
-  badgeIcon?: string | null;
+  level: number | null;
   createdAt: string;
   likeCount: number;
   likedByMe: boolean;
   mine: boolean;
   replies?: CommentInfo[];
+  completedQuests?: QuestCompletion[];
+  levelUp?: number | null;
 }
 
 export interface BadgeMini {
@@ -122,19 +168,68 @@ export interface MeResponse {
   xp: number;
   level: number;
   equippedBadgeId: string | null;
+  equippedTitleId: string | null;
+  equippedAvatarId: string | null;
+  equippedFrameId: string | null;
   xpForNextLevel: number;
+  identity: PublicIdentity | null;
+  bio: string | null;
+  usernameChangesLeft: number;
+  followerCount: number;
+  followingCount: number;
+  pendingFollowCount: number;
+  pendingNoticeCount: number;
+  privacy: ProfilePrivacy;
+  titles: TitleInfo[];
+  cosmetics: CosmeticInfo[];
   badges: BadgeInfo[];
 }
 
-export interface ProfileInfo {
+export interface ProfilePrivacy {
+  profileVisibility: "public" | "private";
+  showLevel: boolean;
+  showTitle: boolean;
+  showBadges: boolean;
+  showStats: boolean;
+  showPosts: boolean;
+  showFavorites: boolean;
+  showReadingHistory: boolean;
+  showFollows: boolean;
+  showJoinDate: boolean;
+}
+
+export interface TitleInfo {
   id: string;
+  name: string;
+  description: string;
+  rarity: Rarity;
+  source: string;
+  unlockedAt: string;
+}
+
+export interface CosmeticInfo extends CosmeticMini {
+  name: string;
+  description: string;
+  kind: "avatar" | "frame";
+  source: string;
+  unlockedAt: string;
+}
+
+export interface ProfileInfo {
+  id: string | null;
   username: string;
-  level: number;
-  memberDays: number;
-  title: { id: string; icon: string; name: string } | null;
-  stats: { comments: number; likesReceived: number; chaptersRead: number; posts: number };
+  bio?: string | null;
+  identity?: PublicIdentity | null;
+  unavailable?: "blocked" | "removed";
+  private?: boolean;
+  memberDays?: number | null;
+  stats?: { comments: number; likesReceived: number; chaptersRead: number; posts: number } | null;
   badges: { id: string; name: string; icon: string; earnedAt: string }[];
   blockedByMe: boolean;
+  blockedMe: boolean;
+  followStatus: "pending" | "accepted" | null;
+  followerCount: number | null;
+  followingCount: number | null;
   isMe: boolean;
   recentPosts: {
     id: string;
@@ -145,6 +240,14 @@ export interface ProfileInfo {
     likeCount: number;
     replyCount: number;
     series: { canonicalId: string; title: string; coverUrl?: string | null } | null;
+  }[];
+  favorites: { canonicalId: string; title: string; coverUrl?: string | null }[];
+  recentReads: {
+    canonicalId: string;
+    title: string;
+    coverUrl?: string | null;
+    chapterNumber: number;
+    readAt: string;
   }[];
 }
 
@@ -167,14 +270,50 @@ export interface CloudProgress {
 
 export interface NotificationInfo {
   id: string;
-  type: "comment" | "post";
+  kind: string;
+  type: "comment" | "post" | "system";
   createdAt: string;
   read: boolean;
+  seen: boolean;
+  title: string;
   fromUsername: string;
   body: string;
+  targetUrl: string | null;
+  metadata: Record<string, unknown> | null;
+  actor: PublicIdentity | null;
   canonicalId: string | null;
   seriesTitle: string | null;
   chapterNumber: number | null;
+}
+
+export interface NotificationPage {
+  items: NotificationInfo[];
+  nextCursor: string | null;
+}
+
+export interface NotificationPreferences {
+  pushEnabled: boolean;
+  replies: boolean;
+  reactions: boolean;
+  follows: boolean;
+  quests: boolean;
+  newChapters: boolean;
+  announcements: boolean;
+}
+
+export interface ModerationNotice {
+  id: string;
+  kind: string;
+  message: string;
+  acknowledgedAt: string | null;
+  createdAt: string;
+  moderationAction: {
+    id: string;
+    action: string;
+    reasonCode: string;
+    reason: string | null;
+    createdAt: string;
+  } | null;
 }
 
 export interface PostInfo {
@@ -183,16 +322,35 @@ export interface PostInfo {
   body: string;
   isSpoiler: boolean;
   createdAt: string;
+  author: PublicIdentity | null;
   username: string;
-  level: number;
-  badgeId?: string | null;
-  badgeIcon?: string | null;
+  level: number | null;
   likeCount: number;
   likedByMe: boolean;
   mine: boolean;
   chapterNumber: number | null;
   series: { canonicalId: string; title: string; coverUrl?: string | null } | null;
+  seriesTags: {
+    canonicalId: string;
+    title: string;
+    coverUrl?: string | null;
+    chapterNumber: number | null;
+  }[];
   replies: PostInfo[];
+  completedQuests?: QuestCompletion[];
+  levelUp?: number | null;
+}
+
+export interface QuestInfo {
+  id: string;
+  name: string;
+  description: string;
+  cadence: "daily" | "weekly" | "permanent" | "seasonal" | "hidden";
+  progress: number;
+  target: number;
+  completedAt: string | null;
+  resetsAt: string | null;
+  rewards: RewardInfo[];
 }
 
 export interface AdminReport {
@@ -202,10 +360,28 @@ export interface AdminReport {
   reason: string | null;
   status: "pending" | "resolved" | "dismissed";
   createdAt: string;
-  reporter: { username: string };
+  reporter: { username: string; identity: PublicIdentity | null };
+  targetIdentity: PublicIdentity | null;
   target:
     | { id: string; body?: string; username?: string; userId?: string; moderationStatus?: string }
     | null;
+}
+
+export interface AdminReportResponse {
+  capabilities: string[];
+  reports: AdminReport[];
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  username: string;
+  role: AuthResponse["user"]["role"];
+  status: AuthResponse["user"]["status"];
+  usernameChangesLeft: number;
+  createdAt: string;
+  identity: PublicIdentity | null;
+  titles: { titleId: string }[];
 }
 
 async function request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
@@ -264,6 +440,7 @@ export const api = {
       username,
       password,
       acceptedTermsVersion,
+      ageConfirmed: true,
     }),
   login: (email: string, password: string) =>
     request<AuthResponse>("/auth/login", "POST", { email, password }),
@@ -273,20 +450,32 @@ export const api = {
   deleteAccount: (password: string) =>
     request<{ ok: boolean }>("/me/account", "DELETE", { password }),
   me: () => get<MeResponse>("/me"),
-  reportRead: (canonicalId: string, chapterNumber: number) =>
-    request<{ ok: boolean; newBadges: BadgeMini[]; levelUp: number | null }>(
+  reportRead: (canonicalId: string, chapterNumber: number, event: "opened" | "completed" = "opened") =>
+    request<{
+      ok: boolean;
+      newBadges: BadgeMini[];
+      levelUp: number | null;
+      completedQuests: QuestCompletion[];
+    }>(
       "/activity/read",
       "POST",
-      { canonicalId, chapterNumber },
+      { canonicalId, chapterNumber, event },
     ),
+  quests: () => get<QuestInfo[]>("/quests"),
 
   comments: (canonicalId: string, chapterNumber: number) =>
     get<CommentInfo[]>(`/comments/${encodeURIComponent(canonicalId)}/${chapterNumber}`),
-  postComment: (canonicalId: string, chapterNumber: number, body: string, parentId?: string) =>
+  postComment: (
+    canonicalId: string,
+    chapterNumber: number,
+    body: string,
+    parentId?: string,
+    isSpoiler = false,
+  ) =>
     request<CommentInfo & { newBadges: BadgeMini[]; levelUp: number | null }>(
       `/comments/${encodeURIComponent(canonicalId)}/${chapterNumber}`,
       "POST",
-      { body, parentId },
+      { body, parentId, isSpoiler },
     ),
   syncLibrary: () => get<CloudLibraryEntry[]>("/sync/library"),
   putLibrary: (canonicalId: string, source: string, sourceSeriesId: string) =>
@@ -315,11 +504,19 @@ export const api = {
       numbers,
     }),
 
-  feed: (page = 1, canonicalId?: string) =>
-    get<PostInfo[]>(`/posts?page=${page}${canonicalId ? `&canonicalId=${canonicalId}` : ""}`),
+  feed: (page = 1, canonicalId?: string, feed: "global" | "following" = "global") =>
+    get<PostInfo[]>(
+      `/posts?page=${page}&feed=${feed}${canonicalId ? `&canonicalId=${canonicalId}` : ""}`,
+    ),
   createPost: (
     body: string,
-    opts?: { canonicalId?: string; chapterNumber?: number; parentId?: string; isSpoiler?: boolean },
+    opts?: {
+      canonicalId?: string;
+      chapterNumber?: number;
+      parentId?: string;
+      isSpoiler?: boolean;
+      seriesTags?: { canonicalId: string; chapterNumber?: number }[];
+    },
   ) =>
     request<PostInfo & { levelUp: number | null; newBadges?: BadgeMini[] }>("/posts", "POST", {
       body,
@@ -332,18 +529,64 @@ export const api = {
       "POST",
     ),
 
-  equipTitle: (badgeId: string | null) =>
-    request<{ ok: boolean; equippedBadgeId: string | null }>("/me/title", "POST", { badgeId }),
+  equipTitle: (titleId: string | null) =>
+    request<{ ok: boolean; equippedTitleId: string | null }>("/me/title", "POST", { titleId }),
+  equipCosmetic: (slot: "avatar" | "frame", cosmeticId: string | null) =>
+    request<{ ok: boolean }>("/me/cosmetic", "POST", { slot, cosmeticId }),
+  updateProfile: (body: { bio?: string | null; username?: string }) =>
+    request<{ user: AuthResponse["user"]; bio: string | null; usernameChangesLeft: number }>(
+      "/me/profile",
+      "PATCH",
+      body,
+    ),
+  updatePrivacy: (privacy: Partial<ProfilePrivacy>) =>
+    request<{ ok: boolean }>("/me/privacy", "PATCH", privacy),
   userProfile: (username: string) =>
     get<ProfileInfo>(`/users/${encodeURIComponent(username)}`),
   toggleBlock: (username: string) =>
     request<{ blocked: boolean }>(`/users/${encodeURIComponent(username)}/block`, "POST"),
+  follow: (username: string) =>
+    request<{ status: "pending" | "accepted" }>(
+      `/users/${encodeURIComponent(username)}/follow`,
+      "PUT",
+    ),
+  unfollow: (username: string) =>
+    request<{ ok: boolean }>(`/users/${encodeURIComponent(username)}/follow`, "DELETE"),
+  followList: (username: string, direction: "followers" | "following") =>
+    get<PublicIdentity[]>(`/users/${encodeURIComponent(username)}/${direction}`),
+  followRequests: () =>
+    get<{ user: PublicIdentity; requestedAt: string }[]>("/me/follow-requests"),
+  answerFollowRequest: (userId: string, action: "accept" | "reject") =>
+    request<{ ok: boolean; status: string }>(
+      `/me/follow-requests/${encodeURIComponent(userId)}`,
+      "POST",
+      { action },
+    ),
   report: (targetType: "post" | "comment" | "user", targetId: string, reason?: string) =>
     request<{ ok: boolean }>("/report", "POST", { targetType, targetId, reason }),
 
-  notifications: () => get<NotificationInfo[]>("/notifications"),
+  notifications: (cursor?: string) =>
+    get<NotificationPage>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
   notificationCount: () => get<{ unread: number }>("/notifications/count"),
   markNotificationsRead: () => request<{ ok: boolean }>("/notifications/read", "POST"),
+  markNotificationRead: (id: string) =>
+    request<{ ok: boolean }>(`/notifications/${encodeURIComponent(id)}/read`, "POST"),
+  dismissNotification: (id: string) =>
+    request<{ ok: boolean }>(`/notifications/${encodeURIComponent(id)}`, "DELETE"),
+  notificationPreferences: () => get<NotificationPreferences>("/notifications/preferences"),
+  updateNotificationPreferences: (preferences: Partial<NotificationPreferences>) =>
+    request<NotificationPreferences>("/notifications/preferences", "PATCH", preferences),
+  registerPushDevice: (expoToken: string, platform: "android" | "ios", locale?: string) =>
+    request<{ ok: boolean }>("/notifications/devices", "PUT", { expoToken, platform, locale }),
+  unregisterPushDevice: (expoToken: string) =>
+    request<{ ok: boolean }>("/notifications/devices", "DELETE", { expoToken }),
+  moderationNotices: () => get<ModerationNotice[]>("/me/moderation-notices"),
+  acknowledgeNotice: (id: string) =>
+    request<{ ok: boolean }>(`/me/moderation-notices/${encodeURIComponent(id)}/acknowledge`, "POST"),
+  appealNotice: (id: string, message: string) =>
+    request<{ ok: boolean }>(`/me/moderation-notices/${encodeURIComponent(id)}/appeal`, "POST", {
+      message,
+    }),
   deleteComment: (id: string) =>
     request<{ ok: boolean }>(`/comments/${encodeURIComponent(id)}`, "DELETE"),
   toggleLike: (id: string) =>
@@ -353,14 +596,42 @@ export const api = {
     ),
 
   adminReports: (status: "pending" | "resolved" | "dismissed" = "pending") =>
-    get<AdminReport[]>(`/admin/reports?status=${status}`),
+    get<AdminReportResponse>(`/admin/reports?status=${status}`),
   moderateReport: (
     id: string,
-    action: "dismiss" | "remove_content" | "warn" | "suspend_7d" | "ban",
+    action:
+      | "dismiss"
+      | "correct_spoiler"
+      | "remove_content"
+      | "warn"
+      | "suspend_7d"
+      | "suspend_30d"
+      | "ban",
+    reasonCode: string,
     reason: string,
+    spoilerState?: boolean,
   ) =>
     request<{ ok: boolean }>(`/admin/reports/${encodeURIComponent(id)}/action`, "POST", {
       action,
+      reasonCode,
       reason,
+      spoilerState,
     }),
+  adminUsers: (q = "") => get<AdminUser[]>(`/admin/users?q=${encodeURIComponent(q)}`),
+  changeUserRole: (id: string, role: AuthResponse["user"]["role"], password: string) =>
+    request<{ ok: boolean; role: string }>(`/admin/users/${encodeURIComponent(id)}/role`, "PATCH", {
+      role,
+      password,
+    }),
+  grantUsernameChange: (id: string, amount = 1) =>
+    request<{ ok: boolean; usernameChangesLeft: number }>(
+      `/admin/users/${encodeURIComponent(id)}/username-change`,
+      "POST",
+      { amount },
+    ),
+  adminTitles: () => get<{ id: string; name: string; rarity: Rarity; description: string }[]>("/admin/titles"),
+  grantTitle: (userId: string, titleId: string) =>
+    request<{ ok: boolean }>(`/admin/users/${encodeURIComponent(userId)}/titles/${encodeURIComponent(titleId)}`, "POST"),
+  revokeTitle: (userId: string, titleId: string) =>
+    request<{ ok: boolean }>(`/admin/users/${encodeURIComponent(userId)}/titles/${encodeURIComponent(titleId)}`, "DELETE"),
 };

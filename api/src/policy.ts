@@ -1,4 +1,4 @@
-export const CURRENT_TERMS_VERSION = "2026-07-10";
+export const CURRENT_TERMS_VERSION = "2026-07-11";
 
 export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL ?? "support@your-domain.example";
 

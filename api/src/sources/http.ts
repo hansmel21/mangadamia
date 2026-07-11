@@ -7,7 +7,7 @@ const HOST_DELAY_MS: Record<string, number> = {
 const lastRequestAt = new Map<string, number>();
 const queues = new Map<string, Promise<void>>();
 
-const USER_AGENT = process.env.APP_USER_AGENT ?? "MangaShelf/1.0 (MangaDex API client)";
+const USER_AGENT = process.env.APP_USER_AGENT ?? "Mangadamia/1.0 (MangaDex API client)";
 
 async function throttle(host: string): Promise<void> {
   const prev = queues.get(host) ?? Promise.resolve();

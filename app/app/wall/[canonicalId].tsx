@@ -84,6 +84,7 @@ export default function SeriesWallScreen() {
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
               }
+              viewerSignedIn={!!user}
             />
           )}
           contentContainerStyle={{ paddingBottom: 90 }}

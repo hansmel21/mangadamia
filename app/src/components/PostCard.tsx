@@ -1,7 +1,6 @@
 // Shared post card for the Feed and series Walls. Handles:
 //  - tappable username → public profile
-//  - progress-aware spoiler shield: a post tagged to a chapter you haven't
-//    reached (or flagged as a spoiler) is blurred until you tap to reveal
+//  - manual Reddit-style spoiler shield, revealed for the whole thread
 //  - like / reply / delete / report
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -10,9 +9,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../anim";
 import type { PostInfo } from "../api";
-import { getCanonicalProgress } from "../library";
 import { colors } from "../theme";
-import { BadgeMedallion } from "./BadgeMedallion";
+import { UserIdentity } from "./UserIdentity";
 
 function timeAgo(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
@@ -34,19 +32,6 @@ function openSeries(series: NonNullable<PostInfo["series"]>) {
   });
 }
 
-// Should this post be shielded from the current reader?
-// Yes if explicitly flagged, or it's tied to a chapter beyond their progress.
-function isShielded(post: PostInfo): boolean {
-  if (post.mine) return false;
-  if (post.isSpoiler) return true;
-  if (post.series && post.chapterNumber != null) {
-    const prog = getCanonicalProgress(post.series.canonicalId);
-    const reached = prog?.chapterNumber ?? -1;
-    if (post.chapterNumber > reached) return true;
-  }
-  return false;
-}
-
 export function PostCard({
   post,
   isReply,
@@ -54,6 +39,9 @@ export function PostCard({
   onReply,
   onDelete,
   onReport,
+  viewerSignedIn = false,
+  threadRevealed,
+  onRevealThread,
 }: {
   post: PostInfo;
   isReply?: boolean;
@@ -61,23 +49,25 @@ export function PostCard({
   onReply?: (p: PostInfo) => void;
   onDelete: (p: PostInfo) => void;
   onReport: (p: PostInfo) => void;
+  viewerSignedIn?: boolean;
+  threadRevealed?: boolean;
+  onRevealThread?: () => void;
 }) {
-  const [revealed, setRevealed] = useState(false);
-  const shielded = isShielded(post) && !revealed;
+  const [localRevealed, setLocalRevealed] = useState(false);
+  const revealed = threadRevealed ?? localRevealed;
+  const revealThread = onRevealThread ?? (() => setLocalRevealed(true));
+  const shielded = viewerSignedIn && !post.mine && post.isSpoiler && !revealed;
 
   return (
     <View style={[styles.card, isReply && styles.replyCard]}>
       <View style={styles.headerRow}>
-        <Pressable
-          style={(s) => [styles.userTap, pressFx(s)]}
-          onPress={() => openProfile(post.username)}
-        >
-          {(post.badgeId || post.badgeIcon) && (
-            <BadgeMedallion badgeId={post.badgeId} fallbackIcon={post.badgeIcon} size={22} glow />
-          )}
-          <Text style={styles.username}>{post.username}</Text>
-          <Text style={styles.level}>LV {post.level}</Text>
-        </Pressable>
+        {post.author ? (
+          <UserIdentity
+            identity={post.author}
+            compact
+            onPress={() => post.author?.id && openProfile(post.author.username)}
+          />
+        ) : null}
         <Text style={styles.time}>· {timeAgo(post.createdAt)}</Text>
         <View style={styles.headerActions}>
           {post.mine ? (
@@ -92,29 +82,30 @@ export function PostCard({
         </View>
       </View>
 
-      {post.series ? (
-        <Pressable
-          style={(s) => [styles.ctxChip, pressFx(s)]}
-          onPress={() => post.series && openSeries(post.series)}
-        >
-          {post.series.coverUrl ? (
-            <Image source={{ uri: post.series.coverUrl }} style={styles.ctxCover} contentFit="cover" />
-          ) : null}
-          <Text style={styles.ctxText} numberOfLines={1}>
-            {post.series.title}
-            {post.chapterNumber != null ? ` · Ch. ${post.chapterNumber}` : ""}
-          </Text>
-        </Pressable>
-      ) : null}
+      {(post.seriesTags.length > 0 ? post.seriesTags : post.series ? [{ ...post.series, chapterNumber: post.chapterNumber }] : []).map(
+        (series) => (
+          <Pressable
+            key={series.canonicalId}
+            style={(s) => [styles.ctxChip, pressFx(s)]}
+            onPress={() => openSeries(series)}
+          >
+            {series.coverUrl ? (
+              <Image source={{ uri: series.coverUrl }} style={styles.ctxCover} contentFit="cover" />
+            ) : null}
+            <Text style={styles.ctxText} numberOfLines={1}>
+              {series.title}
+              {series.chapterNumber != null ? ` · Ch. ${series.chapterNumber}` : ""}
+            </Text>
+          </Pressable>
+        ),
+      )}
 
       {shielded ? (
-        <Pressable style={styles.shield} onPress={() => setRevealed(true)}>
+        <Pressable style={styles.shield} onPress={revealThread}>
           <EyeOff color={colors.accentSoft} size={18} strokeWidth={1.8} />
           <Text style={styles.shieldTitle}>SPOILER SHIELD</Text>
           <Text style={styles.shieldSub}>
-            {post.isSpoiler
-              ? "Marked as a spoiler."
-              : `Discusses Ch. ${post.chapterNumber} — past where you've read.`}
+            Marked as a spoiler. Revealing shows this entire thread.
           </Text>
           <Text style={styles.shieldReveal}>TAP TO REVEAL</Text>
         </Pressable>
@@ -150,6 +141,9 @@ export function PostCard({
           onLike={onLike}
           onDelete={onDelete}
           onReport={onReport}
+          viewerSignedIn={viewerSignedIn}
+          threadRevealed={revealed}
+          onRevealThread={revealThread}
         />
       ))}
     </View>
@@ -173,9 +167,6 @@ const styles = StyleSheet.create({
     paddingRight: 0,
   },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  userTap: { flexDirection: "row", alignItems: "center", gap: 6 },
-  username: { color: colors.text, fontWeight: "700", fontSize: 14 },
-  level: { color: colors.foil, fontWeight: "800", fontSize: 10.5, letterSpacing: 0.5 },
   time: { color: colors.muted, fontSize: 12 },
   headerActions: { marginLeft: "auto" },
   ctxChip: {

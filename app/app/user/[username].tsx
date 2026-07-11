@@ -1,235 +1,228 @@
-// Public reader profile: Title, level, badge collection, stats, recent posts.
-// Reachable by tapping any username in the feed or comments.
-import { useQuery } from "@tanstack/react-query";
-import { Image } from "expo-image";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { pressFx } from "../../src/anim";
 import { api } from "../../src/api";
 import { BadgeMedallion } from "../../src/components/BadgeMedallion";
-import { SystemWindow } from "../../src/components/SystemWindow";
-import { colors, fonts } from "../../src/theme";
 import { ReportModal, type ReportTarget } from "../../src/components/ReportModal";
-
-function formatNum(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
+import { SystemWindow } from "../../src/components/SystemWindow";
+import { UserIdentity } from "../../src/components/UserIdentity";
+import { getSessionUser, subscribeSession } from "../../src/session";
+import { colors } from "../../src/theme";
 
 export default function UserProfileScreen() {
   const { username } = useLocalSearchParams<{ username: string }>();
-  const [blocking, setBlocking] = useState<boolean | null>(null);
+  const viewer = useSyncExternalStore(subscribeSession, getSessionUser);
+  const queryClient = useQueryClient();
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
-
-  const profile = useQuery({
-    queryKey: ["profile", username],
-    queryFn: () => api.userProfile(username),
-  });
-
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
+  const profile = useQuery({ queryKey: ["profile", username], queryFn: () => api.userProfile(username) });
   const p = profile.data;
-  const blocked = blocking ?? p?.blockedByMe ?? false;
+
+  const refreshSocial = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["profile", username] }),
+      queryClient.invalidateQueries({ queryKey: ["feed"] }),
+      queryClient.invalidateQueries({ queryKey: ["wall"] }),
+    ]);
+  };
+
+  const toggleFollow = async () => {
+    if (!p) return;
+    try {
+      if (p.followStatus) await api.unfollow(username);
+      else await api.follow(username);
+      await refreshSocial();
+    } catch (error) {
+      Alert.alert("Follow", (error as Error).message);
+    }
+  };
 
   const toggleBlock = async () => {
     try {
-      const res = await api.toggleBlock(username);
-      setBlocking(res.blocked);
-      Alert.alert(res.blocked ? `Blocked @${username}` : `Unblocked @${username}`);
-    } catch (e) {
-      Alert.alert("Error", (e as Error).message);
+      const result = await api.toggleBlock(username);
+      Alert.alert(result.blocked ? `Blocked @${username}` : `Unblocked @${username}`);
+      await refreshSocial();
+    } catch (error) {
+      Alert.alert("Block", (error as Error).message);
     }
   };
 
   return (
-    <ScrollView style={styles.screen}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: username }} />
-
-      {profile.isLoading ? (
-        <Text style={styles.loading}>Loading…</Text>
-      ) : !p ? (
-        <Text style={styles.loading}>{(profile.error as Error)?.message ?? "Not found"}</Text>
-      ) : (
+      {profile.isLoading ? <Text style={styles.center}>Loading…</Text> : null}
+      {!profile.isLoading && !p ? (
+        <Text style={styles.center}>{(profile.error as Error)?.message ?? "Reader not found"}</Text>
+      ) : null}
+      {p?.unavailable ? (
+        <SystemWindow title="Profile unavailable" dim>
+          <View style={styles.unavailable}>
+            <View style={styles.grayAvatar} />
+            <Text style={styles.grayName}>@{p.username}</Text>
+            <Text style={styles.center}>
+              {p.unavailable === "removed"
+                ? "This account is no longer available."
+                : "Profiles and content are hidden while either reader has blocked the other."}
+            </Text>
+            {p.blockedByMe ? (
+              <Pressable style={styles.secondaryBtn} onPress={toggleBlock}>
+                <Text style={styles.secondaryText}>UNBLOCK</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </SystemWindow>
+      ) : p?.identity ? (
         <>
           <View style={styles.header}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{p.username[0]?.toUpperCase() ?? "?"}</Text>
-            </View>
-            <Text style={styles.username}>{p.username}</Text>
-            {p.title ? (
-              <View style={styles.titleRow}>
-                <BadgeMedallion badgeId={p.title.id} fallbackIcon={p.title.icon} size={18} glow />
-                <Text style={styles.titleText}>{p.title.name}</Text>
+            <UserIdentity identity={p.identity} profile />
+            {p.bio ? <Text style={styles.bio}>{p.bio}</Text> : null}
+            {p.memberDays != null ? <Text style={styles.member}>MEMBER {p.memberDays} DAYS</Text> : null}
+            {p.followerCount != null ? (
+              <View style={styles.followCounts}>
+                <Pressable onPress={() => router.push({ pathname: "/follows/[username]", params: { username: p.username, direction: "followers" } })}>
+                  <Text style={styles.followCount}>{p.followerCount} followers</Text>
+                </Pressable>
+                <Pressable onPress={() => router.push({ pathname: "/follows/[username]", params: { username: p.username, direction: "following" } })}>
+                  <Text style={styles.followCount}>{p.followingCount ?? 0} following</Text>
+                </Pressable>
               </View>
             ) : null}
-            <Text style={styles.levelLine}>
-              LV. {p.level} · Member {p.memberDays}d
-            </Text>
+            {!p.isMe && viewer ? (
+              <Pressable style={styles.primaryBtn} onPress={toggleFollow}>
+                <Text style={styles.primaryText}>
+                  {p.followStatus === "pending"
+                    ? "REQUESTED"
+                    : p.followStatus === "accepted"
+                      ? "FOLLOWING"
+                      : "FOLLOW"}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
-          <SystemWindow title="Status" dim style={styles.status}>
-            <View style={styles.statsRow}>
-              {(
-                [
-                  [p.stats.posts, "Posts"],
-                  [p.stats.comments, "Comments"],
-                  [p.stats.likesReceived, "Likes"],
-                  [p.stats.chaptersRead, "Read"],
-                ] as const
-              ).map(([n, label]) => (
-                <View key={label} style={styles.stat}>
-                  <Text style={styles.statNum}>{n}</Text>
-                  <Text style={styles.statLabel}>{label}</Text>
-                </View>
-              ))}
-            </View>
-          </SystemWindow>
-
-          {p.badges.length > 0 ? (
-            <>
-              <Text style={styles.section}>◆ Badges ({p.badges.length})</Text>
-              <View style={styles.badgeRow}>
-                {p.badges.map((b) => (
-                  <View key={b.id} style={styles.badgeCell}>
-                    <BadgeMedallion badgeId={b.id} fallbackIcon={b.icon} size={44} glow />
-                  </View>
-                ))}
-              </View>
-            </>
-          ) : null}
-
-          <Text style={styles.section}>◆ Recent Posts</Text>
-          {p.recentPosts.length === 0 ? (
-            <Text style={styles.empty}>No posts yet.</Text>
+          {p.private ? (
+            <SystemWindow title="Private Reader" dim>
+              <Text style={styles.center}>Follow this reader to see their collection and posts.</Text>
+            </SystemWindow>
           ) : (
-            p.recentPosts.map((post) => (
-              <View key={post.id} style={styles.postRow}>
-                {post.series ? (
-                  <Pressable
-                    style={(s) => [styles.ctxChip, pressFx(s)]}
-                    onPress={() =>
-                      post.series &&
-                      router.push({
-                        pathname: "/series/[src]/[id]",
-                        params: {
-                          src: "",
-                          id: "",
-                          title: post.series.title,
-                          canonicalOnly: post.series.canonicalId,
-                        },
-                      })
-                    }
-                  >
-                    <Text style={styles.ctxText} numberOfLines={1}>
-                      {post.series.title}
-                      {post.chapterNumber != null ? ` · Ch. ${formatNum(post.chapterNumber)}` : ""}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                <Text style={styles.postBody}>
-                  {post.isSpoiler ? "⚠ [spoiler] " : ""}
-                  {post.body}
-                </Text>
-                <Text style={styles.postMeta}>
-                  ♥ {post.likeCount} · 💬 {post.replyCount}
-                </Text>
-              </View>
-            ))
+            <>
+              {p.stats ? (
+                <SystemWindow title="Status" dim>
+                  <View style={styles.statsRow}>
+                    {([
+                      [p.stats.posts, "Posts"],
+                      [p.stats.comments, "Comments"],
+                      [p.stats.likesReceived, "Likes"],
+                      [p.stats.chaptersRead, "Read"],
+                    ] as const).map(([value, label]) => (
+                      <View key={label} style={styles.stat}>
+                        <Text style={styles.statNum}>{value}</Text>
+                        <Text style={styles.statLabel}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </SystemWindow>
+              ) : null}
+
+              {p.badges.length > 0 ? (
+                <SystemWindow title={`Earned Badges · ${p.badges.length}`}>
+                  <View style={styles.badgeCase}>
+                    {p.badges.map((badge) => (
+                      <View key={badge.id} style={styles.badgePedestal}>
+                        <BadgeMedallion badgeId={badge.id} fallbackIcon={badge.icon} size={52} glow />
+                        <Text style={styles.badgeName} numberOfLines={2}>{badge.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </SystemWindow>
+              ) : null}
+
+              {p.recentPosts.length > 0 ? (
+                <SystemWindow title="Recent Posts">
+                  {p.recentPosts.map((post) => {
+                    const shield = !!viewer && post.isSpoiler && !revealed.has(post.id);
+                    return (
+                      <View key={post.id} style={styles.post}>
+                        {post.series ? <Text style={styles.series}>{post.series.title}</Text> : null}
+                        {shield ? (
+                          <Pressable onPress={() => setRevealed((old) => new Set(old).add(post.id))}>
+                            <Text style={styles.spoiler}>SPOILER SHIELD · TAP TO REVEAL</Text>
+                          </Pressable>
+                        ) : <Text style={styles.postBody}>{post.body}</Text>}
+                        <Text style={styles.meta}>♥ {post.likeCount} · ◇ {post.replyCount}</Text>
+                      </View>
+                    );
+                  })}
+                </SystemWindow>
+              ) : null}
+
+              {p.favorites.length > 0 ? (
+                <SystemWindow title="Favorites">
+                  <View style={styles.chips}>{p.favorites.map((item) => (
+                    <Pressable
+                      key={item.canonicalId}
+                      style={styles.chip}
+                      onPress={() => router.push({ pathname: "/series/[src]/[id]", params: { src: "", id: "", title: item.title, canonicalOnly: item.canonicalId } })}
+                    >
+                      <Text style={styles.chipText}>{item.title}</Text>
+                    </Pressable>
+                  ))}</View>
+                </SystemWindow>
+              ) : null}
+            </>
           )}
 
-          {!p.isMe ? (
-            <View style={styles.safetyActions}>
-              <Pressable style={(s) => [styles.blockBtn, pressFx(s)]} onPress={toggleBlock}>
-                <Text style={styles.blockText}>{blocked ? "UNBLOCK" : "BLOCK"} @{p.username}</Text>
+          {!p.isMe && viewer ? (
+            <View style={styles.safety}>
+              <Pressable style={styles.secondaryBtn} onPress={toggleBlock}>
+                <Text style={styles.secondaryText}>{p.blockedByMe ? "UNBLOCK" : "BLOCK"}</Text>
               </Pressable>
               <Pressable
-                style={(s) => [styles.reportBtn, pressFx(s)]}
-                onPress={() =>
-                  setReportTarget({ type: "user", id: p.id, username: p.username })
-                }
+                style={styles.secondaryBtn}
+                onPress={() => p.id && setReportTarget({ type: "user", id: p.id, username: p.username })}
               >
-                <Text style={styles.reportText}>REPORT @{p.username}</Text>
+                <Text style={styles.secondaryText}>REPORT</Text>
               </Pressable>
             </View>
           ) : null}
-          <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
-          <View style={{ height: 40 }} />
         </>
-      )}
+      ) : null}
+      <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  loading: { color: colors.muted, textAlign: "center", marginTop: 48 },
-  header: { alignItems: "center", paddingTop: 24, gap: 6 },
-  avatar: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  avatarText: { color: colors.accentText, fontSize: 32, fontWeight: "800" },
-  username: { color: colors.text, fontSize: 22, fontFamily: fonts.display },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  titleText: { color: colors.foil, fontWeight: "700", fontSize: 13 },
-  levelLine: { color: colors.muted, fontSize: 12, fontWeight: "600" },
-  status: { marginHorizontal: 20, marginTop: 18 },
-  statsRow: { flexDirection: "row", justifyContent: "space-between" },
-  stat: { alignItems: "center", flex: 1 },
-  statNum: { color: colors.text, fontSize: 18, fontFamily: fonts.display },
-  statLabel: { color: colors.muted, fontSize: 10.5, marginTop: 2, letterSpacing: 0.5 },
-  section: {
-    color: colors.accentSoft,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    paddingHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 10,
-  },
-  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 14, paddingHorizontal: 20 },
-  badgeCell: {},
-  empty: { color: colors.muted, paddingHorizontal: 20 },
-  postRow: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  ctxChip: {
-    alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.4)",
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 6,
-    maxWidth: "100%",
-  },
-  ctxText: { color: colors.accentSoft, fontSize: 11, fontWeight: "700" },
-  postBody: { color: colors.text, fontSize: 14, lineHeight: 19 },
-  postMeta: { color: colors.muted, fontSize: 11, marginTop: 5, fontVariant: ["tabular-nums"] },
-  blockBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: "rgba(229,72,77,0.5)",
-    borderRadius: 4,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  blockText: { color: colors.danger, fontSize: 12, fontWeight: "800", letterSpacing: 1.4 },
-  safetyActions: { flexDirection: "row", gap: 10, marginHorizontal: 20, marginTop: 28 },
-  reportBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: 4,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  reportText: { color: colors.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
+  content: { padding: 20, gap: 18, paddingBottom: 48 },
+  center: { color: colors.muted, textAlign: "center", lineHeight: 20 },
+  header: { alignItems: "center", gap: 10, paddingTop: 8 },
+  bio: { color: colors.text, textAlign: "center", lineHeight: 19, maxWidth: 320 },
+  member: { color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
+  followCounts: { flexDirection: "row", gap: 18 },
+  followCount: { color: colors.muted, fontSize: 12, fontWeight: "700" },
+  primaryBtn: { backgroundColor: colors.accent, paddingHorizontal: 34, paddingVertical: 10, borderRadius: 4 },
+  primaryText: { color: colors.accentText, fontWeight: "900", fontSize: 11, letterSpacing: 1.3 },
+  statsRow: { flexDirection: "row" },
+  stat: { flex: 1, alignItems: "center" },
+  statNum: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  statLabel: { color: colors.muted, fontSize: 10, marginTop: 2 },
+  badgeCase: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  badgePedestal: { width: "30%", alignItems: "center", padding: 9, borderWidth: 1, borderColor: "rgba(245,184,76,0.25)", backgroundColor: "rgba(245,184,76,0.05)" },
+  badgeName: { color: colors.text, textAlign: "center", fontSize: 9.5, marginTop: 6, fontWeight: "700" },
+  post: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  series: { color: colors.accentSoft, fontSize: 10, fontWeight: "800", marginBottom: 5 },
+  postBody: { color: colors.text, lineHeight: 19 },
+  spoiler: { color: colors.accentSoft, borderWidth: 1, borderStyle: "dashed", borderColor: colors.accent, padding: 12, textAlign: "center", fontSize: 10, fontWeight: "800" },
+  meta: { color: colors.muted, fontSize: 10, marginTop: 5 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  chip: { borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, paddingVertical: 5 },
+  chipText: { color: colors.accentSoft, fontSize: 11 },
+  safety: { flexDirection: "row", gap: 10 },
+  secondaryBtn: { flex: 1, borderWidth: 1, borderColor: colors.border, padding: 10, alignItems: "center" },
+  secondaryText: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  unavailable: { alignItems: "center", gap: 12 },
+  grayAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: "#3A3D45", opacity: 0.55 },
+  grayName: { color: colors.muted, fontWeight: "800" },
 });

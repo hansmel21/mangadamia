@@ -1,6 +1,6 @@
-# MangaShelf
+# Mangadamia
 
-MangaShelf is an Expo/React Native reader and community client backed by a
+Mangadamia is an Expo/React Native reader and community client backed by a
 Fastify/PostgreSQL API. The only built-in remote catalog is the documented
 MangaDex API. The project contains no HTML source adapters, browser
 impersonation, Cloudflare workarounds, hotlink headers, or offline chapter
@@ -9,7 +9,7 @@ downloads.
 ## Architecture
 
 ```text
-Expo app ──HTTPS──> MangaShelf API ──JSON──> MangaDex API
+Expo app ──HTTPS──> Mangadamia API ──JSON──> MangaDex API
     │                    │
     │                    └── PostgreSQL: accounts, sync, UGC, moderation
     └── SQLite: on-device library, history, progress, session
@@ -45,7 +45,7 @@ PORT=3000
 NODE_ENV=production
 TRUST_PROXY=true
 ALLOWED_ORIGINS=https://your-web-client.example
-APP_USER_AGENT=MangaShelf/1.0 (support: support@your-domain.example)
+APP_USER_AGENT=Mangadamia/1.0 (support: support@your-domain.example)
 SUPPORT_EMAIL=support@your-domain.example
 DEVELOPER_LEGAL_NAME=Your legal developer name
 ```
@@ -74,13 +74,31 @@ are configured:
 npx eas build --platform android --profile production
 ```
 
+Apply the additive social/quest migrations before starting a changed API:
+
+```bash
+cd api
+npx prisma migrate deploy
+npx prisma generate
+```
+
+Bootstrap the first Owner from a trusted machine with database access:
+
+```bash
+npm run owner:promote -- owner@example.com
+```
+
+Only Owners can grant control roles. Staff markers and cosmetic Titles never
+grant permissions. See `GOOGLE_SERVICES_SETUP.md` for the external EAS/Firebase
+credentials required to activate Android lock-screen push.
+
 ## Safety and policy controls
 
 - Current Terms acceptance is recorded server-side and required before UGC.
 - Posts, comments, and profiles have report and block controls.
-- Reports enter a moderator queue with dismiss, removal, warning, suspension,
-  and ban actions plus an audit log.
-- Banned users' content is excluded from public feeds.
+- Reports enter a capability-based moderator queue with reasons, immutable
+  snapshots, warnings, suspensions, bans, spoiler corrections, and appeals.
+- Banned users' retained content uses an anonymized author identity.
 - In-app and web account deletion remove associated account data.
 - Public Terms, Privacy Policy, Community Guidelines, and deletion pages live
   under `/legal/*` on the API.

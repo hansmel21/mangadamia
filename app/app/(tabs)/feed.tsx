@@ -19,18 +19,20 @@ export default function FeedScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [feedMode, setFeedMode] = useState<"global" | "following">("global");
+  const queryKey = ["feed", feedMode] as const;
 
   const feed = useInfiniteQuery({
-    queryKey: ["feed"],
+    queryKey,
     initialPageParam: 1,
-    queryFn: ({ pageParam }) => api.feed(pageParam),
+    queryFn: ({ pageParam }) => api.feed(pageParam, undefined, feedMode),
     getNextPageParam: (last, pages) => (last.length > 0 ? pages.length + 1 : undefined),
   });
 
   const posts = feed.data?.pages.flat() ?? [];
 
   const patch = (id: string, fn: (p: PostInfo) => PostInfo) => {
-    queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(["feed"], (old) => {
+    queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(queryKey, (old) => {
       if (!old) return old;
       const walk = (list: PostInfo[]): PostInfo[] =>
         list.map((p) =>
@@ -40,7 +42,7 @@ export default function FeedScreen() {
     });
   };
   const removeFromFeed = (id: string) => {
-    queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(["feed"], (old) => {
+    queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(queryKey, (old) => {
       if (!old) return old;
       const walk = (list: PostInfo[]): PostInfo[] =>
         list.filter((p) => p.id !== id).map((p) => ({ ...p, replies: walk(p.replies) }));
@@ -68,6 +70,24 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.screen}>
+      <View style={styles.feedTabs}>
+        {(["global", "following"] as const).map((mode) => (
+          <Pressable
+            key={mode}
+            disabled={mode === "following" && !user}
+            style={[
+              styles.feedTab,
+              feedMode === mode && styles.feedTabActive,
+              mode === "following" && !user && { opacity: 0.35 },
+            ]}
+            onPress={() => setFeedMode(mode)}
+          >
+            <Text style={[styles.feedTabText, feedMode === mode && styles.feedTabTextActive]}>
+              {mode.toUpperCase()}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       {feed.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
       ) : (
@@ -86,6 +106,7 @@ export default function FeedScreen() {
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
               }
+              viewerSignedIn={!!user}
             />
           )}
           contentContainerStyle={{ paddingBottom: 90 }}
@@ -131,6 +152,17 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  feedTabs: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  feedTab: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  feedTabActive: { borderBottomColor: colors.accent },
+  feedTabText: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+  feedTabTextActive: { color: colors.accentSoft },
   empty: { color: colors.muted, textAlign: "center", marginTop: 60, lineHeight: 22 },
   fab: {
     position: "absolute",

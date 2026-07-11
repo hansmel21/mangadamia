@@ -1,4 +1,4 @@
-// INKLIGHT — MangaShelf's design tokens ("printed ink meets a dark room").
+// INKLIGHT — Mangadamia's design tokens ("printed ink meets a dark room").
 // Central place for colors so every screen looks consistent.
 export const colors = {
   bg: "#0d0f14", // Print Black — a dark room, not a void
