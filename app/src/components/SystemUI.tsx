@@ -40,17 +40,21 @@ const toneBorder: Record<Tone, string> = {
 export function ScreenTitle({
   children,
   tone = "accent",
+  color,
   size = 18,
   style,
 }: {
   children: ReactNode;
   tone?: Tone;
+  /** Raw hex override for border + ticks (e.g. a post-kind color). */
+  color?: string;
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const tick = toneColor[tone];
+  const tick = color ?? toneColor[tone];
+  const border = color ? color + "A6" : toneBorder[tone];
   return (
-    <View style={[styles.screenTitle, { borderColor: toneBorder[tone] }, style]}>
+    <View style={[styles.screenTitle, { borderColor: border }, style]}>
       <View style={[styles.titleTick, styles.titleTickTL, { borderTopColor: tick, borderLeftColor: tick }]} />
       <View style={[styles.titleTick, styles.titleTickBR, { borderBottomColor: tick, borderRightColor: tick }]} />
       <Text style={[styles.screenTitleText, { fontSize: size }]}>{children}</Text>

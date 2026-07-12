@@ -34,6 +34,11 @@ function openProfile(username: string) {
   router.push({ pathname: "/user/[username]", params: { username } });
 }
 
+// Everything beneath a node, for the "▾ N MORE REPLIES" collapse label.
+function countDescendants(p: PostInfo): number {
+  return p.replies.reduce((n, r) => n + 1 + countDescendants(r), 0);
+}
+
 export function PostCard({
   post,
   isReply,
@@ -50,6 +55,7 @@ export function PostCard({
   onOpen,
   depth = 0,
   hideReplies = false,
+  root = false,
 }: {
   post: PostInfo;
   isReply?: boolean;
@@ -70,8 +76,12 @@ export function PostCard({
   // The post detail renders top-level comments separately, so the root post
   // suppresses its own nested replies.
   hideReplies?: boolean;
+  // Thread root: full System window with 4 corner brackets + glow.
+  root?: boolean;
 }) {
   const [localRevealed, setLocalRevealed] = useState(false);
+  // Replies deeper than one indent level collapse behind "▾ N MORE REPLIES".
+  const [deepExpanded, setDeepExpanded] = useState(false);
   const revealed = threadRevealed ?? localRevealed;
   const revealThread = onRevealThread ?? (() => setLocalRevealed(true));
   const shielded = viewerSignedIn && !post.mine && post.isSpoiler && !revealed;
@@ -91,8 +101,8 @@ export function PostCard({
     <>
       {!isReply ? (
         <>
-          {/* Kind notch breaking the top border + two corner ticks — the
-              mini System-window treatment from the redesign. */}
+          {/* Kind notch breaking the top border + corner ticks — the mini
+              System-window treatment; the thread root gets all four. */}
           <View style={[styles.notch, { borderColor: kindMeta.color }]} pointerEvents="none">
             <Text style={[styles.notchText, { color: kindMeta.color }]}>
               {kindMeta.icon} {kindMeta.label}
@@ -100,6 +110,12 @@ export function PostCard({
           </View>
           <View style={[styles.tick, styles.tickTL]} pointerEvents="none" />
           <View style={[styles.tick, styles.tickTR]} pointerEvents="none" />
+          {root ? (
+            <>
+              <View style={[styles.tick, styles.tickBL]} pointerEvents="none" />
+              <View style={[styles.tick, styles.tickBR]} pointerEvents="none" />
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -143,14 +159,22 @@ export function PostCard({
       ) : null}
 
       {shielded ? (
-        <Pressable style={styles.shield} onPress={revealThread}>
-          <EyeOff color={colors.accentSoft} size={18} strokeWidth={1.8} />
-          <Text style={styles.shieldTitle}>SPOILER SHIELD</Text>
-          <Text style={styles.shieldSub}>
-            Marked as a spoiler. Revealing shows this entire thread.
-          </Text>
-          <Text style={styles.shieldReveal}>TAP TO REVEAL</Text>
-        </Pressable>
+        isReply ? (
+          // Shielded replies collapse to a one-line dashed chip.
+          <Pressable style={styles.shieldChip} onPress={revealThread}>
+            <EyeOff color={colors.accentSoft} size={13} strokeWidth={1.8} />
+            <Text style={styles.shieldChipText}>SPOILER SHIELD — TAP TO REVEAL</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={styles.shield} onPress={revealThread}>
+            <EyeOff color={colors.accentSoft} size={18} strokeWidth={1.8} />
+            <Text style={styles.shieldTitle}>SPOILER SHIELD</Text>
+            <Text style={styles.shieldSub}>
+              Marked as a spoiler. Revealing shows this entire thread.
+            </Text>
+            <Text style={styles.shieldReveal}>TAP TO REVEAL</Text>
+          </Pressable>
+        )
       ) : (
         <LinkedText style={styles.body} numberOfLines={preview && !isReply ? 8 : undefined}>
           {post.body}
@@ -230,8 +254,22 @@ export function PostCard({
         </View>
       ) : null}
 
-      {!preview && !hideReplies
-        ? post.replies.map((r) => (
+      {!preview && !hideReplies ? (
+        depth >= 1 && post.replies.length > 0 && !deepExpanded ? (
+          // Deeper levels collapse behind ▾ N MORE REPLIES (design: only one
+          // visible indent level; the rest expand flat on demand).
+          <Pressable
+            style={styles.moreReplies}
+            onPress={() => setDeepExpanded(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Show more replies"
+          >
+            <Text style={styles.moreRepliesText}>
+              ▾ {countDescendants(post)} MORE {countDescendants(post) === 1 ? "REPLY" : "REPLIES"}
+            </Text>
+          </Pressable>
+        ) : (
+          post.replies.map((r) => (
             <PostCard
               key={r.id}
               post={r}
@@ -247,20 +285,20 @@ export function PostCard({
               onRevealThread={revealThread}
             />
           ))
-        : null}
+        )
+      ) : null}
     </>
   );
 
   if (isReply) {
-    // Nested replies indent with a left rail; a top-level comment (depth 0,
-    // rendered on its own by the thread screen) stays flush. Deep replies stop
-    // stepping right so the thread stays readable.
+    // One visible indent level with the purple rail; anything deeper renders
+    // flat (those replies arrive via the ▾ MORE REPLIES expander).
     return (
       <View
         style={[
           styles.replyBase,
           depth > 0 && styles.replyIndent,
-          depth > 5 && styles.replyIndentFlat,
+          depth > 1 && styles.replyIndentFlat,
         ]}
       >
         {inner}
@@ -281,7 +319,7 @@ export function PostCard({
     );
   }
 
-  return <View style={styles.card}>{inner}</View>;
+  return <View style={[styles.card, root && styles.cardRoot]}>{inner}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -297,6 +335,15 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   cardPressed: { borderColor: "rgba(124,92,255,0.7)", opacity: 0.96 },
+  cardRoot: {
+    borderWidth: 1.5,
+    borderColor: "rgba(124,92,255,0.55)",
+    shadowColor: colors.accent,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
   replyBase: { marginTop: 12 },
   replyIndent: {
     borderLeftWidth: 2,
@@ -319,6 +366,8 @@ const styles = StyleSheet.create({
   tick: { position: "absolute", width: 9, height: 9 },
   tickTL: { top: -1.5, left: -1.5, borderTopWidth: 2, borderLeftWidth: 2, borderColor: colors.accentBright },
   tickTR: { top: -1.5, right: -1.5, borderTopWidth: 2, borderRightWidth: 2, borderColor: colors.accentBright },
+  tickBL: { bottom: -1.5, left: -1.5, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: colors.accentBright },
+  tickBR: { bottom: -1.5, right: -1.5, borderBottomWidth: 2, borderRightWidth: 2, borderColor: colors.accentBright },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   headerRowNotched: { marginTop: 4 },
   time: { color: colors.muted, fontSize: 12 },
@@ -352,6 +401,41 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1.6,
     marginTop: 4,
+  },
+  shieldChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.5)",
+    borderStyle: "dashed",
+    borderRadius: 3,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(124,92,255,0.06)",
+    alignSelf: "flex-start",
+  },
+  shieldChipText: {
+    color: colors.accentSoft,
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  moreReplies: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+  },
+  moreRepliesText: {
+    color: colors.accentBright,
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 1.2,
   },
   reactionRow: { marginTop: 12 },
   replyRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },

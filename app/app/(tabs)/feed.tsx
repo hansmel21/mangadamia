@@ -1,16 +1,27 @@
-// Dungeons tab — the social wall. Reader posts newest-first via the shared
-// PostCard in preview mode: tap a post to open the full conversation. The +
-// button opens the composer for a new post.
+// DUNGEON — the social wall, System Protocol layout: in-screen bracketed
+// title + ARENA key, a single-row filter deck (kind chips + sort cycle key),
+// System Record cards, and the gradient NEW RECORD key. Tap a post to open
+// the full thread.
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { Plus, X } from "lucide-react-native";
+import { Plus, Trophy, X } from "lucide-react-native";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, Animated, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { pressFx, useSwitchFade } from "../../src/anim";
+import {
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSwitchFade } from "../../src/anim";
 import { api, type PostInfo, type ReactionType } from "../../src/api";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
 import { ReportModal, type ReportTarget } from "../../src/components/ReportModal";
+import { ScreenTitle, SystemKey } from "../../src/components/SystemUI";
 import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors } from "../../src/theme";
 
@@ -18,7 +29,10 @@ function openThread(post: PostInfo) {
   router.push({ pathname: "/post/[id]", params: { id: post.id } });
 }
 
+const SORT_ORDER = ["hot", "top", "new"] as const;
+
 export default function FeedScreen() {
+  const insets = useSafeAreaInsets();
   const { topic: routeTopic } = useLocalSearchParams<{ topic?: string }>();
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const queryClient = useQueryClient();
@@ -101,54 +115,58 @@ export default function FeedScreen() {
     }
   };
 
+  const cycleSort = () => setSort(SORT_ORDER[(SORT_ORDER.indexOf(sort) + 1) % SORT_ORDER.length]);
+
   return (
-    <View style={styles.screen}>
-      <View style={styles.typeTabs}>
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+      {/* header — bracketed title + ARENA key */}
+      <View style={styles.header}>
+        <ScreenTitle>DUNGEON</ScreenTitle>
+        <Pressable
+          style={({ pressed }) => [styles.arenaKey, pressed && { opacity: 0.7 }]}
+          onPress={() => router.push("/arena")}
+          accessibilityRole="button"
+          accessibilityLabel="Arena"
+        >
+          <Trophy color={colors.foil} size={13} strokeWidth={2} />
+          <Text style={styles.arenaText}>ARENA</Text>
+        </Pressable>
+      </View>
+
+      {/* filter deck — kind chips + FOLLOWING scope + sort cycle key */}
+      <View style={styles.deck}>
         {(["all", "theory", "review"] as const).map((f) => (
-          <Pressable
+          <SystemKey
             key={f}
-            style={[styles.typeTab, typeFilter === f && styles.typeTabActive]}
-            onPress={() => setTypeFilter(f)}
-          >
-            <Text style={[styles.typeTabText, typeFilter === f && styles.typeTabTextActive]}>
-              {f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
-            </Text>
-          </Pressable>
+            variant="chip"
+            label={f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
+            active={typeFilter === f && feedMode === "global"}
+            onPress={() => {
+              setTypeFilter(f);
+              setFeedMode("global");
+            }}
+          />
         ))}
+        <SystemKey
+          variant="chip"
+          label="FOLLOWING"
+          active={feedMode === "following"}
+          disabled={!user}
+          onPress={() => {
+            setFeedMode("following");
+            setTypeFilter("all");
+          }}
+        />
+        <Pressable
+          style={({ pressed }) => [styles.sortKey, pressed && { opacity: 0.7 }]}
+          onPress={cycleSort}
+          accessibilityRole="button"
+          accessibilityLabel="Cycle sort order"
+        >
+          <Text style={styles.sortText}>{sort.toUpperCase()} ▾</Text>
+        </Pressable>
       </View>
-      <View style={styles.scopeRow}>
-        <View style={styles.scopeGroup}>
-          {(["global", "following"] as const).map((mode) => (
-            <Pressable
-              key={mode}
-              disabled={mode === "following" && !user}
-              style={[
-                styles.scopeChip,
-                feedMode === mode && styles.scopeChipActive,
-                mode === "following" && !user && { opacity: 0.35 },
-              ]}
-              onPress={() => setFeedMode(mode)}
-            >
-              <Text style={[styles.scopeText, feedMode === mode && styles.scopeTextActive]}>
-                {mode.toUpperCase()}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.scopeGroup}>
-          {(["hot", "top", "new"] as const).map((s) => (
-            <Pressable
-              key={s}
-              style={[styles.scopeChip, sort === s && styles.scopeChipActive]}
-              onPress={() => setSort(s)}
-            >
-              <Text style={[styles.scopeText, sort === s && styles.scopeTextActive]}>
-                {s.toUpperCase()}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+
       {topic ? (
         <View style={styles.topicRow}>
           <Text style={styles.topicText}>TOPIC #{topic}</Text>
@@ -167,62 +185,64 @@ export default function FeedScreen() {
           </Pressable>
         </View>
       ) : null}
+
       {feed.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
       ) : (
         <Animated.View style={[{ flex: 1 }, listFade]}>
-        <FlatList
-          data={posts}
-          keyExtractor={(p) => p.id}
-          renderItem={({ item }) => (
-            <PostCard
-              post={item}
-              preview
-              onOpen={openThread}
-              onReact={react}
-              onVote={vote}
-              onQuote={(p) => {
-                setQuoteTarget(p);
-                setComposerOpen(true);
-              }}
-              onDelete={remove}
-              onReport={(post) =>
-                setReportTarget({ type: "post", id: post.id, username: post.username })
-              }
-              viewerSignedIn={!!user}
-            />
-          )}
-          contentContainerStyle={{ paddingBottom: 90, paddingTop: 2 }}
-          onEndReached={() => {
-            if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
-          }}
-          onEndReachedThreshold={0.5}
-          refreshing={feed.isRefetching && !feed.isFetchingNextPage}
-          onRefresh={() => feed.refetch()}
-          ListEmptyComponent={
-            <Text style={styles.empty}>
-              {topic
-                ? `No records for #${topic} yet.\nStart the topic.`
-                : "The dungeon is silent.\nBe the first to post something."}
-            </Text>
-          }
-        />
+          <FlatList
+            data={posts}
+            keyExtractor={(p) => p.id}
+            renderItem={({ item }) => (
+              <PostCard
+                post={item}
+                preview
+                onOpen={openThread}
+                onReact={react}
+                onVote={vote}
+                onQuote={(p) => {
+                  setQuoteTarget(p);
+                  setComposerOpen(true);
+                }}
+                onDelete={remove}
+                onReport={(post) =>
+                  setReportTarget({ type: "post", id: post.id, username: post.username })
+                }
+                viewerSignedIn={!!user}
+              />
+            )}
+            contentContainerStyle={{ paddingBottom: 96, paddingTop: 2 }}
+            onEndReached={() => {
+              if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
+            }}
+            onEndReachedThreshold={0.5}
+            refreshing={feed.isRefetching && !feed.isFetchingNextPage}
+            onRefresh={() => feed.refetch()}
+            ListEmptyComponent={
+              <Text style={styles.empty}>
+                {topic
+                  ? `No records for #${topic} yet.\nStart the topic.`
+                  : "The dungeon is silent.\nBe the first to post something."}
+              </Text>
+            }
+          />
         </Animated.View>
       )}
 
       {user ? (
-        <Pressable
-          style={(s) => [styles.fab, pressFx(s)]}
+        <SystemKey
+          label="NEW RECORD"
+          icon={<Plus color="#fff" size={15} strokeWidth={2.4} />}
+          arrow={false}
           onPress={() => {
             setQuoteTarget(null);
             setComposerOpen(true);
           }}
-        >
-          <Plus color={colors.accentText} size={26} strokeWidth={2.4} />
-        </Pressable>
+          style={styles.fab}
+        />
       ) : (
         <View style={styles.signedOut}>
-          <Text style={styles.signedOutText}>Sign in from the Account tab to post.</Text>
+          <Text style={styles.signedOutText}>Sign in from the Status tab to post.</Text>
         </View>
       )}
 
@@ -241,52 +261,50 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  typeTabs: {
+  header: {
     flexDirection: "row",
-    gap: 6,
-    backgroundColor: colors.card,
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  arenaKey: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 5,
-    marginHorizontal: 12,
+    borderRadius: 3,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  arenaText: { color: colors.foilSoft, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
+  deck: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginHorizontal: 16,
     marginTop: 10,
   },
-  typeTab: { flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 8 },
-  typeTabActive: {
-    backgroundColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 4,
+  sortKey: {
+    marginLeft: "auto",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
   },
-  typeTabText: { color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 1.2 },
-  typeTabTextActive: { color: colors.accentText },
-  scopeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 2,
-  },
-  scopeGroup: { flexDirection: "row", gap: 4 },
-  scopeChip: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999 },
-  scopeChipActive: { backgroundColor: "rgba(124,92,255,0.16)" },
-  scopeText: { color: colors.muted, fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2 },
-  scopeTextActive: { color: colors.accentSoft },
+  sortText: { color: colors.accentBright, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   topicRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginHorizontal: 12,
-    marginTop: 6,
+    marginHorizontal: 16,
+    marginTop: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: "rgba(76,195,138,0.35)",
-    borderRadius: 10,
+    borderRadius: 3,
     backgroundColor: "rgba(76,195,138,0.08)",
   },
   topicText: { color: colors.fresh, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
@@ -295,19 +313,8 @@ const styles = StyleSheet.create({
   empty: { color: colors.muted, textAlign: "center", marginTop: 60, lineHeight: 22 },
   fab: {
     position: "absolute",
-    right: 18,
-    bottom: 22,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: colors.accent,
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 10,
+    right: 16,
+    bottom: 24,
   },
   signedOut: {
     position: "absolute",

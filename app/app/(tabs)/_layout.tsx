@@ -115,7 +115,8 @@ export default function TabsLayout() {
         name="feed"
         options={{
           title: "DUNGEON",
-          headerTitle: "DUNGEON",
+          // Renders its own in-screen System header (ScreenTitle + ARENA key).
+          headerShown: false,
           tabBarButton: (props) => (
             <DungeonKey
               focused={props.accessibilityState?.selected ?? false}

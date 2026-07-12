@@ -1,21 +1,33 @@
-// Shared post composer (new post, or reply). System-styled modal. Optionally
-// carries a series/chapter context chip. On success, celebrates badges/levels.
+// Shared post composer (new post, or reply) — the System Protocol "NEW RECORD"
+// bottom sheet. Kind tiles across the top, an auto-tagged series row from the
+// reader's last read position, spoiler shield toggle, char counter, and a
+// gradient PUBLISH RECORD key. On success, celebrates badges/levels.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { EyeOff } from "lucide-react-native";
+import { EyeOff, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { api, type PostInfo, type PostKind, type UnifiedCard } from "../api";
 import { celebrateBadges } from "../badges";
+import { getLastReadTag } from "../library";
 import { POST_KINDS } from "../ranks";
+import { colors } from "../theme";
 import { showExpGain } from "./ExpToast";
 import { showLevelUp } from "./LevelUp";
 import { showQuestCompletions } from "./QuestToast";
 import { ReviewRating } from "./ReviewRating";
-import { SystemModal } from "./SystemModal";
+import { SystemKey } from "./SystemUI";
+import { SystemSheet } from "./SystemSheet";
 import { TermsAcceptance } from "./TermsAcceptance";
-import { colors } from "../theme";
 
-const KIND_ORDER: PostKind[] = ["record", "theory", "review", "poll", "spoiler_intel"];
+const KIND_ORDER: PostKind[] = ["theory", "record", "review", "poll", "spoiler_intel"];
+// Short tile labels — the full POST_KINDS labels don't fit five-across.
+const KIND_TILE: Record<PostKind, string> = {
+  record: "RECORD",
+  theory: "THEORY",
+  review: "REVIEW",
+  poll: "POLL",
+  spoiler_intel: "INTEL",
+};
 
 export function PostComposer({
   visible,
@@ -47,16 +59,30 @@ export function PostComposer({
   const [kind, setKind] = useState<PostKind>("record");
   const [rating, setRating] = useState(0);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  // Prefilled from the reader's last read position; ✕ removes it.
+  const [autoTag, setAutoTag] = useState<
+    { canonicalId: string; title: string; chapterNumber: number } | null
+  >(null);
   const queryClient = useQueryClient();
 
-  // Reset the type/rating/poll each time the composer opens.
+  // Reset the type/rating/poll each time the composer opens, and re-read the
+  // last-read auto-tag (only meaningful for brand-new, uncontexted posts).
   useEffect(() => {
     if (visible) {
       setKind(replyTo ? "record" : (initialKind ?? "record"));
       setRating(0);
       setPollOptions(["", ""]);
+      if (!replyTo && !quote && !context) {
+        try {
+          setAutoTag(getLastReadTag() ?? null);
+        } catch {
+          setAutoTag(null);
+        }
+      } else {
+        setAutoTag(null);
+      }
     }
-  }, [visible, replyTo, initialKind]);
+  }, [visible, replyTo, quote, context, initialKind]);
 
   const isQuote = !!quote && !replyTo;
   const isReview = kind === "review" && !replyTo && !isQuote;
@@ -67,6 +93,10 @@ export function PostComposer({
     enabled: visible && !replyTo && !context && seriesQuery.trim().length >= 2,
     staleTime: 60_000,
   });
+
+  // The auto-tag applies when the hunter hasn't tagged anything manually and
+  // isn't reviewing (a review's series must be chosen deliberately).
+  const autoTagActive = !!autoTag && !isReview && selectedSeries.length === 0 && !context;
 
   const submit = async () => {
     const text = body.trim();
@@ -105,9 +135,13 @@ export function PostComposer({
               ? undefined
               : [{ canonicalId: reviewSeries! }]
             : !context
-              ? selectedSeries
-                  .filter((series) => !!series.canonicalId)
-                  .map((series) => ({ canonicalId: series.canonicalId! }))
+              ? selectedSeries.length > 0
+                ? selectedSeries
+                    .filter((series) => !!series.canonicalId)
+                    .map((series) => ({ canonicalId: series.canonicalId! }))
+                : autoTagActive && autoTag
+                  ? [{ canonicalId: autoTag.canonicalId, chapterNumber: autoTag.chapterNumber }]
+                  : undefined
               : undefined,
       });
       showExpGain(created.xpAwarded);
@@ -130,193 +164,235 @@ export function PostComposer({
     }
   };
 
-  const title = replyTo
-    ? "Reply"
-    : isQuote
-      ? "Quote"
-      : isReview
-        ? "File a Review"
-        : isPoll
-          ? "Create a Poll"
-          : "File a Record";
-  const chip = replyTo
+  const title = replyTo ? "REPLY" : isQuote ? "QUOTE RECORD" : "NEW RECORD";
+  const contextChip = replyTo
     ? `Replying to @${replyTo.username}`
     : context
       ? `${context.title}${context.chapterNumber != null ? ` · Ch. ${context.chapterNumber}` : ""}`
       : null;
 
   return (
-    <SystemModal visible={visible} onClose={onClose} title={title}>
+    <SystemSheet visible={visible} onClose={onClose} title={title}>
       <TermsAcceptance>
-      {chip ? (
-        <View style={styles.chip}>
-          <Text style={styles.chipText} numberOfLines={1}>
-            ◆ {chip}
-          </Text>
-        </View>
-      ) : null}
-      {isQuote ? (
-        <View style={styles.quoteBox}>
-          <Text style={styles.quoteLabel}>QUOTING @{quote.username}</Text>
-          <Text style={styles.quoteBody} numberOfLines={3}>
-            {quote.isSpoiler ? "⚠ Spoiler" : quote.body}
-          </Text>
-        </View>
-      ) : null}
-      {!replyTo && !isQuote ? (
-        <View style={styles.typeRow}>
-          {KIND_ORDER.map((k) => (
-            <Pressable
-              key={k}
-              style={[styles.typeChip, kind === k && styles.typeChipOn]}
-              onPress={() => setKind(k)}
-            >
-              <Text style={[styles.typeChipText, kind === k && { color: POST_KINDS[k].color }]}>
-                {POST_KINDS[k].label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-      {isReview ? (
-        <View style={styles.ratingRow}>
-          <Text style={styles.ratingLabel}>YOUR RATING</Text>
-          <ReviewRating value={rating} onChange={setRating} size={28} />
-        </View>
-      ) : null}
-      {isPoll ? (
-        <View style={styles.pollBox}>
-          <Text style={styles.pollLabel}>POLL OPTIONS</Text>
-          {pollOptions.map((opt, i) => (
-            <View key={i} style={styles.pollRow}>
-              <TextInput
-                style={styles.pollInput}
-                value={opt}
-                onChangeText={(t) =>
-                  setPollOptions((prev) => prev.map((o, j) => (j === i ? t : o)))
-                }
-                placeholder={`Option ${i + 1}`}
-                placeholderTextColor={colors.muted}
-                maxLength={80}
-              />
-              {pollOptions.length > 2 ? (
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => setPollOptions((prev) => prev.filter((_, j) => j !== i))}
-                >
-                  <Text style={styles.pollRemove}>×</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-          {pollOptions.length < 6 ? (
-            <Pressable onPress={() => setPollOptions((prev) => [...prev, ""])}>
-              <Text style={styles.pollAdd}>+ Add option</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-      {!replyTo && !context && !isQuote ? (
-        <View style={styles.seriesPicker}>
-          <TextInput
-            style={styles.seriesInput}
-            value={seriesQuery}
-            onChangeText={setSeriesQuery}
-            placeholder={isReview ? "Search the series you're reviewing" : "Tag up to 5 manga (optional)"}
-            placeholderTextColor={colors.muted}
-          />
-          {selectedSeries.length > 0 ? (
-            <View style={styles.selectedSeries}>
-              {selectedSeries.map((series) => (
-                <Pressable key={series.canonicalId} style={styles.selectedChip} onPress={() => setSelectedSeries((old) => old.filter((item) => item.canonicalId !== series.canonicalId))}>
-                  <Text style={styles.selectedChipText} numberOfLines={1}>{series.title} ×</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          {seriesQuery.trim().length >= 2 ? (
-            <View style={styles.results}>
-              {(seriesResults.data ?? []).filter((series) => series.canonicalId && !selectedSeries.some((item) => item.canonicalId === series.canonicalId)).slice(0, 4).map((series) => (
-                <Pressable key={series.canonicalId} style={styles.result} disabled={selectedSeries.length >= 5} onPress={() => {
-                  setSelectedSeries((old) => [...old, series]);
-                  setSeriesQuery("");
-                }}>
-                  <Text style={styles.resultText} numberOfLines={1}>+ {series.title}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-      <TextInput
-        style={styles.input}
-        placeholder={
-          replyTo
-            ? "Write a reply…"
-            : isQuote
-              ? "Add your take…"
-              : isPoll
-                ? "Ask a question…"
-                : "Share a thought…"
-        }
-        placeholderTextColor={colors.muted}
-        value={body}
-        onChangeText={setBody}
-        multiline
-        autoFocus
-        maxLength={1000}
-      />
-      {kind === "spoiler_intel" ? (
-        <View style={styles.spoilerToggle}>
-          <EyeOff color={colors.danger} size={13} strokeWidth={2.5} />
-          <Text style={[styles.spoilerText, { color: colors.danger }]}>
-            Spoiler Intel is shielded automatically
-          </Text>
-        </View>
-      ) : (
-        <Pressable
-          style={(s) => [styles.spoilerToggle, { opacity: s.pressed ? 0.6 : 1 }]}
-          onPress={() => setSpoiler((v) => !v)}
-        >
-          <View style={[styles.checkbox, spoiler && styles.checkboxOn]}>
-            {spoiler ? <EyeOff color={colors.accentText} size={11} strokeWidth={2.5} /> : null}
+        {contextChip ? (
+          <View style={styles.chip}>
+            <Text style={styles.chipText} numberOfLines={1}>
+              ◆ {contextChip}
+            </Text>
           </View>
-          <Text style={styles.spoilerText}>Mark as spoiler</Text>
-        </Pressable>
-      )}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.actions}>
-        <Pressable style={(s) => [styles.btnGhost, { opacity: s.pressed ? 0.6 : 1 }]} onPress={onClose}>
-          <Text style={styles.btnGhostText}>CANCEL</Text>
-        </Pressable>
-        <Pressable
-          style={(s) => [styles.btn, (!body.trim() || busy) && { opacity: 0.4 }, s.pressed && { opacity: 0.6 }]}
-          disabled={!body.trim() || busy}
-          onPress={submit}
-        >
-          {busy ? (
-            <ActivityIndicator color={colors.accentSoft} />
+        ) : null}
+        {isQuote ? (
+          <View style={styles.quoteBox}>
+            <Text style={styles.quoteLabel}>QUOTING @{quote.username}</Text>
+            <Text style={styles.quoteBody} numberOfLines={3}>
+              {quote.isSpoiler ? "⚠ Spoiler" : quote.body}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Kind selector — 5 equal System tiles */}
+        {!replyTo && !isQuote ? (
+          <View style={styles.kindRow}>
+            {KIND_ORDER.map((k) => {
+              const meta = POST_KINDS[k];
+              const on = kind === k;
+              return (
+                <Pressable
+                  key={k}
+                  style={[
+                    styles.kindTile,
+                    on && { borderColor: meta.color, borderWidth: 1.5, backgroundColor: colors.accentGhost },
+                  ]}
+                  onPress={() => setKind(k)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={styles.kindIcon}>{meta.icon}</Text>
+                  <Text style={[styles.kindLabel, on && { color: meta.color }]}>{KIND_TILE[k]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* Auto-tagged series row from the last read position */}
+        {autoTagActive && autoTag ? (
+          <View style={styles.autoTag}>
+            <View style={styles.autoTagSpine} />
+            <View style={styles.autoTagBody}>
+              <Text style={styles.autoTagTitle} numberOfLines={1}>
+                {autoTag.title}
+              </Text>
+              <Text style={styles.autoTagMeta}>
+                CH. {autoTag.chapterNumber} — auto-tagged from your last read
+              </Text>
+            </View>
+            <Pressable hitSlop={10} onPress={() => setAutoTag(null)} accessibilityLabel="Remove tag">
+              <X color={colors.muted} size={14} strokeWidth={2} />
+            </Pressable>
+          </View>
+        ) : null}
+
+        {isReview ? (
+          <View style={styles.ratingRow}>
+            <Text style={styles.ratingLabel}>YOUR RATING</Text>
+            <ReviewRating value={rating} onChange={setRating} size={28} />
+          </View>
+        ) : null}
+        {isPoll ? (
+          <View style={styles.pollBox}>
+            <Text style={styles.pollLabel}>POLL OPTIONS</Text>
+            {pollOptions.map((opt, i) => (
+              <View key={i} style={styles.pollRow}>
+                <TextInput
+                  style={styles.pollInput}
+                  value={opt}
+                  onChangeText={(t) =>
+                    setPollOptions((prev) => prev.map((o, j) => (j === i ? t : o)))
+                  }
+                  placeholder={`Option ${i + 1}`}
+                  placeholderTextColor={colors.muted}
+                  maxLength={80}
+                />
+                {pollOptions.length > 2 ? (
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => setPollOptions((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <Text style={styles.pollRemove}>×</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ))}
+            {pollOptions.length < 6 ? (
+              <Pressable onPress={() => setPollOptions((prev) => [...prev, ""])}>
+                <Text style={styles.pollAdd}>+ Add option</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+        {!replyTo && !context && !isQuote && (!autoTagActive || isReview) ? (
+          <View style={styles.seriesPicker}>
+            <TextInput
+              style={styles.seriesInput}
+              value={seriesQuery}
+              onChangeText={setSeriesQuery}
+              placeholder={isReview ? "Search the series you're reviewing" : "Tag up to 5 manga (optional)"}
+              placeholderTextColor={colors.muted}
+            />
+            {selectedSeries.length > 0 ? (
+              <View style={styles.selectedSeries}>
+                {selectedSeries.map((series) => (
+                  <Pressable key={series.canonicalId} style={styles.selectedChip} onPress={() => setSelectedSeries((old) => old.filter((item) => item.canonicalId !== series.canonicalId))}>
+                    <Text style={styles.selectedChipText} numberOfLines={1}>{series.title} ×</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            {seriesQuery.trim().length >= 2 ? (
+              <View style={styles.results}>
+                {(seriesResults.data ?? []).filter((series) => series.canonicalId && !selectedSeries.some((item) => item.canonicalId === series.canonicalId)).slice(0, 4).map((series) => (
+                  <Pressable key={series.canonicalId} style={styles.result} disabled={selectedSeries.length >= 5} onPress={() => {
+                    setSelectedSeries((old) => [...old, series]);
+                    setSeriesQuery("");
+                  }}>
+                    <Text style={styles.resultText} numberOfLines={1}>+ {series.title}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        <TextInput
+          style={styles.input}
+          placeholder={
+            replyTo
+              ? "Add to the record…"
+              : isQuote
+                ? "Add your take…"
+                : isPoll
+                  ? "Ask a question…"
+                  : "Log your record…"
+          }
+          placeholderTextColor={colors.muted}
+          value={body}
+          onChangeText={setBody}
+          multiline
+          autoFocus
+          maxLength={1000}
+        />
+
+        {/* Spoiler shield toggle + char counter */}
+        <View style={styles.metaRow}>
+          {kind === "spoiler_intel" ? (
+            <View style={styles.shieldPill}>
+              <EyeOff color={colors.danger} size={13} strokeWidth={2.5} />
+              <Text style={[styles.shieldLabel, { color: colors.danger }]}>AUTO-SHIELDED</Text>
+            </View>
           ) : (
-            <Text style={styles.btnText}>POST</Text>
+            <Pressable
+              style={(s) => [styles.shieldPill, { opacity: s.pressed ? 0.6 : 1 }]}
+              onPress={() => setSpoiler((v) => !v)}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: spoiler }}
+            >
+              <Text style={styles.shieldLabel}>SPOILER SHIELD</Text>
+              <View style={[styles.track, spoiler && styles.trackOn]}>
+                <View style={[styles.knob, spoiler && styles.knobOn]} />
+              </View>
+            </Pressable>
           )}
-        </Pressable>
-      </View>
+          <Text style={styles.counter}>{body.length} / 1,000</Text>
+        </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <SystemKey
+          label={replyTo ? "SEND REPLY" : "PUBLISH RECORD"}
+          onPress={submit}
+          disabled={!body.trim() || busy}
+          style={styles.publish}
+          icon={busy ? <ActivityIndicator color="#fff" size="small" /> : undefined}
+        />
+        {!replyTo && !isQuote ? (
+          <Text style={styles.xpHint}>+XP for your first record today · records feed your daily quests</Text>
+        ) : null}
       </TermsAcceptance>
-    </SystemModal>
+    </SystemSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 },
-  typeChip: {
+  kindRow: { flexDirection: "row", gap: 6, marginBottom: 12 },
+  kindTile: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 9,
+    gap: 2,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 3,
   },
-  typeChipOn: { borderColor: "rgba(124,92,255,0.7)", backgroundColor: "rgba(124,92,255,0.12)" },
-  typeChipText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 0.8 },
+  kindIcon: { fontSize: 14 },
+  kindLabel: { color: colors.muted, fontSize: 8.5, fontWeight: "900", letterSpacing: 1 },
+  autoTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.35)",
+    borderRadius: 3,
+    paddingVertical: 8,
+    paddingRight: 10,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
+  autoTagSpine: { width: 2, alignSelf: "stretch", backgroundColor: colors.accent },
+  autoTagBody: { flex: 1, gap: 1 },
+  autoTagTitle: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  autoTagMeta: { color: colors.accentBright, fontSize: 10, fontWeight: "700" },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   ratingLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
   pollBox: { gap: 7, marginBottom: 10 },
@@ -328,7 +404,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 6,
+    borderRadius: 3,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 13,
@@ -338,7 +414,7 @@ const styles = StyleSheet.create({
   quoteBox: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 3,
     padding: 10,
     marginBottom: 10,
     gap: 4,
@@ -347,18 +423,27 @@ const styles = StyleSheet.create({
   quoteLabel: { color: colors.accentSoft, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
   quoteBody: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   seriesPicker: { marginBottom: 10 },
-  seriesInput: { color: colors.text, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
+  seriesInput: {
+    color: colors.text,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+  },
   selectedSeries: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 6 },
-  selectedChip: { borderWidth: 1, borderColor: colors.accent, paddingHorizontal: 6, paddingVertical: 3, maxWidth: "48%" },
+  selectedChip: { borderWidth: 1, borderColor: colors.accent, borderRadius: 3, paddingHorizontal: 6, paddingVertical: 3, maxWidth: "48%" },
   selectedChipText: { color: colors.accentSoft, fontSize: 9.5 },
-  results: { borderWidth: 1, borderColor: colors.border, marginTop: 4 },
+  results: { borderWidth: 1, borderColor: colors.border, borderRadius: 3, marginTop: 4 },
   result: { paddingHorizontal: 8, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   resultText: { color: colors.text, fontSize: 11 },
   chip: {
     alignSelf: "flex-start",
     borderWidth: 1,
     borderColor: "rgba(124,92,255,0.5)",
-    borderRadius: 4,
+    borderRadius: 3,
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginBottom: 10,
@@ -368,47 +453,42 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: colors.card,
     color: colors.text,
-    borderRadius: 4,
+    borderRadius: 3,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "rgba(124,92,255,0.4)",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    minHeight: 90,
+    minHeight: 100,
     maxHeight: 200,
-    fontSize: 15,
+    fontSize: 14.5,
+    lineHeight: 21,
     textAlignVertical: "top",
   },
-  spoilerToggle: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
-  checkbox: {
-    width: 18,
-    height: 18,
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  shieldPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 3,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  shieldLabel: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  track: {
+    width: 26,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: colors.border,
     justifyContent: "center",
+    paddingHorizontal: 2,
   },
-  checkboxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  spoilerText: { color: colors.muted, fontSize: 13 },
+  trackOn: { backgroundColor: colors.accent },
+  knob: { width: 11, height: 11, borderRadius: 6, backgroundColor: colors.text, alignSelf: "flex-start" },
+  knobOn: { alignSelf: "flex-end" },
+  counter: { marginLeft: "auto", color: colors.muted, fontSize: 10 },
   error: { color: colors.danger, marginTop: 8, fontSize: 13 },
-  actions: { flexDirection: "row", gap: 10, marginTop: 14 },
-  btnGhost: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: 4,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  btnGhostText: { color: colors.muted, fontWeight: "800", letterSpacing: 1.6, fontSize: 12 },
-  btn: {
-    flex: 1,
-    backgroundColor: "rgba(124,92,255,0.18)",
-    borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.65)",
-    borderRadius: 4,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  btnText: { color: colors.accentSoft, fontWeight: "800", letterSpacing: 1.6, fontSize: 12 },
+  publish: { marginTop: 14 },
+  xpHint: { color: colors.muted, fontSize: 10, textAlign: "center", marginTop: 9 },
 });

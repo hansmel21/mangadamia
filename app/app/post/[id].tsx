@@ -1,14 +1,27 @@
-// Post thread — the full conversation for one post. Opened by tapping a card
-// in the Dungeons feed or a series wall. Shows the root post with every reply
-// nested beneath it, plus an always-available reply bar.
+// Post thread — the full conversation for one post, System Protocol layout:
+// kind-colored bracketed title, the root post as a full System window, a
+// TOP ◆ / NEW reply sort row, one visible indent level (deeper replies expand
+// on demand), and a sticky avatar + input + gradient-send reply bar.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ArrowLeft, Flag, Send } from "lucide-react-native";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, type PostInfo, type ReactionType } from "../../src/api";
+import { HunterAvatar } from "../../src/components/HunterAvatar";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
 import { ReportModal, type ReportTarget } from "../../src/components/ReportModal";
+import { ScreenTitle } from "../../src/components/SystemUI";
+import { POST_KINDS } from "../../src/ranks";
 import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors } from "../../src/theme";
 
@@ -29,7 +42,12 @@ function countComments(p: PostInfo): number {
   return p.replies.reduce((n, r) => n + 1 + countComments(r), 0);
 }
 
+function reactionTotal(p: PostInfo): number {
+  return Object.values(p.reactions ?? {}).reduce((n, c) => n + c, 0);
+}
+
 export default function PostThreadScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const queryClient = useQueryClient();
@@ -37,6 +55,7 @@ export default function PostThreadScreen() {
   const [replyTarget, setReplyTarget] = useState<PostInfo | null>(null);
   const [quoteTarget, setQuoteTarget] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [replySort, setReplySort] = useState<"top" | "new">("top");
   const queryKey = ["post", id] as const;
 
   const startReply = (target: PostInfo) => {
@@ -52,6 +71,19 @@ export default function PostThreadScreen() {
 
   const thread = useQuery({ queryKey, queryFn: () => api.post(id), enabled: !!id });
   const post = thread.data;
+  // Viewer identity for the sticky reply bar's avatar (shares the "me" cache).
+  const me = useQuery({ queryKey: ["me"], queryFn: api.me, enabled: !!user, staleTime: 60_000 });
+
+  // Top-level comments sorted client-side: TOP by reactions, NEW by recency.
+  const sortedComments = useMemo(() => {
+    const replies = post?.replies ?? [];
+    return [...replies].sort((a, b) =>
+      replySort === "top"
+        ? reactionTotal(b) - reactionTotal(a) ||
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [post?.replies, replySort]);
 
   const patch = (targetId: string, fn: (p: PostInfo) => PostInfo) =>
     queryClient.setQueryData<PostInfo>(queryKey, (old) => (old ? patchPost(old, targetId, fn) : old));
@@ -92,9 +124,33 @@ export default function PostThreadScreen() {
     }
   };
 
+  const kindMeta = post ? (POST_KINDS[post.kind] ?? POST_KINDS.record) : POST_KINDS.record;
+  const total = post ? (post.commentCount ?? countComments(post)) : 0;
+
   return (
-    <View style={styles.screen}>
-      <Stack.Screen options={{ title: post ? `@${post.username}'s post` : "Thread" }} />
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* header — back + kind-colored thread title + report */}
+      <View style={styles.header}>
+        <Pressable hitSlop={10} onPress={() => router.back()} accessibilityLabel="Back">
+          <ArrowLeft color={colors.text} size={22} strokeWidth={2} />
+        </Pressable>
+        <ScreenTitle color={kindMeta.color} size={15}>
+          {kindMeta.label} THREAD
+        </ScreenTitle>
+        {post && !post.mine ? (
+          <Pressable
+            style={styles.headerReport}
+            hitSlop={10}
+            onPress={() => setReportTarget({ type: "post", id: post.id, username: post.username })}
+            accessibilityLabel="Report post"
+          >
+            <Flag color={colors.muted} size={16} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
+
       {thread.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
       ) : thread.isError || !post ? (
@@ -105,9 +161,10 @@ export default function PostThreadScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 110, paddingTop: 4 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 110, paddingTop: 0 }}>
           <PostCard
             post={post}
+            root
             hideReplies
             onReact={react}
             onVote={vote}
@@ -117,21 +174,26 @@ export default function PostThreadScreen() {
             onReport={(p) => setReportTarget({ type: "post", id: p.id, username: p.username })}
             viewerSignedIn={!!user}
           />
-          <View style={styles.repliesHeader}>
-            {(() => {
-              const total = post.commentCount ?? countComments(post);
-              return (
-                <Text style={styles.repliesHeaderText}>
-                  {total > 0
-                    ? `${total} ${total === 1 ? "COMMENT" : "COMMENTS"}`
-                    : "NO COMMENTS YET · BE THE FIRST"}
-                </Text>
-              );
-            })()}
+
+          {/* replies rule — REPLIES ——— TOP ◆ / NEW */}
+          <View style={styles.repliesRule}>
+            <Text style={styles.repliesLabel}>
+              {total > 0 ? `REPLIES · ${total}` : "NO REPLIES YET"}
+            </Text>
+            <View style={styles.ruleLine} />
+            <Pressable hitSlop={8} onPress={() => setReplySort("top")}>
+              <Text style={[styles.sortOption, replySort === "top" && styles.sortOptionOn]}>
+                TOP {replySort === "top" ? "◆" : ""}
+              </Text>
+            </Pressable>
+            <Pressable hitSlop={8} onPress={() => setReplySort("new")}>
+              <Text style={[styles.sortOption, replySort === "new" && styles.sortOptionOn]}>
+                NEW {replySort === "new" ? "◆" : ""}
+              </Text>
+            </Pressable>
           </View>
-          {/* Each top-level comment (and its nested replies) is its own clearly
-              separated block, Reddit-style. */}
-          {post.replies.map((comment) => (
+
+          {sortedComments.map((comment) => (
             <View key={comment.id} style={styles.commentThread}>
               <PostCard
                 post={comment}
@@ -148,13 +210,27 @@ export default function PostThreadScreen() {
         </ScrollView>
       )}
 
+      {/* sticky reply bar — avatar + input + gradient send key */}
       {user && post ? (
-        <Pressable style={styles.replyBar} onPress={() => startReply(post)}>
-          <Text style={styles.replyBarText}>Add a comment…</Text>
-        </Pressable>
+        <View style={[styles.replyBar, { paddingBottom: Math.max(insets.bottom, 10) + 4 }]}>
+          {me.data?.identity ? (
+            <HunterAvatar identity={me.data.identity} size={30} showRank={false} />
+          ) : null}
+          <Pressable style={styles.replyInput} onPress={() => startReply(post)}>
+            <Text style={styles.replyInputText}>Add to the record…</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.sendKey, pressed && { transform: [{ scale: 0.94 }] }]}
+            onPress={() => startReply(post)}
+            accessibilityRole="button"
+            accessibilityLabel="Reply"
+          >
+            <Send color="#fff" size={16} strokeWidth={2} />
+          </Pressable>
+        </View>
       ) : !user ? (
         <View style={styles.signedOut}>
-          <Text style={styles.signedOutText}>Sign in from the Account tab to join in.</Text>
+          <Text style={styles.signedOutText}>Sign in from the Status tab to join in.</Text>
         </View>
       ) : null}
 
@@ -181,42 +257,85 @@ export default function PostThreadScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  repliesHeader: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 4 },
-  repliesHeaderText: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 2,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
   },
+  headerReport: { marginLeft: "auto" },
+  repliesRule: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  repliesLabel: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 1.8 },
+  ruleLine: { flex: 1, height: 1, backgroundColor: colors.hairline },
+  sortOption: { color: colors.muted, fontSize: 9.5, fontWeight: "800", letterSpacing: 0.5 },
+  sortOptionOn: { color: colors.accentBright, fontWeight: "900" },
   // Each top-level comment thread is its own contrasting card, so it's obvious
-  // where one thread ends and the next begins (Reddit-style).
+  // where one thread ends and the next begins.
   commentThread: {
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    marginHorizontal: 12,
+    borderColor: colors.hairline,
+    borderRadius: 4,
+    marginHorizontal: 16,
     marginTop: 10,
     paddingHorizontal: 12,
-    paddingTop: 2,
+    paddingTop: 0,
     paddingBottom: 12,
   },
   missing: { alignItems: "center", marginTop: 72, gap: 16, paddingHorizontal: 24 },
   missingText: { color: colors.muted, textAlign: "center", lineHeight: 22 },
-  backBtn: { borderWidth: 1, borderColor: colors.accent, borderRadius: 6, paddingVertical: 9, paddingHorizontal: 20 },
+  backBtn: {
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 3,
+    paddingVertical: 9,
+    paddingHorizontal: 20,
+  },
   backText: { color: colors.accentSoft, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   replyBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.card,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    backgroundColor: colors.panel,
     borderTopWidth: 1,
-    borderTopColor: "rgba(124,92,255,0.4)",
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    borderTopColor: colors.hairline,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
-  replyBarText: { color: colors.muted, fontSize: 14 },
+  replyInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.4)",
+    borderRadius: 3,
+    backgroundColor: colors.card,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+  },
+  replyInputText: { color: colors.muted, fontSize: 12.5 },
+  sendKey: {
+    width: 38,
+    height: 38,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.accent,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+  },
   signedOut: {
     position: "absolute",
     bottom: 0,

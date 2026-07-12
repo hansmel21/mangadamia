@@ -403,6 +403,32 @@ export function listHistory(limit = 100): HistoryEntry[] {
   }));
 }
 
+/**
+ * The reader's most recent read position joined to a cloud-known series —
+ * used by the composer to auto-tag a new record ("CH. n — auto-tagged from
+ * your last read"). Only rows with a canonical_id qualify, since post tags
+ * anchor on canonicalId.
+ */
+export function getLastReadTag():
+  | { canonicalId: string; title: string; chapterNumber: number }
+  | undefined {
+  const row = db.getFirstSync<{
+    canonical_id: string;
+    t: string | null;
+    chapter_number: number;
+  }>(
+    `SELECT l.canonical_id, COALESCE(r.title, l.title) AS t, r.chapter_number
+     FROM last_read r
+     JOIN library l ON l.src = r.src AND l.series_id = r.series_id
+     WHERE l.canonical_id IS NOT NULL
+     ORDER BY r.updated_at DESC
+     LIMIT 1`,
+  );
+  return row && row.t
+    ? { canonicalId: row.canonical_id, title: row.t, chapterNumber: row.chapter_number }
+    : undefined;
+}
+
 export function getLastRead(
   src: string,
   seriesId: string,

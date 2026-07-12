@@ -70,9 +70,23 @@ not-yet-built features and ⚠ backend endpoints: **`UI-UX/NOT_YET_IMPLEMENTED.m
 - **PostCard** → mini System-window: kind **notch** breaking the top border,
   corner ticks, square radius, `OPEN THREAD ▸` in cyan `data`.
 
-**Next phases (build order):** Feed layout (ticker/filter deck/online) + Composer
-sheet + Thread view → Home/Search + Status + Quest Log + Library/History → full
-Guild Hall (war/raid/board, ⚠ backend) → Arena (⚠ backend). See
+**Phase 2 — Feed + Composer + Thread (done, typechecks clean):**
+- **Feed** (`(tabs)/feed.tsx`): in-screen DUNGEON ScreenTitle + ARENA key,
+  one-row filter deck (ALL/THEORIES/REVIEWS/FOLLOWING chips + HOT▾ sort cycle),
+  gradient NEW RECORD key. Online counter / raid ticker / war card wait on
+  backend (see backlog).
+- **Composer** (`PostComposer.tsx`): now the "NEW RECORD" bottom sheet on the
+  new `SystemSheet.tsx` (CRT open/close), 5 kind tiles, **auto-tag from last
+  read** (`getLastReadTag()` added to `library.ts`) with ✕ remove, spoiler
+  shield toggle + char counter, gradient PUBLISH RECORD key.
+- **Thread** (`post/[id].tsx`): kind-colored ScreenTitle header, root post as a
+  full 4-bracket System window (`PostCard root` prop), **TOP ◆ / NEW reply
+  sort** (client-side), **one indent level + `▾ N MORE REPLIES` collapse**,
+  one-line dashed shield chip for spoiler replies, sticky reply bar (viewer
+  avatar + input + gradient send).
+
+**Next phases (build order):** Home/Search + Status + Quest Log + Library/History
+→ full Guild Hall (war/raid/board, ⚠ backend) → Arena (⚠ backend). See
 `NOT_YET_IMPLEMENTED.md` for the endpoint list.
 
 ## 🔨 In progress

@@ -29,7 +29,7 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - 🎨 Header **hunter chip** (avatar + LV + micro XP bar) from `api.me()` → taps to Status. Replaces hamburger.
 - 🎨 Bell key with `notificationCount` on the Home header.
 - 🎨 **Search focus state**: full-screen dim + glow, panel with RECENT SCANS + TOP MATCH.
-  - RECENT SCANS: **no local recent-search store today** — need `listRecentSearches()` / `clearRecentSearches()` (local persistence, e.g. AsyncStorage). 🔀
+  - RECENT SCANS: `listRecentSearches()` / `clearRecentSearches()` already exist in `library.ts` (SQLite) — UI wiring only. 🎨
   - TOP MATCH: instant lookup against library + `searchAll` (debounced). 🎨
   - **TRENDING IN THE DUNGEONS**: ⚠ needs `GET /posts/trending?window=1h` (rank tags by recent post/comment count). No trending endpoint exists.
 - 🎨 Search results row restyle: rank sigil (from server rank scale — already on `SeriesReviewSummary.rank`), ★ rating + reads, right-aligned `IN LIBRARY`/`+ LIBRARY` action wired to library add/remove.
@@ -39,27 +39,27 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - 🎨 **Daily-directive strip** under the hero: top uncompleted daily from `api.quests()` with progress + XP + deep link.
 - 🎨 Rails restyle only (square corners, CH.n corner badge on latest covers) — data unchanged.
 
-## Dungeon feed (§2)
+## Dungeon feed (§2) — layout DONE (Phase 2); backend items remain
+- ✅ In-screen DUNGEON ScreenTitle + ARENA key; one-row filter deck (ALL/THEORIES/REVIEWS/FOLLOWING chips + HOT▾ sort cycle); NEW RECORD gradient key.
+- ✅ PostCard rework: mini SystemWindow + kind notch, HunterAvatar + GuildChip, `OPEN THREAD ▸` in `colors.data`.
 - ⚠ **Online counter** ("312 ONLINE") — needs `GET /presence/count` (or approximate active-sessions-last-15-min). Poll 60s.
 - ⚠ **Raid-thread ticker** (top post by comments/hr) — needs `GET /posts/trending?window=1h`.
-- 🔀 **GUILD feed chip** (`feedMode: "guild"`) — `api.feed()` has no `mode='guild'`; server must filter posts by `author.guildId === viewer.guildId`.
-- 🎨 HOT/TOP/NEW sort cycle — `sort` param already exists.
-- 🎨 Filter chips ALL/THEORIES/REVIEWS — `kind` param already exists.
+- 🔀 **GUILD feed chip** (`feedMode: "guild"`) — `api.feed()` has no `mode='guild'`; server must filter posts by `author.guildId === viewer.guildId`. (FOLLOWING chip fills the slot meanwhile.)
 - ⚠ **Guild-war rally card** pinned in-feed when viewer's guild has an active war — needs `GET /guilds/:id/war` (see Guild War below).
-- 🎨 PostCard rework: mini SystemWindow + kind notch, HunterAvatar + GuildChip + TitleFlair, series embed as left-accent-bar row, action rail as SystemKey chips, `OPEN THREAD ▸` in `colors.data`.
 
-## Composer (§3)
-- 🎨 Bottom-sheet with SystemWindow top border (reuse SystemModal/`useCrtOpen`).
-- 🎨 5 kind tiles (THEORY/RECORD/REVIEW/POLL/INTEL) — `kind` state exists.
-- 🔀 **Auto-tag from last read**: prefill series/chapter from reading history (`library.ts`) with an ✕ to remove — currently manual tagging only. Client-side if history is local; confirm source.
-- 🎨 Spoiler toggle (`isSpoiler` exists), char counter, footer XP hint from quests ("first record today").
+## Composer (§3) — DONE (Phase 2)
+- ✅ Bottom sheet (`SystemSheet.tsx`, CRT choreography), 5 kind tiles, auto-tag
+  from last read (`getLastReadTag()` in `library.ts`) with ✕ remove, spoiler
+  shield toggle, char counter, gradient PUBLISH RECORD key, XP footer hint.
 
-## Thread view (§5)
-- 🎨 Root post = full SystemWindow, kind-colored ScreenTitle, OP badge, series row `READ ▸` deep link.
-- ⚠ **Reply sort (TOP ◆ / NEW)** — thread endpoint returns replies chronologically only; needs a `sort` param.
-- 🎨 One indent level + `▾ N MORE REPLIES` collapse (client-side; replaces current depth cap).
-- 🎨 Spoiler replies collapse to a one-line dashed shield chip.
-- 🎨 Sticky bottom reply bar (avatar + input + gradient send).
+## Thread view (§5) — DONE (Phase 2)
+- ✅ Kind-colored ScreenTitle header, root post as full 4-bracket System window,
+  TOP ◆ / NEW reply sort (client-side — server `sort` param unnecessary since
+  the full tree ships to the client), one indent level + `▾ N MORE REPLIES`
+  collapse, one-line dashed shield chip for spoiler replies, sticky reply bar
+  (viewer avatar + input + gradient send).
+- 🎨 Series row `READ ▸` deep link into the reader (needs stored-progress route
+  resolution — pair with the Library phase).
 
 ## Guild (§6) — the big backend lift
 - ⚠ **Presence per guild** ("14 ONLINE") — no per-guild online count.
