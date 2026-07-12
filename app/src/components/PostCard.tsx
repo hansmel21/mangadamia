@@ -13,6 +13,7 @@ import { pressFx } from "../anim";
 import type { PostInfo, ReactionType } from "../api";
 import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
+import { PollView } from "./PollView";
 import { ReactionBar } from "./ReactionBar";
 import { ReviewRating } from "./ReviewRating";
 import { SeriesEmbed } from "./SeriesEmbed";
@@ -35,6 +36,7 @@ export function PostCard({
   post,
   isReply,
   onReact,
+  onVote,
   onReply,
   onDelete,
   onReport,
@@ -49,6 +51,7 @@ export function PostCard({
   post: PostInfo;
   isReply?: boolean;
   onReact: (p: PostInfo, type: ReactionType) => void;
+  onVote?: (p: PostInfo, optionId: string) => void;
   onReply?: (p: PostInfo) => void;
   onDelete: (p: PostInfo) => void;
   onReport: (p: PostInfo) => void;
@@ -144,6 +147,14 @@ export function PostCard({
         </Text>
       )}
 
+      {post.kind === "poll" && post.poll ? (
+        <PollView
+          poll={post.poll}
+          onVote={(optionId) => onVote?.(post, optionId)}
+          disabled={!viewerSignedIn}
+        />
+      ) : null}
+
       <View style={styles.reactionRow}>
         <ReactionBar
           reactions={post.reactions}
@@ -196,6 +207,7 @@ export function PostCard({
               isReply
               depth={depth + 1}
               onReact={onReact}
+              onVote={onVote}
               onReply={onReply}
               onDelete={onDelete}
               onReport={onReport}

@@ -1050,6 +1050,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     replies: PostNode[];
     // Total comments in this post's whole thread (all nesting levels).
     commentCount: number;
+    // Present on poll posts.
+    poll: {
+      options: { id: string; text: string; votes: number }[];
+      totalVotes: number;
+      myVote: string | null;
+    } | null;
   }
 
   const postInclude = (meId?: string) =>
@@ -1060,6 +1066,11 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         include: { canonical: { select: { id: true, title: true, coverUrl: true } } },
       },
       likes: meId ? { where: { userId: meId }, select: { type: true } } : false,
+      pollOptions: {
+        orderBy: { position: "asc" as const },
+        select: { id: true, text: true, position: true, _count: { select: { votes: true } } },
+      },
+      pollVotes: meId ? { where: { userId: meId }, select: { optionId: true } } : false,
     }) as const;
 
   // Structural shape of a post row loaded with postInclude(); shared by the
@@ -1080,6 +1091,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       chapterNumber: number | null;
     }[];
     likes?: { type: string }[] | false;
+    pollOptions?: { id: string; text: string; position: number; _count: { votes: number } }[];
+    pollVotes?: { optionId: string }[] | false;
   }
 
   const serializePost = (
@@ -1113,6 +1126,14 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     })),
     replies: [],
     commentCount: 0,
+    poll:
+      p.pollOptions && p.pollOptions.length > 0
+        ? {
+            options: p.pollOptions.map((o) => ({ id: o.id, text: o.text, votes: o._count.votes })),
+            totalVotes: p.pollOptions.reduce((n, o) => n + o._count.votes, 0),
+            myVote: Array.isArray(p.pollVotes) && p.pollVotes[0] ? p.pollVotes[0].optionId : null,
+          }
+        : null,
   });
 
   // Per-post reaction counts, e.g. Map<postId, { endorse: 42, hype: 8 }>.
@@ -1241,15 +1262,26 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     "/posts",
     { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } },
     async (req) => {
-    const { body, canonicalId, chapterNumber, parentId, isSpoiler, seriesTags, kind, rating } = z
+    const {
+      body,
+      canonicalId,
+      chapterNumber,
+      parentId,
+      isSpoiler,
+      seriesTags,
+      kind,
+      rating,
+      pollOptions,
+    } = z
       .object({
         body: z.string().trim().min(1).max(1000),
         canonicalId: z.string().optional(),
         chapterNumber: z.coerce.number().optional(),
         parentId: z.string().optional(),
         isSpoiler: z.boolean().optional(),
-        kind: z.enum(["record", "theory", "review", "spoiler_intel"]).optional(),
+        kind: z.enum(["record", "theory", "review", "spoiler_intel", "poll"]).optional(),
         rating: z.coerce.number().int().min(1).max(5).optional(),
+        pollOptions: z.array(z.string().trim().min(1).max(80)).min(2).max(6).optional(),
         seriesTags: z
           .array(
             z.object({ canonicalId: z.string().min(1), chapterNumber: z.coerce.number().optional() }),
@@ -1266,6 +1298,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (postKind === "review") {
       if (rating === undefined) throw httpError(400, "A review needs a 1–5 rating");
       if (requestedTags.length !== 1) throw httpError(400, "Pick exactly one series to review");
+    }
+    if (postKind === "poll") {
+      if (!pollOptions || pollOptions.length < 2) throw httpError(400, "A poll needs at least 2 options");
+      for (const option of pollOptions) validateUserContent(option);
     }
     const uniqueTags = [...new Map(requestedTags.map((tag) => [tag.canonicalId, tag])).values()];
     if (uniqueTags.length > 0) {
@@ -1316,6 +1352,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
                   position,
                 })),
               }
+            : undefined,
+        pollOptions:
+          postKind === "poll" && pollOptions
+            ? { create: pollOptions.map((text, position) => ({ text, position })) }
             : undefined,
       },
       include: postInclude(user.id),
@@ -1378,6 +1418,14 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       })),
       replies: [],
       commentCount: 0,
+      poll:
+        post.pollOptions.length > 0
+          ? {
+              options: post.pollOptions.map((o) => ({ id: o.id, text: o.text, votes: o._count.votes })),
+              totalVotes: 0,
+              myVote: null,
+            }
+          : null,
       xpAwarded: 8,
       levelUp: activity.levelUp ?? (levelAfter > levelBefore ? levelAfter : null),
       completedQuests: activity.completedQuests,
@@ -1460,6 +1508,33 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     });
     const reactions = Object.fromEntries(groups.map((g) => [g.type, g._count]));
     return { reactions, myReaction: action === "remove" ? null : type, ...activity };
+  });
+
+  // Vote on a poll post. One vote per reader; re-voting moves it.
+  app.post<{ Params: { id: string } }>("/posts/:id/vote", async (req) => {
+    const user = await requireActiveUser(req);
+    const { optionId } = z.object({ optionId: z.string().min(1) }).parse(req.body);
+    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!post || post.moderationStatus !== "visible" || post.kind !== "poll") {
+      throw httpError(404, "No such poll");
+    }
+    const option = await prisma.pollOption.findUnique({ where: { id: optionId } });
+    if (!option || option.postId !== post.id) throw httpError(404, "No such option");
+    await prisma.pollVote.upsert({
+      where: { userId_postId: { userId: user.id, postId: post.id } },
+      create: { userId: user.id, postId: post.id, optionId },
+      update: { optionId },
+    });
+    const options = await prisma.pollOption.findMany({
+      where: { postId: post.id },
+      orderBy: { position: "asc" },
+      select: { id: true, text: true, _count: { select: { votes: true } } },
+    });
+    return {
+      options: options.map((o) => ({ id: o.id, text: o.text, votes: o._count.votes })),
+      totalVotes: options.reduce((n, o) => n + o._count.votes, 0),
+      myVote: optionId,
+    };
   });
 
   // Community review summary for a series: average rating, count, letter rank,

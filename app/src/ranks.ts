@@ -43,4 +43,5 @@ export const POST_KINDS: Record<PostKind, { label: string; color: string; icon: 
   theory: { label: "THEORY", color: "#4BA3FF", icon: "🧠" },
   review: { label: "REVIEW", color: colors.foil, icon: "★" },
   spoiler_intel: { label: "SPOILER INTEL", color: colors.danger, icon: "👁" },
+  poll: { label: "POLL", color: "#4CC38A", icon: "📊" },
 };

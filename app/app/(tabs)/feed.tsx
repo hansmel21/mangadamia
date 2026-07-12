@@ -67,6 +67,15 @@ export default function FeedScreen() {
       /* ignore */
     }
   };
+  const vote = async (p: PostInfo, optionId: string) => {
+    if (!user) return;
+    try {
+      const poll = await api.votePoll(p.id, optionId);
+      patch(p.id, (x) => ({ ...x, poll }));
+    } catch {
+      /* ignore */
+    }
+  };
   const remove = async (p: PostInfo) => {
     try {
       await api.deletePost(p.id);
@@ -122,6 +131,7 @@ export default function FeedScreen() {
               preview
               onOpen={openThread}
               onReact={react}
+              onVote={vote}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })

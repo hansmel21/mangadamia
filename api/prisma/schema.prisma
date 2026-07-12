@@ -95,6 +95,7 @@ model User {
   guildMembership      GuildMember?
   guildJoinRequests    GuildJoinRequest[]
   guildXpContributions GuildXpTransaction[]
+  pollVotes            PollVote[]
 }
 
 // Titles are independent social identity rewards. They never grant authority;
@@ -343,7 +344,7 @@ model Post {
   canonical        CanonicalSeries? @relation(fields: [canonicalId], references: [id], onDelete: SetNull)
   chapterNumber    Float?
   body             String
-  // System Record type: record | theory | review | spoiler_intel
+  // System Record type: record | theory | review | spoiler_intel | poll
   kind             String           @default("record")
   // 1–5 rating, reviews only (drives the community series rank)
   rating           Int?
@@ -366,12 +367,40 @@ model Post {
   guild            Guild?           @relation(fields: [guildId], references: [id], onDelete: Cascade)
   notifications    Notification[]
   seriesTags       PostSeriesTag[]
+  pollOptions      PollOption[]
+  pollVotes        PollVote[]
 
   @@index([canonicalId, createdAt])
   @@index([createdAt])
   @@index([rootId])
   @@index([guildId, createdAt])
   @@index([canonicalId, kind])
+}
+
+// A choice on a poll post; vote tallies come from PollVote.
+model PollOption {
+  id       String     @id @default(cuid())
+  postId   String
+  text     String
+  position Int        @default(0)
+  post     Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  votes    PollVote[]
+
+  @@index([postId, position])
+}
+
+// One vote per reader per poll (changing your vote updates the row).
+model PollVote {
+  userId    String
+  postId    String
+  optionId  String
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([optionId])
 }
 
 model PostSeriesTag {

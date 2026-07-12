@@ -15,7 +15,7 @@ import { SystemModal } from "./SystemModal";
 import { TermsAcceptance } from "./TermsAcceptance";
 import { colors } from "../theme";
 
-const KIND_ORDER: PostKind[] = ["record", "theory", "review", "spoiler_intel"];
+const KIND_ORDER: PostKind[] = ["record", "theory", "review", "poll", "spoiler_intel"];
 
 export function PostComposer({
   visible,
@@ -43,17 +43,20 @@ export function PostComposer({
   const [selectedSeries, setSelectedSeries] = useState<UnifiedCard[]>([]);
   const [kind, setKind] = useState<PostKind>("record");
   const [rating, setRating] = useState(0);
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const queryClient = useQueryClient();
 
-  // Reset the type/rating each time the composer opens.
+  // Reset the type/rating/poll each time the composer opens.
   useEffect(() => {
     if (visible) {
       setKind(replyTo ? "record" : (initialKind ?? "record"));
       setRating(0);
+      setPollOptions(["", ""]);
     }
   }, [visible, replyTo, initialKind]);
 
   const isReview = kind === "review" && !replyTo;
+  const isPoll = kind === "poll" && !replyTo;
   const seriesResults = useQuery({
     queryKey: ["composerSeries", seriesQuery],
     queryFn: () => api.searchAll(seriesQuery.trim(), 1),
@@ -74,6 +77,11 @@ export function PostComposer({
       setError("Add a 1–5 rating for your review.");
       return;
     }
+    const cleanPollOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+    if (isPoll && cleanPollOptions.length < 2) {
+      setError("A poll needs at least 2 options.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -84,6 +92,7 @@ export function PostComposer({
         isSpoiler: kind === "spoiler_intel" ? true : spoiler,
         kind: replyTo ? undefined : kind,
         rating: isReview ? rating : undefined,
+        pollOptions: isPoll ? cleanPollOptions : undefined,
         seriesTags: replyTo
           ? undefined
           : isReview
@@ -105,6 +114,7 @@ export function PostComposer({
       setSelectedSeries([]);
       setSeriesQuery("");
       setRating(0);
+      setPollOptions(["", ""]);
       queryClient.invalidateQueries({ queryKey: ["feed"] });
       onPosted?.(created);
       onClose();
@@ -115,7 +125,13 @@ export function PostComposer({
     }
   };
 
-  const title = replyTo ? "Reply" : isReview ? "File a Review" : "File a Record";
+  const title = replyTo
+    ? "Reply"
+    : isReview
+      ? "File a Review"
+      : isPoll
+        ? "Create a Poll"
+        : "File a Record";
   const chip = replyTo
     ? `Replying to @${replyTo.username}`
     : context
@@ -153,6 +169,38 @@ export function PostComposer({
           <ReviewRating value={rating} onChange={setRating} size={28} />
         </View>
       ) : null}
+      {isPoll ? (
+        <View style={styles.pollBox}>
+          <Text style={styles.pollLabel}>POLL OPTIONS</Text>
+          {pollOptions.map((opt, i) => (
+            <View key={i} style={styles.pollRow}>
+              <TextInput
+                style={styles.pollInput}
+                value={opt}
+                onChangeText={(t) =>
+                  setPollOptions((prev) => prev.map((o, j) => (j === i ? t : o)))
+                }
+                placeholder={`Option ${i + 1}`}
+                placeholderTextColor={colors.muted}
+                maxLength={80}
+              />
+              {pollOptions.length > 2 ? (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setPollOptions((prev) => prev.filter((_, j) => j !== i))}
+                >
+                  <Text style={styles.pollRemove}>×</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+          {pollOptions.length < 6 ? (
+            <Pressable onPress={() => setPollOptions((prev) => [...prev, ""])}>
+              <Text style={styles.pollAdd}>+ Add option</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {!replyTo && !context ? (
         <View style={styles.seriesPicker}>
           <TextInput
@@ -187,7 +235,7 @@ export function PostComposer({
       ) : null}
       <TextInput
         style={styles.input}
-        placeholder={replyTo ? "Write a reply…" : "Share a thought…"}
+        placeholder={replyTo ? "Write a reply…" : isPoll ? "Ask a question…" : "Share a thought…"}
         placeholderTextColor={colors.muted}
         value={body}
         onChangeText={setBody}
@@ -248,6 +296,22 @@ const styles = StyleSheet.create({
   typeChipText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 0.8 },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   ratingLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
+  pollBox: { gap: 7, marginBottom: 10 },
+  pollLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
+  pollRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  pollInput: {
+    flex: 1,
+    color: colors.text,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+  },
+  pollRemove: { color: colors.muted, fontSize: 20, fontWeight: "800", paddingHorizontal: 4 },
+  pollAdd: { color: colors.accentSoft, fontSize: 12, fontWeight: "800", paddingVertical: 2 },
   seriesPicker: { marginBottom: 10 },
   seriesInput: { color: colors.text, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
   selectedSeries: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 6 },

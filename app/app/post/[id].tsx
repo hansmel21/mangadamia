@@ -58,6 +58,15 @@ export default function PostThreadScreen() {
       /* ignore */
     }
   };
+  const vote = async (p: PostInfo, optionId: string) => {
+    if (!user) return;
+    try {
+      const poll = await api.votePoll(p.id, optionId);
+      patch(p.id, (x) => ({ ...x, poll }));
+    } catch {
+      /* ignore */
+    }
+  };
 
   const remove = async (p: PostInfo) => {
     try {
@@ -94,6 +103,7 @@ export default function PostThreadScreen() {
             post={post}
             hideReplies
             onReact={react}
+            onVote={vote}
             onReply={startReply}
             onDelete={remove}
             onReport={(p) => setReportTarget({ type: "post", id: p.id, username: p.username })}
@@ -119,6 +129,7 @@ export default function PostThreadScreen() {
                 post={comment}
                 isReply
                 onReact={react}
+                onVote={vote}
                 onReply={startReply}
                 onDelete={remove}
                 onReport={(p) => setReportTarget({ type: "post", id: p.id, username: p.username })}

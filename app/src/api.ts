@@ -380,8 +380,14 @@ export interface ModerationNotice {
   } | null;
 }
 
-export type PostKind = "record" | "theory" | "review" | "spoiler_intel";
+export type PostKind = "record" | "theory" | "review" | "spoiler_intel" | "poll";
 export type ReactionType = "like" | "hype" | "mindblown" | "pain" | "dead";
+
+export interface PollInfo {
+  options: { id: string; text: string; votes: number }[];
+  totalVotes: number;
+  myVote: string | null;
+}
 
 export interface SeriesReviewSummary {
   canonicalId: string;
@@ -418,6 +424,8 @@ export interface PostInfo {
   // Total comments in the whole thread (all nesting levels). Present on feed
   // preview cards and the thread root; absent on freshly created replies.
   commentCount?: number;
+  // Present on poll posts.
+  poll?: PollInfo | null;
   completedQuests?: QuestCompletion[];
   levelUp?: number | null;
 }
@@ -608,6 +616,7 @@ export const api = {
       isSpoiler?: boolean;
       kind?: PostKind;
       rating?: number;
+      pollOptions?: string[];
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];
     },
   ) =>
@@ -623,6 +632,8 @@ export const api = {
       "POST",
       { type },
     ),
+  votePoll: (id: string, optionId: string) =>
+    request<PollInfo>(`/posts/${encodeURIComponent(id)}/vote`, "POST", { optionId }),
 
   equipTitle: (titleId: string | null) =>
     request<{ ok: boolean; equippedTitleId: string | null }>("/me/title", "POST", { titleId }),

@@ -81,16 +81,17 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       contrasting cards (Reddit boxes); guild `[TAG]` inline with the username;
       removed the confusing rank "E" sigil; hid "RECORD" on plain posts.
 
-**Social Feel v2 is done + polished. Next up:** pick a phase from the backlog
-below (recommend Guild depth — invites/wall are the most broken gaps).
+### Social v2 — Phase 2: post functions (in progress)
+- [x] **Polls** — `poll` record kind + `PollOption`/`PollVote` models
+      (migration `polls`); composer poll builder (2–6 options); one-tap vote
+      with live result bars (`PollView`); `POST /posts/:id/vote`. Verified live.
+- [ ] Feed sorting (Hot / Top / New)
+- [ ] Quote-repost (`Post.quotedPostId`)
+- [ ] Mentions (@user → notification) & #hashtags (tappable topic filter)
 
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-**Social — Phase 2: post functions** (each a sub-phase)
-- Polls (poll record kind + vote + live results)
-- Feed sorting (Hot / Top / New)
-- Quote-repost (`Post.quotedPostId`)
-- Mentions (@user → notification) & #hashtags (tappable topic filter)
+_Phase 2 (post functions) is in progress above — Polls done, sorting/quote/mentions next._
 
 **Social — Phase 3: media in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress

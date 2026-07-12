@@ -53,6 +53,15 @@ export default function SeriesWallScreen() {
       /* ignore */
     }
   };
+  const vote = async (p: PostInfo, optionId: string) => {
+    if (!user) return;
+    try {
+      const poll = await api.votePoll(p.id, optionId);
+      patch(p.id, (x) => ({ ...x, poll }));
+    } catch {
+      /* ignore */
+    }
+  };
   const remove = async (p: PostInfo) => {
     try {
       await api.deletePost(p.id);
@@ -77,6 +86,7 @@ export default function SeriesWallScreen() {
               preview
               onOpen={(p) => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
               onReact={react}
+              onVote={vote}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
