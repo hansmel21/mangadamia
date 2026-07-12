@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, Text, View, type PressableProps } from "react-native";
 import { api } from "../../src/api";
-import { HeaderMenu } from "../../src/components/HeaderMenu";
 import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors, fonts } from "../../src/theme";
 
@@ -65,20 +64,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         animation: "shift",
-        // Screens still on the native header keep it (with HeaderMenu) until
-        // each is redesigned with an in-screen ScreenTitle; those flip
-        // headerShown:false in their own options below.
-        headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.text,
-        headerShadowVisible: false,
-        headerTitleAlign: "center",
-        headerTitleStyle: {
-          color: colors.accentSoft,
-          fontSize: 16,
-          fontWeight: "900",
-          letterSpacing: 2.2,
-        },
-        headerRight: () => <HeaderMenu />,
+        // Every tab renders its own in-screen System header (ScreenTitle).
+        headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: colors.accentBright,
         tabBarInactiveTintColor: colors.muted,
@@ -91,7 +78,6 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "HOME",
-          headerTitle: "MANGADAMIA",
           tabBarIcon: ({ color, focused }) => (
             <SideIcon focused={focused}>
               <Compass color={color} size={21} strokeWidth={focused ? 2.2 : 1.8} />
@@ -103,7 +89,6 @@ export default function TabsLayout() {
         name="library"
         options={{
           title: "ARCHIVE",
-          headerTitle: "ARCHIVE",
           tabBarIcon: ({ color, focused }) => (
             <SideIcon focused={focused}>
               <LibraryBig color={color} size={21} strokeWidth={focused ? 2.2 : 1.8} />
@@ -115,8 +100,6 @@ export default function TabsLayout() {
         name="feed"
         options={{
           title: "DUNGEON",
-          // Renders its own in-screen System header (ScreenTitle + ARENA key).
-          headerShown: false,
           tabBarButton: (props) => (
             <DungeonKey
               focused={props.accessibilityState?.selected ?? false}
@@ -129,8 +112,6 @@ export default function TabsLayout() {
         name="guild"
         options={{
           title: "GUILD",
-          // New tab — ships with its own in-screen System header.
-          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
             <SideIcon focused={focused}>
               <Shield color={color} size={21} strokeWidth={focused ? 2.2 : 1.8} />
@@ -142,7 +123,6 @@ export default function TabsLayout() {
         name="account"
         options={{
           title: "STATUS",
-          headerTitle: "PLAYER STATUS",
           tabBarIcon: ({ color, focused }) => (
             <SideIcon focused={focused}>
               <CircleUserRound color={color} size={21} strokeWidth={focused ? 2.2 : 1.8} />

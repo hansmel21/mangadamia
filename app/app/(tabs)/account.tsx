@@ -1,19 +1,11 @@
-// Account tab: sign in / create account when logged out, profile when in.
+// STATUS — the hunter's character sheet (System Protocol §8): XP ring around
+// the avatar, HUNTER RECORD stat grid, EQUIPPED slots, badges rail, and
+// today's quests. Menus (edit profile, staff, legal, sign-out) live behind
+// the settings key on /account/settings. Signed-out users get the auth form.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import {
-  Bell,
-  ChevronRight,
-  Crown,
-  FileText,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  SquarePen,
-  UserPlus,
-  Users,
-} from "lucide-react-native";
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Bell, Settings } from "lucide-react-native";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -25,284 +17,373 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import { api, type BadgeInfo, type MeResponse, type TitleInfo } from "../../src/api";
-import { BadgeMedallion, badgeTierName } from "../../src/components/BadgeMedallion";
-import { SystemModal } from "../../src/components/SystemModal";
-import { SystemWindow } from "../../src/components/SystemWindow";
-import { getSessionUser, setSession, subscribeSession } from "../../src/session";
-import { pullCloud } from "../../src/sync";
-import { colors, fonts } from "../../src/theme";
-import { TERMS_VERSION } from "../../src/legal";
-import { clearAllLocalData } from "../../src/library";
 import { BADGE_CATALOG } from "../../src/badges";
-import { UserIdentity } from "../../src/components/UserIdentity";
+import { BadgeMedallion, badgeTierName } from "../../src/components/BadgeMedallion";
+import { GuildChip } from "../../src/components/GuildCrest";
+import { HunterAvatar } from "../../src/components/HunterAvatar";
+import { SystemModal } from "../../src/components/SystemModal";
+import { ScreenTitle } from "../../src/components/SystemUI";
 import { TitleFlair } from "../../src/components/TitleFlair";
-import { unregisterPushNotifications } from "../../src/push";
-
-function timeAgo(iso: string): string {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function formatNum(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
+import { TERMS_VERSION } from "../../src/legal";
+import { pullCloud } from "../../src/sync";
+import { getSessionUser, setSession, subscribeSession } from "../../src/session";
+import { colors, fonts } from "../../src/theme";
 
 export default function AccountScreen() {
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   return user ? <Profile /> : <AuthForm />;
 }
 
+const RING_R = 41;
+const RING_C = 2 * Math.PI * RING_R;
+
 function Profile() {
+  const insets = useSafeAreaInsets();
   const user = getSessionUser();
   const queryClient = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: api.me, staleTime: 60_000 });
+  const notif = useQuery({
+    queryKey: ["notifCount"],
+    queryFn: api.notificationCount,
+    refetchInterval: 60_000,
+  });
+  const quests = useQuery({ queryKey: ["quests"], queryFn: api.quests, staleTime: 60_000 });
   const equippedId = me.data?.equippedTitleId ?? null;
   const badges = me.data?.badges ?? BADGE_CATALOG;
   const [selectedBadge, setSelectedBadge] = useState<BadgeInfo | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [titlesOpen, setTitlesOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const canModerate = user?.capabilities?.includes("view_reports");
-  const canManageUsers = user?.capabilities?.includes("manage_rewards");
+  const [allBadges, setAllBadges] = useState(false);
 
+  const unread = notif.data?.unread ?? 0;
   const equippedTitle = me.data?.titles.find((title) => title.id === equippedId) ?? null;
-  const titleCount = me.data?.titles.length ?? 0;
-  const titlesValue = equippedTitle
-    ? equippedTitle.name
-    : titleCount > 0
-      ? `${titleCount} unlocked`
-      : "None yet";
-  const cosmeticsValue = me.data?.cosmetics.length
-    ? `${me.data.cosmetics.length} owned`
-    : "Customize";
+  const equippedFrame =
+    me.data?.cosmetics.find((c) => c.id === me.data?.equippedFrameId && c.kind === "frame") ?? null;
+  const equippedAvatar =
+    me.data?.cosmetics.find((c) => c.id === me.data?.equippedAvatarId && c.kind === "avatar") ??
+    null;
+
+  const xpFloor = me.data ? (me.data.level - 1) ** 2 * 100 : 0;
+  const xpPct = me.data
+    ? Math.max(
+        0,
+        Math.min(100, ((me.data.xp - xpFloor) / Math.max(1, me.data.xpForNextLevel - xpFloor)) * 100),
+      )
+    : 0;
+  const xpToGo = me.data ? Math.max(0, me.data.xpForNextLevel - me.data.xp) : 0;
+  const earned = badges.filter((b) => b.earned).length;
+  const dailies = (quests.data ?? []).filter((q) => q.cadence === "daily");
+  const dailiesDone = dailies.filter((q) => !!q.completedAt).length;
 
   const equipTitle = async (titleId: string | null) => {
     await api.equipTitle(titleId);
     await queryClient.invalidateQueries({ queryKey: ["me"] });
   };
 
-  const signOut = async () => {
-    try {
-      await unregisterPushNotifications();
-      await api.logout();
-    } catch {
-      // session is being discarded either way
-    }
-    setSession(null, null);
-  };
-
   return (
-    <ScrollView style={styles.screen}>
-      <View style={styles.profileCard}>
-        {me.data?.identity ? (
-          <UserIdentity identity={me.data.identity} profile />
-        ) : (
-          <>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{user?.username?.[0]?.toUpperCase() ?? "?"}</Text>
-            </View>
-            <Text style={styles.username}>{user?.username}</Text>
-          </>
-        )}
-        <Text style={styles.email}>{user?.email}</Text>
-      </View>
-
-      {me.data ? (
-        <Pressable onPress={() => setStatsOpen(true)}>
-        <SystemWindow title="Status" dim style={styles.statusWindow}>
-          <View style={styles.levelRow}>
-            <Text style={styles.levelText}>LV. {me.data.level}</Text>
-            <Text style={styles.xpText}>
-              {me.data.xp} / {me.data.xpForNextLevel} XP
-            </Text>
-          </View>
-          <View style={styles.xpTrack}>
-            <View
-              style={[
-                styles.xpFill,
-                {
-                  width: `${Math.min(
-                    100,
-                    Math.round(
-                      ((me.data.xp - (me.data.level - 1) ** 2 * 100) /
-                        (me.data.xpForNextLevel - (me.data.level - 1) ** 2 * 100)) *
-                        100,
-                    ),
-                  )}%`,
-                },
-              ]}
-            />
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statNum}>{me.data.stats.comments}</Text>
-              <Text style={styles.statLabel}>Comments</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNum}>{me.data.stats.likesReceived}</Text>
-              <Text style={styles.statLabel}>Likes recv.</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNum}>{me.data.stats.chaptersRead}</Text>
-              <Text style={styles.statLabel}>Ch. read</Text>
-            </View>
-          </View>
-          <Text style={styles.statusHint}>TAP FOR FULL STATUS ▸</Text>
-        </SystemWindow>
-        </Pressable>
-      ) : (
-        <SystemWindow title="Status" dim style={styles.statusWindow}>
-          {me.isLoading ? (
-            <View style={styles.accountLoading}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={styles.accountLoadingText}>Loading account status…</Text>
-            </View>
-          ) : (
-            <View style={styles.accountLoading}>
-              <Text style={styles.accountErrorText}>Account status could not be loaded.</Text>
-              <Pressable style={styles.retryBtn} onPress={() => void me.refetch()}>
-                <Text style={styles.retryText}>TRY AGAIN</Text>
-              </Pressable>
-            </View>
-          )}
-        </SystemWindow>
-      )}
-
-      <Text style={styles.sectionTitle}>Collection</Text>
-      <View style={styles.tileRow}>
-        <CollectionTile
-          icon={<Crown color={colors.foil} size={22} strokeWidth={1.9} />}
-          label="Titles"
-          value={titlesValue}
-          onPress={() => setTitlesOpen(true)}
-        />
-        <CollectionTile
-          icon={<Sparkles color={colors.accentSoft} size={22} strokeWidth={1.9} />}
-          label="Avatars & Frames"
-          value={cosmeticsValue}
-          onPress={() => router.push("/account/appearance")}
-        />
-      </View>
-
-      <Text style={styles.sectionSubTitle}>Badges</Text>
-      <View style={styles.badgeGrid}>
-        {badges.map((b) => (
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+      {/* header — STATUS title + bell + settings */}
+      <View style={styles.header}>
+        <ScreenTitle>STATUS</ScreenTitle>
+        <View style={styles.headerKeys}>
           <Pressable
-            key={b.id}
-            style={[styles.badgeCard, !b.earned && styles.badgeLocked]}
-            onPress={() => setSelectedBadge(b)}
+            hitSlop={8}
+            onPress={() => router.push("/notifications")}
+            accessibilityLabel="Notifications"
           >
-            <BadgeMedallion badgeId={b.id} fallbackIcon={b.icon} size={46} glow={b.earned} />
-            <Text style={styles.badgeName} numberOfLines={1}>
-              {b.name}
+            <Bell color={colors.muted} size={20} strokeWidth={2} />
+            {unread > 0 ? <View style={styles.bellDot} /> : null}
+          </Pressable>
+          <Pressable
+            hitSlop={8}
+            onPress={() => router.push("/account/settings")}
+            accessibilityLabel="Settings"
+          >
+            <Settings color={colors.muted} size={20} strokeWidth={2} />
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        {/* identity — XP ring around the avatar + name/flair/level */}
+        <View style={styles.identity}>
+          <View style={styles.ringWrap}>
+            <Svg width={88} height={88} style={styles.ring}>
+              <Circle cx={44} cy={44} r={RING_R} stroke={colors.panelRaised} strokeWidth={5} fill="none" />
+              <Circle
+                cx={44}
+                cy={44}
+                r={RING_R}
+                stroke={colors.accent}
+                strokeWidth={5}
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={`${RING_C}`}
+                strokeDashoffset={RING_C * (1 - xpPct / 100)}
+              />
+            </Svg>
+            {me.data?.identity ? (
+              <HunterAvatar identity={me.data.identity} size={62} />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarFallbackText}>
+                  {user?.username?.[0]?.toUpperCase() ?? "?"}
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.identityBody}>
+            <Text style={styles.username} numberOfLines={1}>
+              {user?.username}
             </Text>
-            <Text
-              style={[styles.badgeSub, b.earned && styles.badgeEarned]}
-              numberOfLines={1}
-            >
-              {b.earned ? "Earned" : `${b.progress.current}/${b.progress.target}`}
+            <View style={styles.flairRow}>
+              {equippedTitle ? <TitleFlair title={equippedTitle} /> : null}
+              {me.data?.identity?.guild ? (
+                <Pressable
+                  onPress={() =>
+                    me.data?.identity?.guild &&
+                    router.push({
+                      pathname: "/guild/[id]",
+                      params: { id: me.data.identity.guild.id },
+                    })
+                  }
+                >
+                  <GuildChip guild={me.data.identity.guild} />
+                </Pressable>
+              ) : null}
+            </View>
+            {me.data ? (
+              <View style={styles.levelLine}>
+                <Text style={styles.levelText}>LV {me.data.level}</Text>
+                <Text style={styles.xpToGo}>
+                  {Math.round(xpPct)}% · {xpToGo} XP to LV {me.data.level + 1}
+                </Text>
+              </View>
+            ) : me.isLoading ? (
+              <ActivityIndicator color={colors.accent} style={{ alignSelf: "flex-start", marginTop: 8 }} />
+            ) : (
+              <Pressable onPress={() => void me.refetch()}>
+                <Text style={styles.retryInline}>Status failed to load — TAP TO RETRY</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {/* moderation notice stays visible even though menus moved */}
+        {me.data?.pendingNoticeCount ? (
+          <Pressable style={styles.noticeBanner} onPress={() => router.push("/appeals")}>
+            <Text style={styles.noticeText}>
+              ! MODERATION NOTICE · {me.data.pendingNoticeCount} — TAP TO REVIEW
             </Text>
           </Pressable>
-        ))}
-      </View>
-
-      <Text style={styles.sectionTitle}>Account</Text>
-      <View style={styles.menuList}>
-        <MenuRow
-          icon={<SquarePen color={colors.accentSoft} size={18} strokeWidth={1.9} />}
-          label="Edit profile & privacy"
-          onPress={() => router.push("/account/edit")}
-        />
-        <MenuRow
-          icon={<Bell color={colors.accentSoft} size={18} strokeWidth={1.9} />}
-          label="Notifications"
-          onPress={() => router.push("/notifications")}
-        />
-        {me.data?.pendingFollowCount ? (
-          <MenuRow
-            icon={<UserPlus color={colors.accentSoft} size={18} strokeWidth={1.9} />}
-            label="Follow requests"
-            badge={String(me.data.pendingFollowCount)}
-            onPress={() => router.push("/account/follow-requests")}
-          />
         ) : null}
-        {me.data?.pendingNoticeCount ? (
-          <MenuRow
-            icon={<ShieldAlert color={colors.danger} size={18} strokeWidth={1.9} />}
-            label="Moderation notice"
-            tone="danger"
-            badge={String(me.data.pendingNoticeCount)}
-            onPress={() => router.push("/appeals")}
-          />
-        ) : null}
-      </View>
 
-      {canModerate || canManageUsers ? (
-        <>
-          <Text style={styles.sectionTitle}>Staff</Text>
-          <View style={styles.menuList}>
-            {canModerate ? (
-              <MenuRow
-                icon={<ShieldCheck color={colors.foil} size={18} strokeWidth={1.9} />}
-                label="Moderation queue"
-                onPress={() => router.push("/admin/moderation")}
-              />
-            ) : null}
-            {canManageUsers ? (
-              <MenuRow
-                icon={<Users color={colors.foil} size={18} strokeWidth={1.9} />}
-                label="User administration"
-                onPress={() => router.push("/admin/users")}
-              />
-            ) : null}
+        {/* HUNTER RECORD — 6-stat grid, tap for the full status readout */}
+        {me.data ? (
+          <Pressable onPress={() => setStatsOpen(true)}>
+            <View style={styles.record}>
+              <View style={[styles.recordTick, styles.recordTickTL]} pointerEvents="none" />
+              <View style={[styles.recordTick, styles.recordTickTR]} pointerEvents="none" />
+              <View style={[styles.recordTick, styles.recordTickBL]} pointerEvents="none" />
+              <View style={[styles.recordTick, styles.recordTickBR]} pointerEvents="none" />
+              <View style={styles.recordHead}>
+                <View style={styles.recordDiamond}>
+                  <Text style={styles.recordDiamondMark}>!</Text>
+                </View>
+                <Text style={styles.recordTitle}>HUNTER RECORD</Text>
+              </View>
+              <View style={styles.recordRule} />
+              <View style={styles.recordGrid}>
+                <RecordStat value={String(me.data.stats.chaptersRead)} label="CHAPTERS" />
+                <RecordStat value={String(me.data.stats.comments)} label="RECORDS" />
+                <RecordStat value={String(me.data.stats.likesReceived)} label="REACTIONS" />
+                <RecordStat value={`${earned}/${badges.length}`} label="BADGES" foil />
+                <RecordStat value={String(me.data.stats.accountDays)} label="DAYS" />
+                <RecordStat value={String(me.data.xp)} label="TOTAL XP" />
+              </View>
+            </View>
+          </Pressable>
+        ) : null}
+
+        {/* EQUIPPED slots */}
+        <Text style={styles.sectionLabel}>EQUIPPED</Text>
+        <View style={styles.slotRow}>
+          <SlotCard
+            slot="TITLE"
+            value={equippedTitle?.name ?? "None"}
+            meta={
+              equippedTitle
+                ? `${equippedTitle.rarity} · ${me.data?.titles.length ?? 0} owned`
+                : `${me.data?.titles.length ?? 0} owned`
+            }
+            equipped={!!equippedTitle}
+            onPress={() => setTitlesOpen(true)}
+          />
+          <SlotCard
+            slot="FRAME"
+            value={equippedFrame?.name ?? "None"}
+            meta={equippedFrame ? String(equippedFrame.rarity) : "tap to equip"}
+            equipped={!!equippedFrame}
+            onPress={() => router.push("/account/appearance")}
+          />
+          <SlotCard
+            slot="AVATAR"
+            value={equippedAvatar?.name ?? "Default"}
+            meta={equippedAvatar ? String(equippedAvatar.rarity) : "tap to equip"}
+            equipped={!!equippedAvatar}
+            onPress={() => router.push("/account/appearance")}
+          />
+        </View>
+
+        {/* badges — horizontal rail, ALL ▸ expands the grid */}
+        <View style={styles.railHead}>
+          <Text style={styles.sectionLabelInline}>
+            BADGES · {earned}/{badges.length}
+          </Text>
+          <Pressable hitSlop={8} onPress={() => setAllBadges((v) => !v)}>
+            <Text style={styles.allLink}>{allBadges ? "LESS ▴" : "ALL ▸"}</Text>
+          </Pressable>
+        </View>
+        {allBadges ? (
+          <View style={styles.badgeGrid}>
+            {badges.map((b) => (
+              <Pressable
+                key={b.id}
+                style={[styles.badgeCard, !b.earned && styles.badgeLocked]}
+                onPress={() => setSelectedBadge(b)}
+              >
+                <BadgeMedallion badgeId={b.id} fallbackIcon={b.icon} size={46} glow={b.earned} />
+                <Text style={styles.badgeName} numberOfLines={1}>
+                  {b.name}
+                </Text>
+                <Text style={[styles.badgeSub, b.earned && styles.badgeEarned]} numberOfLines={1}>
+                  {b.earned ? "Earned" : `${b.progress.current}/${b.progress.target}`}
+                </Text>
+              </Pressable>
+            ))}
           </View>
-        </>
-      ) : null}
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.badgeRail}
+          >
+            {badges.map((b) => (
+              <Pressable
+                key={b.id}
+                style={[styles.badgeRailItem, !b.earned && styles.badgeLocked]}
+                onPress={() => setSelectedBadge(b)}
+              >
+                <BadgeMedallion badgeId={b.id} fallbackIcon={b.icon} size={52} glow={b.earned} />
+                <Text style={styles.badgeName} numberOfLines={1}>
+                  {b.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
 
-      <Text style={styles.sectionTitle}>Legal & safety</Text>
-      <View style={styles.menuList}>
-        <MenuRow
-          icon={<FileText color={colors.muted} size={18} strokeWidth={1.9} />}
-          label="Terms of Use"
-          onPress={() => router.push("/legal/terms")}
-        />
-        <MenuRow
-          icon={<FileText color={colors.muted} size={18} strokeWidth={1.9} />}
-          label="Privacy Policy"
-          onPress={() => router.push("/legal/privacy")}
-        />
-        <MenuRow
-          icon={<FileText color={colors.muted} size={18} strokeWidth={1.9} />}
-          label="Community Guidelines"
-          onPress={() => router.push("/legal/community")}
-        />
-      </View>
+        {/* today's quests */}
+        <View style={styles.questsBox}>
+          <View style={styles.questsHead}>
+            <Text style={styles.sectionLabelInline}>
+              TODAY'S QUESTS{dailies.length > 0 ? ` · ${dailiesDone}/${dailies.length}` : ""}
+            </Text>
+            <Pressable hitSlop={8} onPress={() => router.push("/quests")}>
+              <Text style={styles.allLink}>ALL QUESTS ▸</Text>
+            </Pressable>
+          </View>
+          {dailies.length === 0 ? (
+            <Text style={styles.questsEmpty}>No daily directives right now.</Text>
+          ) : (
+            dailies.map((q) => {
+              const done = !!q.completedAt;
+              const xp = q.rewards.find((r) => r.type === "xp");
+              return (
+                <Pressable
+                  key={q.id}
+                  style={styles.questRow}
+                  onPress={() => (done ? undefined : router.push("/quests"))}
+                >
+                  {done ? (
+                    <Text style={styles.questCheck}>✓</Text>
+                  ) : (
+                    <View style={styles.questBox} />
+                  )}
+                  <Text
+                    style={[styles.questName, done && styles.questNameDone]}
+                    numberOfLines={1}
+                  >
+                    {q.name}
+                    {!done && q.target > 1 ? ` — ${Math.min(q.progress, q.target)}/${q.target}` : ""}
+                  </Text>
+                  {xp ? (
+                    <Text style={[styles.questXp, done && { color: colors.muted }]}>{xp.name}</Text>
+                  ) : null}
+                </Pressable>
+              );
+            })
+          )}
+        </View>
 
-      <TitlesModal
-        open={titlesOpen}
-        onClose={() => setTitlesOpen(false)}
-        titles={me.data?.titles ?? []}
-        equippedId={equippedId}
-        onEquip={equipTitle}
-      />
-      <BadgeDetailModal badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
-      <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} me={me.data} />
+        <TitlesModal
+          open={titlesOpen}
+          onClose={() => setTitlesOpen(false)}
+          titles={me.data?.titles ?? []}
+          equippedId={equippedId}
+          onEquip={equipTitle}
+        />
+        <BadgeDetailModal badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
+        <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} me={me.data} />
+      </ScrollView>
+    </View>
+  );
+}
 
-      <Pressable style={styles.signOutBtn} onPress={signOut}>
-        <Text style={styles.signOutText}>Sign out</Text>
-      </Pressable>
-      <Pressable style={styles.deleteAccountBtn} onPress={() => setDeleteOpen(true)}>
-        <Text style={styles.deleteAccountText}>Delete account and data</Text>
-      </Pressable>
-      <DeleteAccountModal open={deleteOpen} onClose={() => setDeleteOpen(false)} />
-      <View style={{ height: 32 }} />
-    </ScrollView>
+function RecordStat({ value, label, foil }: { value: string; label: string; foil?: boolean }) {
+  return (
+    <View style={styles.recordStat}>
+      <Text style={[styles.recordValue, foil && { color: colors.foilSoft }]}>{value}</Text>
+      <Text style={styles.recordLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function SlotCard({
+  slot,
+  value,
+  meta,
+  equipped,
+  onPress,
+}: {
+  slot: string;
+  value: string;
+  meta: string;
+  equipped: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.slot,
+        equipped && styles.slotEquipped,
+        pressed && { opacity: 0.85 },
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${slot} slot`}
+    >
+      <Text style={styles.slotLabel}>{slot}</Text>
+      <Text style={[styles.slotValue, equipped && { color: colors.foilSoft }]} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={styles.slotMeta} numberOfLines={1}>
+        {meta}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -567,115 +648,6 @@ function AuthForm() {
   );
 }
 
-function DeleteAccountModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const remove = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      await api.deleteAccount(password);
-      clearAllLocalData();
-      setSession(null, null);
-      setPassword("");
-      onClose();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <SystemModal visible={open} onClose={onClose} title="Delete account">
-      <Text style={styles.deleteWarning}>
-        This permanently deletes your account and associated cloud library, reading activity,
-        posts, comments, likes, reports, blocks, and sessions. This cannot be undone.
-      </Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Confirm your password"
-        placeholderTextColor={colors.muted}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable
-        style={[styles.deleteConfirm, (!password || busy) && { opacity: 0.4 }]}
-        disabled={!password || busy}
-        onPress={remove}
-      >
-        <Text style={styles.deleteConfirmText}>{busy ? "DELETING…" : "DELETE PERMANENTLY"}</Text>
-      </Pressable>
-    </SystemModal>
-  );
-}
-
-// A square tile in the Collection row (Titles, Avatars & Frames).
-function CollectionTile({
-  icon,
-  label,
-  value,
-  onPress,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <View style={styles.tileIcon}>{icon}</View>
-      <Text style={styles.tileLabel}>{label}</Text>
-      <Text style={styles.tileValue} numberOfLines={1}>
-        {value}
-      </Text>
-    </Pressable>
-  );
-}
-
-// A consistent list row for the Account / Staff / Legal menus.
-function MenuRow({
-  icon,
-  label,
-  badge,
-  tone,
-  onPress,
-}: {
-  icon: ReactNode;
-  label: string;
-  badge?: string;
-  tone?: "danger";
-  onPress: () => void;
-}) {
-  const danger = tone === "danger";
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <View style={styles.menuIcon}>{icon}</View>
-      <Text style={[styles.menuLabel, danger && { color: colors.danger }]}>{label}</Text>
-      {badge ? (
-        <View style={[styles.menuBadge, danger && { backgroundColor: colors.danger }]}>
-          <Text style={styles.menuBadgeText}>{badge}</Text>
-        </View>
-      ) : null}
-      <ChevronRight color={danger ? colors.danger : colors.muted} size={18} strokeWidth={1.8} />
-    </Pressable>
-  );
-}
-
 // The Titles collection — a scrollable list you equip one flair from.
 function TitlesModal({
   open,
@@ -740,13 +712,190 @@ function TitlesModal({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  headerKeys: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 16 },
+  bellDot: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+    borderWidth: 1.5,
+    borderColor: colors.bg,
+  },
+  identity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  ringWrap: { width: 88, height: 88, alignItems: "center", justifyContent: "center" },
+  ring: { position: "absolute", transform: [{ rotate: "-90deg" }] },
+  avatarFallback: {
+    width: 62,
+    height: 62,
+    borderRadius: 17,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarFallbackText: { color: "#0B0B11", fontSize: 26, fontWeight: "900" },
+  identityBody: { flex: 1, gap: 3 },
+  username: { color: colors.text, fontFamily: fonts.display, fontSize: 24 },
+  flairRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  levelLine: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 },
+  levelText: { color: colors.foil, fontFamily: fonts.display, fontSize: 16 },
+  xpToGo: { color: colors.muted, fontSize: 10.5 },
+  retryInline: { color: colors.danger, fontSize: 11, marginTop: 6 },
+  noticeBanner: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "rgba(229,72,77,0.6)",
+    backgroundColor: colors.dangerGhost,
+    borderRadius: 3,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  noticeText: { color: colors.danger, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
+  record: {
+    position: "relative",
+    marginHorizontal: 16,
+    marginTop: 18,
+    backgroundColor: "rgba(13,15,20,0.97)",
+    borderWidth: 1.5,
+    borderColor: "rgba(124,92,255,0.5)",
+    borderRadius: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
+  },
+  recordTick: { position: "absolute", width: 11, height: 11, borderColor: colors.accentBright },
+  recordTickTL: { top: -2, left: -2, borderTopWidth: 2.5, borderLeftWidth: 2.5 },
+  recordTickTR: { top: -2, right: -2, borderTopWidth: 2.5, borderRightWidth: 2.5 },
+  recordTickBL: { bottom: -2, left: -2, borderBottomWidth: 2.5, borderLeftWidth: 2.5 },
+  recordTickBR: { bottom: -2, right: -2, borderBottomWidth: 2.5, borderRightWidth: 2.5 },
+  recordHead: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
+  recordDiamond: {
+    width: 15,
+    height: 15,
+    borderWidth: 1.5,
+    borderColor: colors.accentBright,
+    transform: [{ rotate: "45deg" }],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recordDiamondMark: {
+    color: colors.accentBright,
+    fontSize: 9,
+    fontWeight: "900",
+    transform: [{ rotate: "-45deg" }],
+  },
+  recordTitle: { color: colors.accentBright, fontSize: 11, fontWeight: "800", letterSpacing: 3.5 },
+  recordRule: { height: 1, backgroundColor: "rgba(124,92,255,0.35)", marginVertical: 12 },
+  recordGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: 12 },
+  recordStat: { width: "33.3%", alignItems: "center" },
+  recordValue: { color: colors.text, fontFamily: fonts.display, fontSize: 19 },
+  recordLabel: { color: colors.muted, fontSize: 9.5, letterSpacing: 1, marginTop: 2 },
+  sectionLabel: {
+    color: colors.muted,
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 1.8,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  sectionLabelInline: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.8 },
+  slotRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16 },
+  slot: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    padding: 10,
+    gap: 4,
+  },
+  slotEquipped: { borderColor: "rgba(245,184,76,0.45)" },
+  slotLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.4 },
+  slotValue: { color: colors.mutedStrong, fontSize: 11.5, fontWeight: "800" },
+  slotMeta: { color: colors.muted, fontSize: 9, textTransform: "lowercase" },
+  railHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  allLink: { color: colors.data, fontSize: 9.5, fontWeight: "900", letterSpacing: 0.5 },
+  badgeRail: { paddingHorizontal: 16, gap: 10 },
+  badgeRailItem: { width: 64, alignItems: "center", gap: 4 },
+  badgeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  badgeCard: {
+    width: "30%",
+    backgroundColor: colors.card,
+    borderRadius: 4,
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  badgeLocked: { opacity: 0.35 },
+  badgeName: { color: colors.muted, fontSize: 9, marginTop: 4, textAlign: "center" },
+  badgeSub: { color: colors.muted, fontSize: 10, marginTop: 2 },
+  badgeEarned: { color: colors.foil, fontWeight: "800", letterSpacing: 0.6 },
+  questsBox: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    borderRadius: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  questsHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  questsEmpty: { color: colors.muted, fontSize: 11.5, marginTop: 10 },
+  questRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  questCheck: { color: colors.fresh, fontSize: 13, width: 13, textAlign: "center" },
+  questBox: {
+    width: 12,
+    height: 12,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    borderRadius: 2,
+    marginHorizontal: 0.5,
+  },
+  questName: { color: colors.text, fontSize: 12.5, fontWeight: "600", flex: 1 },
+  questNameDone: { color: colors.muted, textDecorationLine: "line-through" },
+  questXp: { color: colors.foilSoft, fontSize: 10, fontWeight: "800" },
+
   formWrap: { padding: 24, paddingTop: 48, gap: 12 },
   title: { color: colors.text, fontSize: 24, fontWeight: "700" },
   subtitle: { color: colors.muted, marginBottom: 12, lineHeight: 20 },
   input: {
     backgroundColor: colors.card,
     color: colors.text,
-    borderRadius: 4,
+    borderRadius: 3,
     borderWidth: 1.5,
     borderColor: "rgba(124,92,255,0.3)",
     paddingHorizontal: 14,
@@ -758,7 +907,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(124,92,255,0.18)",
     borderWidth: 1.5,
     borderColor: "rgba(124,92,255,0.65)",
-    borderRadius: 4,
+    borderRadius: 3,
     paddingVertical: 13,
     alignItems: "center",
     marginTop: 6,
@@ -778,42 +927,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   switchText: { color: colors.accent, textAlign: "center", marginTop: 14, fontWeight: "600" },
-  profileCard: { alignItems: "center", paddingTop: 48, gap: 6 },
-  avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  avatarText: { color: colors.accentText, fontSize: 36, fontWeight: "800" },
-  username: { color: colors.text, fontSize: 23, fontFamily: fonts.display },
-  email: { color: colors.muted },
-  statsRow: { flexDirection: "row", gap: 32, marginTop: 20 },
-  stat: { alignItems: "center" },
-  statNum: { color: colors.text, fontSize: 20, fontFamily: fonts.display },
-  statLabel: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  signOutBtn: {
-    marginTop: 36,
-    marginHorizontal: 24,
-    borderColor: "rgba(229,72,77,0.5)",
-    borderWidth: 1.5,
-    borderRadius: 4,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  signOutText: {
-    color: colors.danger,
-    fontWeight: "800",
-    fontSize: 12,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  deleteAccountBtn: { marginTop: 12, alignItems: "center", paddingVertical: 10 },
-  deleteAccountText: { color: colors.danger, fontSize: 12, textDecorationLine: "underline" },
-  legalLinks: { marginHorizontal: 24, gap: 12, paddingVertical: 6 },
   legalLink: { color: colors.accentSoft, fontWeight: "700", textDecorationLine: "underline" },
   authLegalLinks: { flexDirection: "row", justifyContent: "center", gap: 18 },
   consentRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 4 },
@@ -829,92 +942,6 @@ const styles = StyleSheet.create({
   checkboxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   checkboxMark: { color: colors.accentText, fontWeight: "900" },
   consentText: { color: colors.muted, fontSize: 12, lineHeight: 17, flex: 1 },
-  deleteWarning: { color: colors.text, lineHeight: 20, marginBottom: 12 },
-  deleteConfirm: {
-    marginTop: 14,
-    borderWidth: 1.5,
-    borderColor: colors.danger,
-    borderRadius: 4,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  deleteConfirmText: { color: colors.danger, fontWeight: "800", letterSpacing: 1.2 },
-  moderationBtn: { marginHorizontal: 24, marginTop: 12, borderWidth: 1, borderColor: colors.foil, padding: 11, alignItems: "center" },
-  moderationText: { color: colors.foil, fontWeight: "800", letterSpacing: 1.2 },
-  sectionTitle: {
-    color: colors.text,
-    fontWeight: "700",
-    fontSize: 16,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 6,
-  },
-  sectionHint: { color: colors.muted, paddingHorizontal: 24, fontSize: 11, marginBottom: 8 },
-  sectionSubTitle: {
-    color: colors.muted,
-    fontWeight: "800",
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    paddingHorizontal: 24,
-    paddingTop: 22,
-    paddingBottom: 8,
-  },
-  tileRow: { flexDirection: "row", gap: 10, paddingHorizontal: 24 },
-  tile: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
-  },
-  tilePressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
-  tileIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 11,
-    backgroundColor: colors.bg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tileLabel: { color: colors.text, fontSize: 13, fontWeight: "800" },
-  tileValue: { color: colors.muted, fontSize: 11.5 },
-  menuList: { paddingHorizontal: 24, gap: 8 },
-  menuRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  menuRowPressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
-  menuIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: colors.bg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  menuLabel: { color: colors.text, fontSize: 14, fontWeight: "600", flex: 1 },
-  menuBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  menuBadgeText: { color: "#fff", fontSize: 10, fontWeight: "900", fontVariant: ["tabular-nums"] },
   titlesIntro: { color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: 12 },
   titlesScroll: { maxHeight: 360 },
   titleRow: {
@@ -924,70 +951,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 3,
     padding: 12,
   },
   titleRowEquipped: { borderColor: colors.foil, backgroundColor: "rgba(245,184,76,0.07)" },
   titleRowBody: { flex: 1, gap: 5 },
   titleNone: { color: colors.text, fontSize: 14, fontWeight: "700", flex: 1 },
   titlesEmpty: { color: colors.muted, fontSize: 12, textAlign: "center", paddingVertical: 18, lineHeight: 18 },
-  titleGrid: { gap: 9, paddingHorizontal: 24 },
-  titleCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 11, gap: 7 },
-  titleCardEquipped: { borderColor: colors.foil, backgroundColor: "rgba(245,184,76,0.07)" },
   titleDesc: { color: colors.muted, fontSize: 11, lineHeight: 15 },
   titleState: { color: colors.foil, fontSize: 8.5, fontWeight: "900", letterSpacing: 1.2 },
-  accountLinks: { paddingHorizontal: 24, paddingTop: 22, gap: 8 },
-  accountLink: { borderWidth: 1, borderColor: colors.border, padding: 11, alignItems: "center" },
-  accountLinkText: { color: colors.accentSoft, fontWeight: "900", fontSize: 10, letterSpacing: 1.2 },
-  notifEmpty: { color: colors.muted, paddingHorizontal: 24, paddingVertical: 8, lineHeight: 19 },
-  notifRow: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  notifTitle: { color: colors.muted, fontSize: 14 },
-  notifUnread: { color: colors.text, fontWeight: "700" },
-  notifBody: { color: colors.muted, fontSize: 13, marginTop: 3, lineHeight: 18 },
-  notifWhen: { color: colors.muted, fontSize: 11, marginTop: 3 },
-  levelWrap: { width: "78%", marginTop: 16 },
-  levelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 5 },
-  levelText: { color: colors.foil, fontFamily: fonts.display, fontSize: 16 },
-  xpText: { color: colors.muted, fontSize: 12, fontVariant: ["tabular-nums"] },
-  xpTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.card,
-    overflow: "hidden",
-  },
-  xpFill: { height: "100%", backgroundColor: colors.accent, borderRadius: 4 },
-  badgeGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    paddingHorizontal: 24,
-    paddingTop: 4,
-  },
-  badgeCard: {
-    width: "30%",
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-  },
-  badgeLocked: { opacity: 0.35 },
-  badgeName: { color: colors.text, fontSize: 11, fontWeight: "700", marginTop: 6 },
-  badgeSub: { color: colors.muted, fontSize: 10, marginTop: 2 },
-  badgeEarned: { color: colors.foil, fontWeight: "800", letterSpacing: 0.6 },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-  },
-  modalWrap: { width: "100%", maxWidth: 340 },
   modalBody: { alignItems: "center", gap: 6 },
   modalName: { color: colors.text, fontSize: 21, fontFamily: fonts.display, marginTop: 10 },
   modalTier: {
@@ -1025,41 +997,11 @@ const styles = StyleSheet.create({
     marginTop: 18,
     borderColor: "rgba(124,92,255,0.55)",
     borderWidth: 1,
-    borderRadius: 4,
+    borderRadius: 3,
     paddingVertical: 9,
     paddingHorizontal: 32,
   },
   modalCloseText: { color: colors.accentSoft, fontWeight: "800", letterSpacing: 2, fontSize: 12 },
-  equipBtn: {
-    marginTop: 16,
-    backgroundColor: "rgba(245,184,76,0.14)",
-    borderWidth: 1.5,
-    borderColor: colors.foil,
-    borderRadius: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 28,
-  },
-  equipText: { color: colors.foil, fontWeight: "800", letterSpacing: 1.6, fontSize: 12 },
-  statusWindow: { marginHorizontal: 24, marginTop: 20 },
-  accountLoading: { minHeight: 72, alignItems: "center", justifyContent: "center", gap: 10 },
-  accountLoadingText: { color: colors.muted, fontSize: 12 },
-  accountErrorText: { color: colors.danger, fontSize: 12, textAlign: "center" },
-  retryBtn: {
-    borderWidth: 1,
-    borderColor: colors.accent,
-    borderRadius: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  retryText: { color: colors.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
-  statusHint: {
-    color: colors.muted,
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    textAlign: "right",
-    marginTop: 12,
-  },
   statsName: {
     color: colors.text,
     fontFamily: fonts.display,

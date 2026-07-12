@@ -366,6 +366,7 @@ export interface HistoryEntry {
   chapterId: string;
   chapterNumber: number;
   pageIndex: number;
+  pageCount?: number;
   updatedAt: number;
   title: string;
   coverUrl?: string;
@@ -378,11 +379,12 @@ export function listHistory(limit = 100): HistoryEntry[] {
     chapter_id: string;
     chapter_number: number;
     page_index: number;
+    page_count: number | null;
     updated_at: number;
     t: string | null;
     c: string | null;
   }>(
-    `SELECT r.src, r.series_id, r.chapter_id, r.chapter_number, r.page_index, r.updated_at,
+    `SELECT r.src, r.series_id, r.chapter_id, r.chapter_number, r.page_index, r.page_count, r.updated_at,
             COALESCE(r.title, l.title) AS t, COALESCE(r.cover_url, l.cover_url) AS c
      FROM last_read r
      LEFT JOIN library l ON l.src = r.src AND l.series_id = r.series_id
@@ -397,6 +399,7 @@ export function listHistory(limit = 100): HistoryEntry[] {
     chapterId: r.chapter_id,
     chapterNumber: r.chapter_number,
     pageIndex: r.page_index,
+    pageCount: r.page_count ?? undefined,
     updatedAt: r.updated_at,
     title: r.t ?? "",
     coverUrl: r.c ?? undefined,

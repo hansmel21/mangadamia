@@ -85,9 +85,28 @@ not-yet-built features and ⚠ backend endpoints: **`UI-UX/NOT_YET_IMPLEMENTED.m
   one-line dashed shield chip for spoiler replies, sticky reply bar (viewer
   avatar + input + gradient send).
 
-**Next phases (build order):** Home/Search + Status + Quest Log + Library/History
-→ full Guild Hall (war/raid/board, ⚠ backend) → Arena (⚠ backend). See
-`NOT_YET_IMPLEMENTED.md` for the endpoint list.
+**Phase 3 — Home/Search + Status + Quest Log + Archive (done, typechecks clean):**
+- **Home** (`(tabs)/index.tsx`): in-screen wordmark header + bell key + hunter
+  chip (LV + XP bar → Status), search key with corner ticks + SAFE badge,
+  framed hero window (TOP-n notch, CONTINUE CH.n from stored progress, WALL),
+  daily-directive strip, CH.n badges on the LATEST rail, `± LIBRARY` actions
+  on search result rows, ALL/ONGOING/DONE chips + result count.
+- **Status** (`(tabs)/account.tsx`): pure character sheet — XP ring (SVG)
+  around HunterAvatar, HUNTER RECORD 6-stat grid, EQUIPPED slots, badges rail
+  with ALL ▸ grid, TODAY'S QUESTS strip. Menus moved to new
+  **`account/settings.tsx`** (edit profile, follow requests, moderation,
+  staff, legal, sign out, delete account).
+- **Quest Log** (`quests.tsx`): live reset countdown, cadence chips, CLAIMED /
+  corner-ticked cards, GO TO DUNGEON ▸ deep-link heuristic, rarity tints.
+- **Archive** (`(tabs)/library.tsx`): RESUME EXPEDITION window, shelf chips,
+  unread `+n` badges + progress hairlines (SeriesGrid), ADD SERIES tile,
+  EXPEDITION LOG history view. `listHistory()` now returns `pageCount`.
+- **HeaderMenu deleted** — every entry has a System Protocol replacement; all
+  five tabs render their own in-screen headers.
+
+**Next phases (build order):** full Guild Hall (war/raid/board, ⚠ backend) →
+Arena (⚠ backend) → reader chrome restyle. See `NOT_YET_IMPLEMENTED.md` for
+the endpoint list.
 
 ## 🔨 In progress
 

@@ -18,26 +18,21 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ Primitives: `ScreenTitle`, `SystemKey` (primary/outline/chip), `HunterAvatar`, `GuildChip` — `SystemUI.tsx`, `HunterAvatar.tsx`, `GuildCrest.tsx`.
 - ✅ Motion helpers: `useCrtOpen`, `usePulseGlow`, `useProgressGrow` — `app/src/anim.ts`.
 
-## Navigation (§1)
-- 🎨 **5-key command bar** replacing 4 tabs: HOME · ARCHIVE(library) · **DUNGEON** center diamond(feed) · GUILD · STATUS(account). Center key = 58px square rotated 45°, accent border + glow when active, raised −18px.
-- 🎨 **GUILD promoted to a tab** (currently reached from HeaderMenu). Needs a `(tabs)/guild.tsx` entry that resolves the viewer's guild (or the guildless recruit state) — wire to `api.myGuild()` → `guild/[id]` or `guilds.tsx`.
-- 🎨 **Delete `HeaderMenu.tsx`**; move its entries: Notifications → bell key on Home/Status headers; Quests → "ALL QUESTS ▸" on Status + daily strip on Home.
-- 🎨 Unread badge moves from Account tab → STATUS key (same `notificationCount` wiring).
-- 🎨 Arena lives **inside the Dungeon key** as a FEED/ARENA sub-view (not its own tab).
+## Navigation (§1) — DONE (Phases 1–3)
+- ✅ 5-key command bar (HOME · ARCHIVE · DUNGEON diamond · GUILD · STATUS), unread badge on STATUS.
+- ✅ GUILD tab (`(tabs)/guild.tsx`): recruit window / Hall banner + quick keys.
+- ✅ `HeaderMenu.tsx` deleted — Notifications → bell keys (Home/Status), Quests → ALL QUESTS ▸ (Status) + daily directive (Home), Guilds → tab, Arena → key on Dungeon header.
+- ✅ Every tab renders its own in-screen ScreenTitle header (`headerShown:false` globally).
 
-## Home + Search (§4)
-- 🎨 Header **hunter chip** (avatar + LV + micro XP bar) from `api.me()` → taps to Status. Replaces hamburger.
-- 🎨 Bell key with `notificationCount` on the Home header.
-- 🎨 **Search focus state**: full-screen dim + glow, panel with RECENT SCANS + TOP MATCH.
-  - RECENT SCANS: `listRecentSearches()` / `clearRecentSearches()` already exist in `library.ts` (SQLite) — UI wiring only. 🎨
-  - TOP MATCH: instant lookup against library + `searchAll` (debounced). 🎨
-  - **TRENDING IN THE DUNGEONS**: ⚠ needs `GET /posts/trending?window=1h` (rank tags by recent post/comment count). No trending endpoint exists.
-- 🎨 Search results row restyle: rank sigil (from server rank scale — already on `SeriesReviewSummary.rank`), ★ rating + reads, right-aligned `IN LIBRARY`/`+ LIBRARY` action wired to library add/remove.
-  - ⚠ **posts/hr per series** ("89 posts/hr") shown in hero/results — no per-series activity-rate metric today.
-- 🎨 **SAFE badge** on the search bar (static — MangaDex safe rating).
-- 🎨 Hero as a framed SystemWindow with CONTINUE CH.n (stored progress) + WALL buttons and TOP-n notch.
-- 🎨 **Daily-directive strip** under the hero: top uncompleted daily from `api.quests()` with progress + XP + deep link.
-- 🎨 Rails restyle only (square corners, CH.n corner badge on latest covers) — data unchanged.
+## Home + Search (§4) — layout DONE (Phase 3); data-dependent bits remain
+- ✅ Header: bracketed wordmark + bell key (unread count) + hunter chip (LV + micro XP bar → Status).
+- ✅ Search key: corner ticks + SAFE badge; RECENT SCANS panel + "safe catalog" note; ALL/ONGOING/DONE SystemKey chips + result count; `± LIBRARY` action on result rows (local library + cloud sync).
+- ✅ Framed hero window (4 brackets, TOP-n notch, CONTINUE CH.n from stored progress / OPEN + WALL keys).
+- ✅ Daily-directive strip (top uncompleted daily quest, progress + XP → Quest Log).
+- ✅ Rails: square corners, CH.n badge on LATEST covers.
+- 🎨 **TOP MATCH instant search** (debounced-as-you-type) — current search is submit-based.
+- ⚠ **TRENDING IN THE DUNGEONS** — needs `GET /posts/trending?window=1h`.
+- ⚠ **Rank sigil + ★ rating + reads + posts/hr on result rows** — search payload has no rank/rating/activity metrics.
 
 ## Dungeon feed (§2) — layout DONE (Phase 2); backend items remain
 - ✅ In-screen DUNGEON ScreenTitle + ARENA key; one-row filter deck (ALL/THEORIES/REVIEWS/FOLLOWING chips + HOT▾ sort cycle); NEW RECORD gradient key.
@@ -78,28 +73,26 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ⚠ **Draw competition**: image entries + one-vote-per-user. **Blocked by the no-uploads policy** — needs an upload exception or off-app hosting. Voting can reuse poll plumbing.
 - 🎨 Week number + countdown in header (server week number).
 
-## Status (§8)
-- 🎨 HunterAvatar 88 wrapped in an **XP ring** (SVG circle, dashoffset = xp progress).
-- 🎨 HUNTER RECORD 6-stat grid — `me.stats` covers chapters/comments/reactions/badges, but:
-  - ⚠ **dayStreak** — needs a server-side daily streak counter.
-  - ⚠ **weeklyRank** — from the weekly leaderboard endpoint (missing).
-- 🎨 EQUIPPED slots (TITLE/FRAME/AVATAR) → existing equip flows.
-- 🎨 Badges rail + `ALL ▸` grid; TODAY'S QUESTS strip from `api.quests()` (daily filter).
-- 🎨 Settings key opens the old menu rows (edit profile, legal, sign-out) as a pushed screen — keeps Status a pure character sheet.
+## Status (§8) — DONE (Phase 3); two stats backend-gated
+- ✅ STATUS header + bell + settings key; menus moved to new `account/settings.tsx` (edit profile, follow requests, moderation, staff, legal, sign-out, delete).
+- ✅ XP ring (SVG dashoffset) around HunterAvatar; TitleFlair + GuildChip; LV + "n XP to LV n+1".
+- ✅ HUNTER RECORD 6-stat grid (CHAPTERS / RECORDS / REACTIONS / BADGES / DAYS / TOTAL XP) → full status modal.
+- ✅ EQUIPPED slots (TITLE / FRAME / AVATAR) → titles modal / appearance screen.
+- ✅ Badges rail (locked 35%) with ALL ▸ expanding to the grid; TODAY'S QUESTS strip (✓/strikethrough, ALL QUESTS ▸).
+- ⚠ **dayStreak** stat — needs a server-side daily streak counter (grid shows DAYS/TOTAL XP meanwhile).
+- ⚠ **weeklyRank** stat — needs the weekly leaderboard endpoint.
 
-## Quest Log (§9)
-- 🎨 Cadence chips (DAILY/WEEKLY/SEASON/MILESTONE) — client filter on existing `cadence`.
-- 🎨 Live reset countdown from `resetsAt`.
-- ⚠ **Chain bonus** ("clear all 3 dailies → +100 XP") — new server rule / synthetic quest.
-- ⚠ **Per-quest deep link** — add a `deepLink` field (route + params) to the quest payload for `GO TO DUNGEON ▸`.
-- 🎨 Rarity-tinted gradient for epic/seasonal quests (reuse `rarityColors`).
+## Quest Log (§9) — DONE (Phase 3); chain bonus + precise links backend-gated
+- ✅ QUEST LOG ScreenTitle + live HH:MM:SS reset countdown; cadence chips (ALL/DAILY n/n/WEEKLY/SEASON/MILESTONE), client-filtered.
+- ✅ Done = gold CLAIMED strikethrough; active = corner-ticked card with `GO TO DUNGEON ▸`/`GO READ ▸` (client keyword heuristic); epic/seasonal rarity tint.
+- ⚠ **Chain bonus** ("clear all dailies → +100 XP") — new server rule / synthetic quest.
+- ⚠ **Per-quest `deepLink` field** for precise routes (heuristic covers common quests meanwhile).
 
-## Library / Archive (§10)
-- 🎨 ARCHIVE ScreenTitle + SYNCED state (`sync.ts` status exists).
-- 🎨 **RESUME EXPEDITION** window (most-recent history row + play key).
-- 🎨 Shelf chips READING/CAUGHT UP/DONE — client filter on unread counts.
-- 🎨 Grid cards: `+n` unread badge (chapters ahead of progress), bottom progress hairline (purple reading / green caught-up), dashed ADD SERIES tile → Home search.
-- 🎨 **HISTORY / EXPEDITION LOG** screen (rows with %, RESUME ▸) + CLEAR — uses local history; confirm `library.ts` exposes/clears history.
+## Library / Archive (§10) — DONE (Phase 3)
+- ✅ ARCHIVE ScreenTitle + HISTORY key + SYNCED/LOCAL state; RESUME EXPEDITION window (cover, ch/page, % bar, play key → reader).
+- ✅ Shelf chips ALL/READING n/CAUGHT UP/DONE (client filter on progress + series detail); grid `+n` unread badges + progress hairlines + dashed ADD SERIES tile.
+- ✅ EXPEDITION LOG history view (rows with % bar + RESUME ▸).
+- 🎨 History CLEAR intentionally omitted: `last_read` doubles as the progress store — clearing would erase reading positions. Needs a separate history table first.
 
 ## Reader (design parity)
 - 🎨 System-styled reader chrome (top bar title/chapter, side tap zones, bottom progress + "SAVE & EXIT ▸", XP-on-clear hint) — mostly restyle of the existing reader.

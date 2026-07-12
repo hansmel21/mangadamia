@@ -1,7 +1,15 @@
+// QUEST LOG — System Protocol layout: bracketed title + live reset countdown,
+// cadence chips filtering the list client-side, gold CLAIMED cards for done
+// quests, corner-ticked active cards with a GO ▸ deep link, and rarity-tinted
+// seasonal/epic cards. Detail modal stays on SystemModal.
 import { useQuery } from "@tanstack/react-query";
+import { router, Stack } from "expo-router";
+import { ArrowLeft } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, type QuestInfo, type RewardInfo } from "../src/api";
+import { SystemKey, ScreenTitle } from "../src/components/SystemUI";
 import { SystemModal } from "../src/components/SystemModal";
 import { normalizeRarity, rarityColors } from "../src/rarity";
 import { colors } from "../src/theme";
@@ -31,19 +39,51 @@ const rewardKindLabel: Record<RewardInfo["type"], string> = {
   cosmetic: "Cosmetic",
 };
 
-function RewardChip({ reward, index }: { reward: RewardInfo; index: number }) {
+type CadenceFilter = "all" | "daily" | "weekly" | "seasonal" | "permanent";
+
+// Until the server ships a per-quest deepLink, route by what the quest asks:
+// social objectives point at the Dungeon, reading objectives at Home.
+function questRoute(q: QuestInfo): { label: string; path: string } | null {
+  if (q.completedAt) return null;
+  const text = `${q.name} ${q.description}`.toLowerCase();
+  if (/comment|post|record|react|reply|like|endorse/.test(text)) {
+    return { label: "GO TO DUNGEON ▸", path: "/feed" };
+  }
+  if (/read|chapter|series|finish/.test(text)) {
+    return { label: "GO READ ▸", path: "/" };
+  }
+  return null;
+}
+
+function RewardChip({ reward }: { reward: RewardInfo }) {
   const tone = rarityColors[normalizeRarity(reward.rarity)];
   return (
-    <Text
-      key={`${reward.type}-${reward.id ?? index}`}
-      style={[styles.reward, { color: tone.text, borderColor: tone.main }]}
-    >
-      {reward.name}
-    </Text>
+    <Text style={[styles.reward, { color: tone.text, borderColor: tone.main }]}>{reward.name}</Text>
   );
 }
 
+// Live HH:MM:SS until the soonest reset among incomplete quests.
+function useResetCountdown(quests: QuestInfo[] | undefined): string | null {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const next = (quests ?? [])
+    .filter((q) => q.resetsAt && !q.completedAt)
+    .map((q) => new Date(q.resetsAt as string).getTime())
+    .filter((t) => t > now)
+    .sort((a, b) => a - b)[0];
+  if (!next) return null;
+  const s = Math.floor((next - now) / 1000);
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
 export default function QuestsScreen() {
+  const insets = useSafeAreaInsets();
   // Always refetch on open (and every 30s while open) so a quest you just
   // finished never shows stale, pre-completion progress.
   const quests = useQuery({
@@ -54,53 +94,134 @@ export default function QuestsScreen() {
     refetchInterval: 30_000,
   });
   const [selected, setSelected] = useState<QuestInfo | null>(null);
+  const [filter, setFilter] = useState<CadenceFilter>("all");
+  const countdown = useResetCountdown(quests.data);
 
-  if (quests.isLoading)
-    return <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />;
+  const all = quests.data ?? [];
+  const dailies = all.filter((q) => q.cadence === "daily");
+  const dailiesDone = dailies.filter((q) => !!q.completedAt).length;
+  const list =
+    filter === "all"
+      ? all
+      : all.filter((q) => (filter === "permanent" ? q.cadence === "permanent" || q.cadence === "hidden" : q.cadence === filter));
 
   return (
-    <>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.intro}>
-          Objectives reset on UTC time. Tap a quest to see what it asks and what it pays out. Rewards
-          unlock instantly and are never auto-equipped.
-        </Text>
-        {(quests.data ?? []).map((quest) => {
-          const done = !!quest.completedAt;
-          const pct = Math.min(100, Math.round((quest.progress / quest.target) * 100));
-          return (
-            <Pressable
-              key={quest.id}
-              style={({ pressed }) => [styles.card, done && styles.done, pressed && styles.cardPressed]}
-              onPress={() => setSelected(quest)}
-              accessibilityRole="button"
-              accessibilityLabel={`${quest.name} quest details`}
-            >
-              <View style={styles.heading}>
-                <Text style={styles.cadence}>{quest.cadence.toUpperCase()}</Text>
-                <Text style={[styles.state, done && { color: colors.foil }]}>
-                  {done ? "COMPLETE" : `${quest.progress}/${quest.target}`}
-                </Text>
-              </View>
-              <Text style={styles.name}>{quest.name}</Text>
-              <Text style={styles.description} numberOfLines={2}>
-                {quest.description}
-              </Text>
-              <View style={styles.track}>
-                <View style={[styles.fill, { width: `${pct}%` }, done && { backgroundColor: colors.foil }]} />
-              </View>
-              <View style={styles.rewards}>
-                {quest.rewards.map((reward, index) => (
-                  <RewardChip key={`${reward.type}-${reward.id ?? index}`} reward={reward} index={index} />
-                ))}
-                <Text style={styles.detailsHint}>DETAILS ›</Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={styles.header}>
+        <Pressable hitSlop={10} onPress={() => router.back()} accessibilityLabel="Back">
+          <ArrowLeft color={colors.text} size={22} strokeWidth={2} />
+        </Pressable>
+        <ScreenTitle tone="foil">QUEST LOG</ScreenTitle>
+        {countdown ? <Text style={styles.countdown}>RESET {countdown}</Text> : null}
+      </View>
+
+      <View style={styles.chips}>
+        <SystemKey variant="chip" label="ALL" active={filter === "all"} onPress={() => setFilter("all")} />
+        <SystemKey
+          variant="chip"
+          label={dailies.length > 0 ? `DAILY ${dailiesDone}/${dailies.length}` : "DAILY"}
+          active={filter === "daily"}
+          onPress={() => setFilter("daily")}
+        />
+        <SystemKey variant="chip" label="WEEKLY" active={filter === "weekly"} onPress={() => setFilter("weekly")} />
+        <SystemKey variant="chip" label="SEASON" active={filter === "seasonal"} onPress={() => setFilter("seasonal")} />
+        <SystemKey
+          variant="chip"
+          label="MILESTONE"
+          active={filter === "permanent"}
+          onPress={() => setFilter("permanent")}
+        />
+      </View>
+
+      {quests.isLoading ? (
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.content}>
+          {list.map((quest) => (
+            <QuestCard key={quest.id} quest={quest} onPress={() => setSelected(quest)} />
+          ))}
+          {list.length === 0 ? (
+            <Text style={styles.empty}>No quests in this log yet.</Text>
+          ) : null}
+        </ScrollView>
+      )}
       <QuestDetailModal quest={selected} onClose={() => setSelected(null)} />
-    </>
+    </View>
+  );
+}
+
+function QuestCard({ quest, onPress }: { quest: QuestInfo; onPress: () => void }) {
+  const done = !!quest.completedAt;
+  const pct = Math.min(100, Math.round((quest.progress / quest.target) * 100));
+  const route = questRoute(quest);
+  // Seasonal/epic quests carry a rarity tint from their best reward.
+  const bestRarity = quest.rewards
+    .map((r) => normalizeRarity(r.rarity))
+    .sort((a, b) => ["common", "rare", "epic", "legendary"].indexOf(b) - ["common", "rare", "epic", "legendary"].indexOf(a))[0];
+  const tinted = quest.cadence === "seasonal" || bestRarity === "epic" || bestRarity === "legendary";
+  const tintTone = bestRarity ? rarityColors[bestRarity] : undefined;
+  const xpReward = quest.rewards.find((r) => r.type === "xp");
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.card,
+        done && styles.cardDone,
+        tinted && !done && tintTone && { borderColor: tintTone.main + "80", backgroundColor: tintTone.main + "0F" },
+        pressed && styles.cardPressed,
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${quest.name} quest details`}
+    >
+      {!done ? (
+        <>
+          <View style={[styles.cardTick, styles.cardTickTL]} pointerEvents="none" />
+          <View style={[styles.cardTick, styles.cardTickBR]} pointerEvents="none" />
+        </>
+      ) : null}
+      <View style={styles.heading}>
+        <Text style={[styles.cadence, tinted && !done && tintTone && { color: tintTone.text }]}>
+          {quest.cadence === "permanent" ? "MILESTONE" : quest.cadence.toUpperCase()}
+          {tinted && !done ? " · EPIC REWARD" : ""}
+        </Text>
+        <Text style={[styles.state, done && { color: colors.foil }]}>
+          {done ? `CLAIMED${xpReward ? ` ${xpReward.name.toUpperCase()}` : ""}` : resetLabel(quest)?.toUpperCase() ?? ""}
+        </Text>
+      </View>
+      <Text style={[styles.name, done && styles.nameDone]}>{quest.name}</Text>
+      <Text style={styles.description} numberOfLines={2}>
+        {quest.description}
+      </Text>
+      {!done ? (
+        <View style={styles.track}>
+          <View style={[styles.fill, { width: `${pct}%` }]} />
+        </View>
+      ) : null}
+      <View style={styles.rewards}>
+        {!done ? (
+          <Text style={styles.progressNums}>
+            {Math.min(quest.progress, quest.target)} / {quest.target}
+          </Text>
+        ) : null}
+        {quest.rewards.map((reward, index) => (
+          <RewardChip key={`${reward.type}-${reward.id ?? index}`} reward={reward} />
+        ))}
+        {route ? (
+          <Pressable
+            style={({ pressed }) => [styles.goKey, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(route.path as never)}
+            hitSlop={6}
+          >
+            <Text style={styles.goKeyText}>{route.label}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.detailsHint}>DETAILS ▸</Text>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
@@ -164,20 +285,65 @@ function QuestDetailModal({ quest, onClose }: { quest: QuestInfo | null; onClose
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 18, gap: 12, paddingBottom: 48 },
-  intro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginBottom: 4 },
-  card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14 },
-  cardPressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
-  done: { borderColor: "rgba(245,184,76,0.55)", backgroundColor: "rgba(245,184,76,0.06)" },
-  heading: { flexDirection: "row", justifyContent: "space-between" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  countdown: {
+    marginLeft: "auto",
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    fontVariant: ["tabular-nums"],
+  },
+  chips: { flexDirection: "row", gap: 4, paddingHorizontal: 16, marginTop: 10 },
+  content: { padding: 16, gap: 10, paddingBottom: 48 },
+  empty: { color: colors.muted, textAlign: "center", marginTop: 40, lineHeight: 22 },
+  card: {
+    position: "relative",
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.accentLine,
+    borderRadius: 3,
+    padding: 14,
+  },
+  cardPressed: { opacity: 0.92 },
+  cardDone: { borderColor: "rgba(245,184,76,0.5)", backgroundColor: "rgba(245,184,76,0.05)" },
+  cardTick: { position: "absolute", width: 9, height: 9, borderColor: colors.accentBright },
+  cardTickTL: { top: -1.5, left: -1.5, borderTopWidth: 2, borderLeftWidth: 2 },
+  cardTickBR: { bottom: -1.5, right: -1.5, borderBottomWidth: 2, borderRightWidth: 2 },
+  heading: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   cadence: { color: colors.accentSoft, fontSize: 9, fontWeight: "900", letterSpacing: 1.4 },
-  state: { color: colors.muted, fontSize: 9, fontWeight: "900" },
-  name: { color: colors.text, fontSize: 17, fontWeight: "900", marginTop: 8 },
-  description: { color: colors.muted, fontSize: 12, marginTop: 3, lineHeight: 17 },
-  track: { height: 6, borderRadius: 3, backgroundColor: colors.bg, marginTop: 12, overflow: "hidden" },
+  state: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
+  name: { color: colors.text, fontSize: 15, fontWeight: "800", marginTop: 7 },
+  nameDone: { textDecorationLine: "line-through", opacity: 0.7 },
+  description: { color: colors.muted, fontSize: 11.5, marginTop: 3, lineHeight: 16 },
+  track: { height: 6, borderRadius: 3, backgroundColor: colors.bg, marginTop: 10, overflow: "hidden" },
   fill: { height: "100%", backgroundColor: colors.accent },
+  progressNums: { color: colors.accentBright, fontSize: 11, fontWeight: "900" },
   rewards: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10, alignItems: "center" },
-  reward: { borderWidth: 1, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, fontSize: 9, fontWeight: "800" },
+  reward: {
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 2,
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  goKey: {
+    marginLeft: "auto",
+    backgroundColor: "rgba(124,92,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.55)",
+    borderRadius: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  goKeyText: { color: colors.accentBright, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
   detailsHint: { marginLeft: "auto", color: colors.accentSoft, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
 
   modalCadence: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 2, textAlign: "center" },
@@ -201,7 +367,7 @@ const styles = StyleSheet.create({
     marginTop: 22,
     borderColor: "rgba(124,92,255,0.55)",
     borderWidth: 1,
-    borderRadius: 4,
+    borderRadius: 3,
     paddingVertical: 9,
     paddingHorizontal: 32,
   },
