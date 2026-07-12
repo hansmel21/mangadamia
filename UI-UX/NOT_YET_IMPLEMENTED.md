@@ -56,15 +56,17 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - 🎨 Series row `READ ▸` deep link into the reader (needs stored-progress route
   resolution — pair with the Library phase).
 
-## Guild (§6) — the big backend lift
+## Guild (§6) — war/raid/board DONE (Phase 4, backend + client, E2E-tested)
+- ✅ **Guild War**: `GuildWar` model + lazy weekly matchmaking (nearest-XP unpaired guild, member-triggered), scores derived from members' `weeklyXp` and snapshotted on read. `GET /guilds/:id/war` + `/wars` (history with won/lost). Client: red war window on the Guild tab (scores, bar, CONTRIBUTE → feed, inline HISTORY) + **rally card pinned in the Dungeon feed** during an active war.
+- ✅ **Guild Raid**: `GuildRaidProgress` model; first-completion-per-week chapter events tick it (same distinct-event window as quests — not farmable); +250 guild XP paid once on target. `GET /guilds/:id/raid` (target scales with roster, `myShare`). Client: gold raid card on the Guild tab.
+- ✅ **Guild Board**: reuses Post + new `pinned` flag. `GET/POST /guilds/:id/board`, `POST /posts/:id/pin` (officers). Replies inherit `guildId`; leak guards added everywhere (public feed, post detail, react, vote, quote, profile recentPosts — all verified 404/hidden for outsiders). Client: board preview on Guild tab + full board screen (`guild/board/[id]`) with inline composer + officer pin toggles.
 - ⚠ **Presence per guild** ("14 ONLINE") — no per-guild online count.
-- ⚠ **Guild War** model `GuildWar {id, weekNo, guildA, guildB, scoreA, scoreB, endsAt}`; war score derived from members' `weeklyXp` during the window (weeklyXp already tracked). Endpoints: `GET /guilds/:id/war`, `GET /guilds/:id/wars` (history).
-- ⚠ **Guild Raid** model `GuildRaid {questId, target, progress, rewardId, resetsAt}` — shared weekly quest; progress = sum of member chapter completions (hook the same event as personal quests in `api/src/quests.ts`).
-- ⚠ **Guild Board** — guild-scoped posts. Reuse Post table with `guildId` + `pinned` flag; GM/officer can pin (📌). New: `api.createGuildPost`, `GET /guilds/:id/board`.
-- 🎨 **Guild Hall** as a scrolling home base (banner + war window + quick keys BOARD/RAIDS/ROSTER/MANAGE + raid card + board preview) — replaces current HALL/ROSTER tabs.
-- 🔀 **Roster enrichment**: join-requests already exist (`pendingRequests` + `answerGuildRequest`), but design wants applicant LV/rank/chapters in the request payload (⚠ include stats), member `idle Nd` from `lastActiveAt` (⚠ expose), online dot (⚠ presence). Weekly-GXP ordering data exists.
-- 🔀 **Guild XP multiplier** ("+10% XP" recruit copy) — implies a server-side XP bonus for guild members. ⚠ if it should be real.
-- 🎨 Directory war-status chips (`AT WAR`/`RECRUITING` from joinPolicy + war state), ⚔ power, #1 gold card — mostly restyle; `AT WAR` needs war state.
+- 🔀 **Roster enrichment**: applicant LV/rank/chapters in request payload (⚠ include stats), member `idle Nd` from `lastActiveAt` (⚠ expose), online dot (⚠ presence).
+- 🔀 **Guild XP multiplier** ("+10% XP" recruit copy) — ⚠ if it should be real.
+- 🎨 Directory war-status chips (`AT WAR`/`RECRUITING`) + #1 gold card — restyle; `AT WAR` can now read war state.
+- 🎨 Old Hall screen (`guild/[id].tsx`) roster restyle to weekly-GXP ordering + role chips (data exists).
+- ⚠ **War refinements**: rewards for the winner; a rollover job to freeze final scores exactly at week end (today the last live read before rollover stands as final).
+- ⚠ **Raid cosmetic reward** (design shows "Frame: Ember Wreath") — needs per-member reward grants; current bonus is +250 guild XP.
 
 ## Arena (§7) — new surface (per ARENA_PLAN.md)
 - ⚠ **Quiz**: `ArenaEvent {type:quiz, seriesId, questions, opensAt, closesAt}`, `api.arenaEnter`, `api.arenaSubmit(score, ms)` → rewards pipeline. Quiz runner screen. Full backend.
@@ -110,10 +112,10 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 2. `GET /guilds/:id/presence` (or include in guild detail) — per-guild online.
 3. `GET /posts/trending?window=1h` — trending threads + trending tags (feed ticker, search).
 4. `api.feed(..., mode='guild')` — guild-scoped feed filter.
-5. Thread replies `sort` param (TOP/NEW).
-6. Guild War: `GET /guilds/:id/war`, `GET /guilds/:id/wars`, `GuildWar` model.
-7. Guild Raid: `GuildRaid` model + progress hook in `quests.ts`.
-8. Guild Board: guild-scoped posts (`guildId` + `pinned`) + create/list.
+5. Thread replies `sort` param (TOP/NEW). *(client-side sort shipped in Phase 2 — server param optional)*
+6. ~~Guild War~~ ✅ shipped (Phase 4: `GET /guilds/:id/war`, `/wars`, `GuildWar` model, lazy matchmaking).
+7. ~~Guild Raid~~ ✅ shipped (Phase 4: `GuildRaidProgress` + completion hook + `GET /guilds/:id/raid`).
+8. ~~Guild Board~~ ✅ shipped (Phase 4: board create/list/pin + leak guards).
 9. Weekly leaderboard: `GET /leaderboard/weekly?around=me`.
 10. Arena: `ArenaEvent` + quiz enter/submit + prediction-pool resolution job.
 11. Profile stats: `dayStreak`, `weeklyRank` on `me`.

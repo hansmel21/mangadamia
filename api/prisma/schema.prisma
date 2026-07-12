@@ -365,6 +365,8 @@ model Post {
   // When set, this is a post on a guild's members-only wall (not the public feed).
   guildId          String?
   guild            Guild?           @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // Guild board only: officers can pin a post to the top of the board.
+  pinned           Boolean          @default(false)
   // Quote-repost: this post embeds and comments on another top-level post.
   quotedPostId     String?
   quotedPost       Post?            @relation("QuotedPost", fields: [quotedPostId], references: [id], onDelete: SetNull)
@@ -682,8 +684,45 @@ model Guild {
   joinRequests   GuildJoinRequest[]
   xpTransactions GuildXpTransaction[]
   posts          Post[]
+  warsAsA        GuildWar[]           @relation("WarsAsA")
+  warsAsB        GuildWar[]           @relation("WarsAsB")
+  raidProgress   GuildRaidProgress[]
 
   @@index([xp])
+}
+
+// One weekly head-to-head between two guilds. Paired lazily on first read of
+// the war window (no cron): the score columns are refreshed from members'
+// weeklyXp while the war is live, so the last write before rollover stands as
+// the final score.
+model GuildWar {
+  id        String   @id @default(cuid())
+  weekKey   String // Monday-anchored UTC week (guilds.ts currentWeekKey)
+  guildAId  String
+  guildBId  String
+  scoreA    Int      @default(0)
+  scoreB    Int      @default(0)
+  createdAt DateTime @default(now())
+  guildA    Guild    @relation("WarsAsA", fields: [guildAId], references: [id], onDelete: Cascade)
+  guildB    Guild    @relation("WarsAsB", fields: [guildBId], references: [id], onDelete: Cascade)
+
+  @@unique([weekKey, guildAId])
+  @@unique([weekKey, guildBId])
+  @@index([guildAId, weekKey])
+  @@index([guildBId, weekKey])
+}
+
+// Weekly shared raid: chapters cleared together this week. Progress ticks on
+// every member chapter completion; claimedAt marks the one-time completion
+// bonus so it can't be granted twice.
+model GuildRaidProgress {
+  guildId   String
+  weekKey   String
+  progress  Int       @default(0)
+  claimedAt DateTime?
+  guild     Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, weekKey])
 }
 
 model GuildMember {

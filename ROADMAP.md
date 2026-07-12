@@ -104,9 +104,29 @@ not-yet-built features and ⚠ backend endpoints: **`UI-UX/NOT_YET_IMPLEMENTED.m
 - **HeaderMenu deleted** — every entry has a System Protocol replacement; all
   five tabs render their own in-screen headers.
 
-**Next phases (build order):** full Guild Hall (war/raid/board, ⚠ backend) →
-Arena (⚠ backend) → reader chrome restyle. See `NOT_YET_IMPLEMENTED.md` for
-the endpoint list.
+**Phase 4 — Guild war/raid/board, backend + client (done, E2E-tested live):**
+- **Migration** `20260712191519_guild_war_raid_board`: `Post.pinned`,
+  `GuildWar` (weekly head-to-head, lazy matchmaking, score snapshots),
+  `GuildRaidProgress` (weekly shared chapter target + one-time bonus claim).
+- **Backend** (`api/src/guilds.ts`, `routes/guilds.ts`, `routes/social.ts`):
+  - War: `GET /guilds/:id/war` (member-triggered nearest-XP matchmaking;
+    scores = Σ member `weeklyXp`, snapshotted on read) + `/wars` history.
+  - Raid: first-completion-per-week chapter events tick progress (quest-style
+    distinct-event window — not farmable); +250 guild XP once on target;
+    `GET /guilds/:id/raid` with roster-scaled target + `myShare`.
+  - Board: `GET/POST /guilds/:id/board`, `POST /posts/:id/pin` (officers);
+    replies inherit `guildId`. **Leak guards** on public feed, post detail,
+    react, vote, quote, and profile recentPosts — all verified via curl
+    (outsider gets 404/hidden; member reads/replies fine).
+- **Client**: Guild tab is the full Hall (banner, red war window with score
+  bar + CONTRIBUTE + inline history, gold raid card, board preview), new
+  board screen `guild/board/[id]` (inline composer, officer pins), and a
+  war **rally card pinned in the Dungeon feed** during an active war.
+- Found in testing: account deletion orphans guilds (pre-existing; leave-route
+  succession never runs) — flagged as a separate task.
+
+**Next phases (build order):** Arena (⚠ backend, per ARENA_PLAN) → remaining
+polish (roster restyle, presence, trending). See `NOT_YET_IMPLEMENTED.md`.
 
 ## 🔨 In progress
 

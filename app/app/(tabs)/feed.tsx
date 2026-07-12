@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery } from "@tanstack/react-query";
 import { useSwitchFade } from "../../src/anim";
 import { api, type PostInfo, type ReactionType } from "../../src/api";
 import { PostCard } from "../../src/components/PostCard";
@@ -68,6 +69,17 @@ export default function FeedScreen() {
   const posts = feed.data?.pages.flat() ?? [];
   // Cross-fade + rise the list whenever the type/scope/sort changes.
   const listFade = useSwitchFade(`${feedMode}:${typeFilter}:${sort}`);
+
+  // Guild-war rally card: pinned above the feed while the viewer's guild has
+  // an active war — reading and posting here is contributing.
+  const myGuild = useQuery({ queryKey: ["myGuild"], queryFn: api.myGuild, enabled: !!user });
+  const myGuildId = myGuild.data?.guildId ?? null;
+  const war = useQuery({
+    queryKey: ["guildWar", myGuildId],
+    queryFn: () => api.guildWar(myGuildId as string),
+    enabled: !!myGuildId,
+    staleTime: 120_000,
+  });
 
   const patch = (id: string, fn: (p: PostInfo) => PostInfo) => {
     queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(queryKey, (old) => {
@@ -193,6 +205,11 @@ export default function FeedScreen() {
           <FlatList
             data={posts}
             keyExtractor={(p) => p.id}
+            ListHeaderComponent={
+              war.data?.war && myGuildId ? (
+                <WarRallyCard war={war.data.war} myGuildId={myGuildId} />
+              ) : null
+            }
             renderItem={({ item }) => (
               <PostCard
                 post={item}
@@ -259,8 +276,100 @@ export default function FeedScreen() {
   );
 }
 
+// Red-tinted rally strip: both tags, the live score bar, and the countdown.
+// Tapping opens the Guild hall.
+function WarRallyCard({
+  war,
+  myGuildId,
+}: {
+  war: NonNullable<Awaited<ReturnType<typeof api.guildWar>>["war"]>;
+  myGuildId: string;
+}) {
+  const mine = war.sideA.id === myGuildId ? war.sideA : war.sideB;
+  const theirs = war.sideA.id === myGuildId ? war.sideB : war.sideA;
+  const total = Math.max(1, mine.score + theirs.score);
+  const minePct = mine.score + theirs.score === 0 ? 50 : (mine.score / total) * 100;
+  const ms = new Date(war.endsAt).getTime() - Date.now();
+  const d = Math.max(0, Math.floor(ms / 86_400_000));
+  const h = Math.max(0, Math.floor((ms % 86_400_000) / 3_600_000));
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.rally, pressed && { borderColor: "rgba(229,72,77,0.8)" }]}
+      onPress={() => router.push("/guild")}
+      accessibilityRole="button"
+      accessibilityLabel="Guild war"
+    >
+      <View style={styles.rallyNotch} pointerEvents="none">
+        <Text style={styles.rallyNotchText}>⚔ GUILD WAR</Text>
+      </View>
+      <View style={styles.rallyRow}>
+        <Text style={[styles.rallyTag, { color: colors.danger }]}>{mine.tag}</Text>
+        <View style={styles.rallyCenter}>
+          <View style={styles.rallyBar}>
+            <View style={[styles.rallyBarMine, { width: `${minePct}%` }]} />
+            <View style={{ width: 3 }} />
+            <View style={[styles.rallyBarTheirs, { width: `${100 - minePct}%` }]} />
+          </View>
+          <View style={styles.rallyScores}>
+            <Text style={[styles.rallyScore, { color: colors.danger }]}>
+              {mine.score.toLocaleString()}
+            </Text>
+            <Text style={styles.rallyEnds}>
+              ENDS IN {d > 0 ? `${d}D ${h}H` : `${h}H`}
+            </Text>
+            <Text style={[styles.rallyScore, { color: colors.info }]}>
+              {theirs.score.toLocaleString()}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.rallyTag, { color: colors.info }]}>{theirs.tag}</Text>
+      </View>
+      <Text style={styles.rallyHint}>reads &amp; records contribute — tap for the war room</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  rally: {
+    position: "relative",
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 13,
+    paddingTop: 14,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(229,72,77,0.45)",
+    borderRadius: 4,
+  },
+  rallyNotch: {
+    position: "absolute",
+    top: -9,
+    left: 14,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+  },
+  rallyNotchText: { color: colors.danger, fontSize: 9, fontWeight: "900", letterSpacing: 1.8 },
+  rallyRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
+  rallyTag: { fontFamily: undefined, fontSize: 15, fontWeight: "800" },
+  rallyCenter: { flex: 1, gap: 3 },
+  rallyBar: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.bg,
+    overflow: "hidden",
+    flexDirection: "row",
+  },
+  rallyBarMine: { backgroundColor: colors.danger },
+  rallyBarTheirs: { backgroundColor: colors.info },
+  rallyScores: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  rallyScore: { fontSize: 10, fontWeight: "900" },
+  rallyEnds: { color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  rallyHint: { color: colors.muted, fontSize: 11, marginTop: 8 },
   header: {
     flexDirection: "row",
     alignItems: "center",

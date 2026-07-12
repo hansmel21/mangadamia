@@ -21,7 +21,7 @@ import {
 import { prisma } from "../db/client.js";
 import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../identity.js";
 import { createNotification } from "../notifications.js";
-import { creditGuild } from "../guilds.js";
+import { bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateUserContent } from "../policy.js";
 import { questListForUser, recordActivity } from "../quests.js";
@@ -461,12 +461,14 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       getStats(target.id),
       prisma.userBadge.findMany({ where: { userId: target.id }, orderBy: { earnedAt: "asc" } }),
       prisma.post.count({
-        where: { userId: target.id, parentId: null, moderationStatus: "visible" },
+        where: { userId: target.id, parentId: null, guildId: null, moderationStatus: "visible" },
       }),
       prisma.post.findMany({
         where: {
           userId: target.id,
           parentId: null,
+          // Guild-board posts are members-only; profiles never surface them.
+          guildId: null,
           moderationStatus: "visible",
         },
         orderBy: { createdAt: "desc" },
@@ -793,6 +795,21 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         name: b.name,
         icon: b.icon,
       }));
+    }
+    // Guild raid: the first completion of a chapter this week ticks the
+    // shared weekly raid (same distinct-event window the quest engine uses,
+    // so re-reporting a chapter can't farm raid progress).
+    if (event === "completed") {
+      const priorThisWeek = await prisma.activityEvent.count({
+        where: {
+          userId: user.id,
+          type: "chapter_completed",
+          eventKey: `${canonicalId}:${chapterNumber}`,
+          reversedAt: null,
+          createdAt: { gte: new Date(`${currentWeekKey()}T00:00:00Z`) },
+        },
+      });
+      if (priorThisWeek === 0) void bumpGuildRaid(user.id);
     }
     const activity = await recordActivity(user.id, {
       type: event === "completed" ? "chapter_completed" : "chapter_opened",
@@ -1316,6 +1333,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const rows = await prisma.post.findMany({
       where: {
         parentId: null,
+        // Guild-board posts never surface in public feeds.
+        guildId: null,
         moderationStatus: "visible",
         userId: { notIn: blockedIds },
         ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
@@ -1369,6 +1388,16 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     });
     if (!rootPost || rootPost.moderationStatus !== "visible") throw httpError(404, "No such post");
     if (me && blockedIds.includes(rootPost.userId)) throw httpError(404, "No such post");
+    // Guild-board threads are members-only. 404 (not 403) so existence
+    // doesn't leak to outsiders.
+    if (rootPost.guildId) {
+      const membership = me
+        ? await prisma.guildMember.findUnique({ where: { userId: me.id } })
+        : null;
+      if (!membership || membership.guildId !== rootPost.guildId) {
+        throw httpError(404, "No such post");
+      }
+    }
     const descendants = await prisma.post.findMany({
       where: { rootId, moderationStatus: "visible", userId: { notIn: blockedIds } },
       orderBy: { createdAt: "asc" },
@@ -1454,7 +1483,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     let quoted = null;
     if (quotedPostId && !parentId) {
       quoted = await prisma.post.findUnique({ where: { id: quotedPostId } });
-      if (!quoted || quoted.moderationStatus !== "visible" || quoted.parentId) {
+      // Guild-board posts can't be quoted onto the public feed.
+      if (!quoted || quoted.moderationStatus !== "visible" || quoted.parentId || quoted.guildId) {
         throw httpError(404, "That post can't be quoted");
       }
       if ((await hiddenUserIds(user.id)).includes(quoted.userId)) {
@@ -1483,6 +1513,14 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       if (!root || root.moderationStatus !== "visible") {
         throw httpError(404, "No such post to reply to");
       }
+      // Replies in a guild-board thread stay on the board: members only, and
+      // the reply inherits the thread's guildId below.
+      if (root.guildId) {
+        const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+        if (!membership || membership.guildId !== root.guildId) {
+          throw httpError(404, "No such post to reply to");
+        }
+      }
       if ((await hiddenUserIds(user.id)).includes(parent.userId)) {
         throw httpError(403, "You cannot interact with this user");
       }
@@ -1501,6 +1539,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         chapterNumber: root ? root.chapterNumber : (primaryTag?.chapterNumber ?? null),
         parentId: parent?.id,
         rootId: parent ? (parent.rootId ?? parent.id) : null,
+        guildId: root?.guildId ?? null,
         seriesTags:
           !parent && uniqueTags.length > 0
             ? {
@@ -1657,6 +1696,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (!isReactionType(type)) throw httpError(400, "Unknown reaction");
     const post = await prisma.post.findUnique({ where: { id: req.params.id } });
     if (!post || post.moderationStatus !== "visible") throw httpError(404, "No such post");
+    if (post.guildId) {
+      const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+      if (!membership || membership.guildId !== post.guildId) throw httpError(404, "No such post");
+    }
     if ((await hiddenUserIds(user.id)).includes(post.userId)) {
       throw httpError(403, "You cannot interact with this user");
     }
@@ -1723,6 +1766,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (!post || post.moderationStatus !== "visible" || post.kind !== "poll") {
       throw httpError(404, "No such poll");
     }
+    if (post.guildId) {
+      const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+      if (!membership || membership.guildId !== post.guildId) throw httpError(404, "No such poll");
+    }
     const option = await prisma.pollOption.findUnique({ where: { id: optionId } });
     if (!option || option.postId !== post.id) throw httpError(404, "No such option");
     await prisma.pollVote.upsert({
@@ -1740,6 +1787,123 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       totalVotes: options.reduce((n, o) => n + o._count.votes, 0),
       myVote: optionId,
     };
+  });
+
+  // ── Guild board — the members-only wall (reuses the Post table) ────────
+  async function requireGuildMember(userId: string, guildId: string) {
+    const membership = await prisma.guildMember.findUnique({ where: { userId } });
+    if (!membership || membership.guildId !== guildId) {
+      throw httpError(403, "Guild members only");
+    }
+    return membership;
+  }
+
+  app.get<{ Params: { id: string } }>("/guilds/:id/board", async (req) => {
+    const user = await requireUser(req);
+    await requireGuildMember(user.id, req.params.id);
+    const { page } = z
+      .object({ page: z.coerce.number().int().min(1).default(1) })
+      .parse(req.query);
+    const blockedIds = await hiddenUserIds(user.id);
+    const rows = await prisma.post.findMany({
+      where: {
+        guildId: req.params.id,
+        parentId: null,
+        moderationStatus: "visible",
+        userId: { notIn: blockedIds },
+      },
+      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+      skip: (page - 1) * 25,
+      take: 25,
+      include: postInclude(user.id),
+    });
+    const rootIds = rows.map((p) => p.id);
+    const [counts, identities, reactionMap, memberRoles] = await Promise.all([
+      rootIds.length
+        ? prisma.post.groupBy({
+            by: ["rootId"],
+            where: { rootId: { in: rootIds }, moderationStatus: "visible", userId: { notIn: blockedIds } },
+            _count: true,
+          })
+        : [],
+      identitiesForUsers(rows.map((p) => p.userId), user.id),
+      reactionsForPosts(rootIds),
+      prisma.guildMember.findMany({
+        where: { guildId: req.params.id, userId: { in: rows.map((p) => p.userId) } },
+        select: { userId: true, role: true },
+      }),
+    ]);
+    const countByRoot = new Map(counts.map((c) => [c.rootId, c._count]));
+    const roleByUser = new Map(memberRoles.map((m) => [m.userId, m.role]));
+    return rows.map((p) => ({
+      ...serializePost(p, identities, user.id, reactionMap.get(p.id) ?? {}),
+      commentCount: countByRoot.get(p.id) ?? 0,
+      pinned: p.pinned,
+      authorRole: roleByUser.get(p.userId) ?? null,
+    }));
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/guilds/:id/board",
+    { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } },
+    async (req) => {
+      const user = await requireAcceptedTerms(req);
+      const membership = await requireGuildMember(user.id, req.params.id);
+      const { body, isSpoiler } = z
+        .object({
+          body: z.string().trim().min(1).max(1000),
+          isSpoiler: z.boolean().optional(),
+        })
+        .parse(req.body);
+      validateUserContent(body);
+      const post = await prisma.post.create({
+        data: {
+          userId: user.id,
+          body,
+          kind: "record",
+          isSpoiler: isSpoiler ?? false,
+          guildId: req.params.id,
+        },
+      });
+      const identity = await identityForUser(user.id, user.id);
+      return {
+        id: post.id,
+        body: post.body,
+        kind: post.kind,
+        isSpoiler: post.isSpoiler,
+        createdAt: post.createdAt,
+        author: identity,
+        username: user.username,
+        pinned: false,
+        authorRole: membership.role,
+        reactions: {},
+        myReaction: null,
+        mine: true,
+        commentCount: 0,
+      };
+    },
+  );
+
+  // Officers pin/unpin a board post (the 📌 row at the top of the board).
+  app.post<{ Params: { id: string } }>("/posts/:id/pin", async (req) => {
+    const user = await requireActiveUser(req);
+    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!post || post.moderationStatus !== "visible" || !post.guildId || post.parentId) {
+      throw httpError(404, "No such board post");
+    }
+    const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+    if (
+      !membership ||
+      membership.guildId !== post.guildId ||
+      !["guildmaster", "officer"].includes(membership.role)
+    ) {
+      throw httpError(403, "Officers only");
+    }
+    const updated = await prisma.post.update({
+      where: { id: post.id },
+      data: { pinned: !post.pinned },
+    });
+    return { ok: true, pinned: updated.pinned };
   });
 
   // Community review summary for a series: average rating, count, letter rank,

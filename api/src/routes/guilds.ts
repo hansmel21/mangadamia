@@ -11,6 +11,11 @@ import {
   guildPower,
   guildXpForLevel,
   isGuildEmblem,
+  RAID_BONUS_XP,
+  raidTargetForGuild,
+  warScoreForGuild,
+  weekEndsAt,
+  weekNumber,
 } from "../guilds.js";
 import { identitiesForUsers } from "../identity.js";
 import { createNotification } from "../notifications.js";
@@ -461,6 +466,164 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       },
     });
     return { ok: true, guild: { id: updated.id, name: updated.name, tag: updated.tag } };
+  });
+
+  // ── Guild War: this week's head-to-head ───────────────────────────────
+  // Wars pair lazily: the first member to open the war window this week
+  // triggers matchmaking against the nearest-XP guild that's still unpaired.
+  // Scores derive from members' weekly contribution (weeklyXp) and are
+  // snapshotted onto the war row on every read, so the final pre-rollover
+  // write stands as the result in history.
+  const warSide = (g: {
+    id: string;
+    name: string;
+    tag: string;
+    emblemKey: string;
+    primaryColor: string;
+    secondaryColor: string | null;
+  }) => ({
+    id: g.id,
+    name: g.name,
+    tag: g.tag,
+    emblemKey: g.emblemKey,
+    primaryColor: g.primaryColor,
+    secondaryColor: g.secondaryColor,
+  });
+
+  app.get<{ Params: { id: string } }>("/guilds/:id/war", async (req) => {
+    const me = await getUser(req);
+    const guildId = req.params.id;
+    const weekKey = currentWeekKey();
+    const guild = await prisma.guild.findUnique({ where: { id: guildId } });
+    if (!guild) throw httpError(404, "No such guild");
+
+    let war = await prisma.guildWar.findFirst({
+      where: { weekKey, OR: [{ guildAId: guildId }, { guildBId: guildId }] },
+    });
+    if (!war) {
+      // Only a member of this guild can trigger matchmaking.
+      const membership = me
+        ? await prisma.guildMember.findUnique({ where: { userId: me.id } })
+        : null;
+      if (!membership || membership.guildId !== guildId) return { war: null };
+      const busy = await prisma.guildWar.findMany({
+        where: { weekKey },
+        select: { guildAId: true, guildBId: true },
+      });
+      const busyIds = new Set(busy.flatMap((w) => [w.guildAId, w.guildBId]));
+      busyIds.add(guildId);
+      const candidates = await prisma.guild.findMany({
+        where: { id: { notIn: [...busyIds] }, members: { some: {} } },
+        select: { id: true, xp: true },
+      });
+      if (candidates.length === 0) return { war: null };
+      const opponent = candidates.reduce((best, c) =>
+        Math.abs(c.xp - guild.xp) < Math.abs(best.xp - guild.xp) ? c : best,
+      );
+      try {
+        war = await prisma.guildWar.create({
+          data: { weekKey, guildAId: guildId, guildBId: opponent.id },
+        });
+      } catch {
+        // Concurrent matchmaking — take whichever pairing won the race.
+        war = await prisma.guildWar.findFirst({
+          where: { weekKey, OR: [{ guildAId: guildId }, { guildBId: guildId }] },
+        });
+        if (!war) return { war: null };
+      }
+    }
+
+    const [scoreA, scoreB, guildA, guildB] = await Promise.all([
+      warScoreForGuild(war.guildAId, war.weekKey),
+      warScoreForGuild(war.guildBId, war.weekKey),
+      prisma.guild.findUniqueOrThrow({ where: { id: war.guildAId } }),
+      prisma.guild.findUniqueOrThrow({ where: { id: war.guildBId } }),
+    ]);
+    // Snapshot live scores so history has finals after the week rolls over.
+    await prisma.guildWar.update({ where: { id: war.id }, data: { scoreA, scoreB } });
+    return {
+      war: {
+        id: war.id,
+        weekKey: war.weekKey,
+        weekNo: weekNumber(war.weekKey),
+        endsAt: weekEndsAt(war.weekKey),
+        sideA: { ...warSide(guildA), score: scoreA },
+        sideB: { ...warSide(guildB), score: scoreB },
+      },
+    };
+  });
+
+  // ── War history ───────────────────────────────────────────────────────
+  app.get<{ Params: { id: string } }>("/guilds/:id/wars", async (req) => {
+    const guildId = req.params.id;
+    const weekKey = currentWeekKey();
+    const wars = await prisma.guildWar.findMany({
+      where: {
+        OR: [{ guildAId: guildId }, { guildBId: guildId }],
+        weekKey: { not: weekKey }, // history = finished weeks only
+      },
+      orderBy: { weekKey: "desc" },
+      take: 12,
+      include: { guildA: true, guildB: true },
+    });
+    return wars.map((w) => {
+      const mineIsA = w.guildAId === guildId;
+      const myScore = mineIsA ? w.scoreA : w.scoreB;
+      const theirScore = mineIsA ? w.scoreB : w.scoreA;
+      return {
+        id: w.id,
+        weekKey: w.weekKey,
+        weekNo: weekNumber(w.weekKey),
+        opponent: warSide(mineIsA ? w.guildB : w.guildA),
+        myScore,
+        theirScore,
+        result: myScore > theirScore ? "won" : myScore < theirScore ? "lost" : "draw",
+      };
+    });
+  });
+
+  // ── Guild Raid: this week's shared objective ──────────────────────────
+  app.get<{ Params: { id: string } }>("/guilds/:id/raid", async (req) => {
+    const me = await getUser(req);
+    const guildId = req.params.id;
+    const weekKey = currentWeekKey();
+    const [guild, memberCount, row] = await Promise.all([
+      prisma.guild.findUnique({ where: { id: guildId } }),
+      prisma.guildMember.count({ where: { guildId } }),
+      prisma.guildRaidProgress.findUnique({
+        where: { guildId_weekKey: { guildId, weekKey } },
+      }),
+    ]);
+    if (!guild) throw httpError(404, "No such guild");
+    // The viewer's share: chapters they completed this week (first-completion
+    // events, same window the raid ticks on).
+    const myMembership = me
+      ? await prisma.guildMember.findUnique({ where: { userId: me.id } })
+      : null;
+    const myShare =
+      me && myMembership?.guildId === guildId
+        ? (
+            await prisma.activityEvent.groupBy({
+              by: ["eventKey"],
+              where: {
+                userId: me.id,
+                type: "chapter_completed",
+                reversedAt: null,
+                createdAt: { gte: new Date(`${weekKey}T00:00:00Z`) },
+              },
+            })
+          ).length
+        : null;
+    return {
+      weekKey,
+      weekNo: weekNumber(weekKey),
+      target: raidTargetForGuild(memberCount),
+      progress: row?.progress ?? 0,
+      completed: !!row?.claimedAt,
+      bonusXp: RAID_BONUS_XP,
+      resetsAt: weekEndsAt(weekKey),
+      myShare,
+    };
   });
 
   // ── My guild shortcut ─────────────────────────────────────────────────

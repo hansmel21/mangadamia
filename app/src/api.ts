@@ -172,6 +172,47 @@ export interface GuildDetail {
   pendingRequests: { identity: PublicIdentity | null; requestedAt: string }[];
 }
 
+// One side of a weekly guild war (crest + live score).
+export interface GuildWarSide {
+  id: string;
+  name: string;
+  tag: string;
+  emblemKey: string;
+  primaryColor: string;
+  secondaryColor: string | null;
+  score: number;
+}
+
+export interface GuildWarInfo {
+  id: string;
+  weekKey: string;
+  weekNo: number;
+  endsAt: string;
+  sideA: GuildWarSide;
+  sideB: GuildWarSide;
+}
+
+export interface GuildWarHistoryEntry {
+  id: string;
+  weekKey: string;
+  weekNo: number;
+  opponent: Omit<GuildWarSide, "score">;
+  myScore: number;
+  theirScore: number;
+  result: "won" | "lost" | "draw";
+}
+
+export interface GuildRaidInfo {
+  weekKey: string;
+  weekNo: number;
+  target: number;
+  progress: number;
+  completed: boolean;
+  bonusXp: number;
+  resetsAt: string;
+  myShare: number | null;
+}
+
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "mythic";
 
 export interface CosmeticMini {
@@ -735,6 +776,25 @@ export const api = {
       joinPolicy: GuildJoinPolicy;
     }>,
   ) => request<{ ok: boolean }>(`/guilds/${encodeURIComponent(id)}`, "PATCH", body),
+  guildWar: (id: string) =>
+    get<{ war: GuildWarInfo | null }>(`/guilds/${encodeURIComponent(id)}/war`),
+  guildWars: (id: string) =>
+    get<GuildWarHistoryEntry[]>(`/guilds/${encodeURIComponent(id)}/wars`),
+  guildRaid: (id: string) => get<GuildRaidInfo>(`/guilds/${encodeURIComponent(id)}/raid`),
+  guildBoard: (id: string, page = 1) =>
+    get<(PostInfo & { pinned: boolean; authorRole: GuildRole | null })[]>(
+      `/guilds/${encodeURIComponent(id)}/board?page=${page}`,
+    ),
+  createGuildPost: (id: string, body: string, isSpoiler?: boolean) =>
+    request<{ id: string }>(`/guilds/${encodeURIComponent(id)}/board`, "POST", {
+      body,
+      isSpoiler,
+    }),
+  pinGuildPost: (postId: string) =>
+    request<{ ok: boolean; pinned: boolean }>(
+      `/posts/${encodeURIComponent(postId)}/pin`,
+      "POST",
+    ),
 
   notifications: (cursor?: string) =>
     get<NotificationPage>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
