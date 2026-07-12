@@ -490,6 +490,7 @@ export interface QuotedPostInfo {
   body: string;
   kind: PostKind;
   rating: number | null;
+  gifUrl: string | null;
   isSpoiler: boolean;
   createdAt: string;
   series: { canonicalId: string; title: string; coverUrl?: string | null } | null;
@@ -509,6 +510,7 @@ export interface PostInfo {
   body: string;
   kind: PostKind;
   rating: number | null;
+  gifUrl: string | null;
   isSpoiler: boolean;
   createdAt: string;
   author: PublicIdentity | null;
@@ -726,6 +728,7 @@ export const api = {
       isSpoiler?: boolean;
       kind?: PostKind;
       rating?: number;
+      gifUrl?: string;
       pollOptions?: string[];
       quotedPostId?: string;
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];

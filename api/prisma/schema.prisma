@@ -389,6 +389,9 @@ model Post {
   kind             String           @default("record")
   // 1–5 rating, reviews only (drives the community series rank)
   rating           Int?
+  // Hosted GIF attachment URL. Phase 3 starts with provider-hosted GIFs so
+  // there is no user-upload storage or moderation pipeline yet.
+  gifUrl           String?
   isSpoiler        Boolean          @default(false)
   createdAt        DateTime         @default(now())
   moderationStatus String           @default("visible") // visible | removed

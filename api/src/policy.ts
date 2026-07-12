@@ -30,3 +30,29 @@ export function validateUserContent(body: string): void {
     });
   }
 }
+
+export function validateGifUrl(gifUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(gifUrl.trim());
+  } catch {
+    throw Object.assign(new Error("Paste a valid GIF URL"), { statusCode: 400 });
+  }
+  if (url.protocol !== "https:") {
+    throw Object.assign(new Error("GIF URLs must use https"), { statusCode: 400 });
+  }
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+  const allowedHost =
+    host === "media.giphy.com" ||
+    host === "i.giphy.com" ||
+    host.endsWith(".giphy.com") ||
+    host === "media.tenor.com" ||
+    host === "c.tenor.com";
+  if (!allowedHost || !(/\.(gif|webp)$/i.test(path) || path.includes("/media/"))) {
+    throw Object.assign(new Error("Use a direct Giphy or Tenor GIF/media URL"), {
+      statusCode: 400,
+    });
+  }
+  return url.toString();
+}

@@ -68,7 +68,8 @@ export default function FeedScreen() {
 
   const posts = feed.data?.pages.flat() ?? [];
   // Cross-fade + rise the list whenever the type/scope/sort changes.
-  const listFade = useSwitchFade(`${feedMode}:${typeFilter}:${sort}`);
+  const listKey = `${feedMode}:${typeFilter}:${sort}:${topic}`;
+  const listFade = useSwitchFade(listKey);
 
   // Guild-war rally card: pinned above the feed while the viewer's guild has
   // an active war — reading and posting here is contributing.
@@ -127,7 +128,23 @@ export default function FeedScreen() {
     }
   };
 
-  const cycleSort = () => setSort(SORT_ORDER[(SORT_ORDER.indexOf(sort) + 1) % SORT_ORDER.length]);
+  const clearFeedPages = () => {
+    queryClient.removeQueries({ queryKey: ["feed"], exact: false });
+  };
+  const selectTypeFilter = (next: "all" | "theory" | "review") => {
+    clearFeedPages();
+    setTypeFilter(next);
+    setFeedMode("global");
+  };
+  const selectFollowing = () => {
+    clearFeedPages();
+    setFeedMode("following");
+    setTypeFilter("all");
+  };
+  const cycleSort = () => {
+    clearFeedPages();
+    setSort(SORT_ORDER[(SORT_ORDER.indexOf(sort) + 1) % SORT_ORDER.length]);
+  };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -153,10 +170,7 @@ export default function FeedScreen() {
             variant="chip"
             label={f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
             active={typeFilter === f && feedMode === "global"}
-            onPress={() => {
-              setTypeFilter(f);
-              setFeedMode("global");
-            }}
+            onPress={() => selectTypeFilter(f)}
           />
         ))}
         <SystemKey
@@ -164,10 +178,7 @@ export default function FeedScreen() {
           label="FOLLOWING"
           active={feedMode === "following"}
           disabled={!user}
-          onPress={() => {
-            setFeedMode("following");
-            setTypeFilter("all");
-          }}
+          onPress={selectFollowing}
         />
         <Pressable
           style={({ pressed }) => [styles.sortKey, pressed && { opacity: 0.7 }]}
@@ -186,6 +197,7 @@ export default function FeedScreen() {
             style={styles.topicClear}
             hitSlop={10}
             onPress={() => {
+              clearFeedPages();
               setTopic("");
               router.setParams({ topic: undefined });
             }}
@@ -203,6 +215,7 @@ export default function FeedScreen() {
       ) : (
         <Animated.View style={[{ flex: 1 }, listFade]}>
           <FlatList
+            key={listKey}
             data={posts}
             keyExtractor={(p) => p.id}
             ListHeaderComponent={

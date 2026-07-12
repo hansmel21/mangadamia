@@ -24,7 +24,7 @@ import { createNotification } from "../notifications.js";
 import { bumpWeeklyXp } from "../arena.js";
 import { bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
-import { CURRENT_TERMS_VERSION, validateUserContent } from "../policy.js";
+import { CURRENT_TERMS_VERSION, validateGifUrl, validateUserContent } from "../policy.js";
 import { questListForUser, recordActivity } from "../quests.js";
 import { deleteUserCompletely } from "../accounts.js";
 
@@ -1119,6 +1119,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     body: string;
     kind: string;
     rating: number | null;
+    gifUrl: string | null;
     isSpoiler: boolean;
     createdAt: Date;
     author: Awaited<ReturnType<typeof identityForUser>>;
@@ -1153,6 +1154,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       body: string;
       kind: string;
       rating: number | null;
+      gifUrl: string | null;
       isSpoiler: boolean;
       createdAt: Date;
       series: { canonicalId: string; title: string; coverUrl: string | null } | null;
@@ -1179,6 +1181,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           body: true,
           kind: true,
           rating: true,
+          gifUrl: true,
           isSpoiler: true,
           createdAt: true,
           moderationStatus: true,
@@ -1195,6 +1198,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     body: string;
     kind: string;
     rating: number | null;
+    gifUrl: string | null;
     isSpoiler: boolean;
     createdAt: Date;
     userId: string;
@@ -1213,6 +1217,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       body: string;
       kind: string;
       rating: number | null;
+      gifUrl: string | null;
       isSpoiler: boolean;
       createdAt: Date;
       moderationStatus: string;
@@ -1231,6 +1236,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     body: p.body,
     kind: p.kind,
     rating: p.rating,
+    gifUrl: p.gifUrl,
     isSpoiler: p.isSpoiler,
     createdAt: p.createdAt,
     author: identities.get(p.userId) ?? null,
@@ -1268,6 +1274,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
             body: p.quotedPost.body,
             kind: p.quotedPost.kind,
             rating: p.quotedPost.rating,
+            gifUrl: p.quotedPost.gifUrl,
             isSpoiler: p.quotedPost.isSpoiler,
             createdAt: p.quotedPost.createdAt,
             series: p.quotedPost.canonical
@@ -1448,6 +1455,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       seriesTags,
       kind,
       rating,
+      gifUrl,
       pollOptions,
       quotedPostId,
     } = z
@@ -1459,6 +1467,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         isSpoiler: z.boolean().optional(),
         kind: z.enum(["record", "theory", "review", "spoiler_intel", "poll"]).optional(),
         rating: z.coerce.number().int().min(1).max(5).optional(),
+        gifUrl: z.string().trim().max(500).optional(),
         pollOptions: z.array(z.string().trim().min(1).max(80)).min(2).max(6).optional(),
         quotedPostId: z.string().optional(),
         seriesTags: z
@@ -1471,6 +1480,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       .parse(req.body);
     const user = await requireAcceptedTerms(req);
     validateUserContent(body);
+    const cleanGifUrl = gifUrl ? validateGifUrl(gifUrl) : null;
     // Replies are always plain records; a post's type only applies to top-level.
     const postKind = parentId ? "record" : (kind ?? "record");
     const requestedTags = seriesTags ?? (canonicalId ? [{ canonicalId, chapterNumber }] : []);
@@ -1537,6 +1547,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         body,
         kind: postKind,
         rating: postKind === "review" ? (rating ?? null) : null,
+        gifUrl: cleanGifUrl,
         isSpoiler: postKind === "spoiler_intel" ? true : (isSpoiler ?? false),
         canonicalId: root ? root.canonicalId : (primaryTag?.canonicalId ?? null),
         chapterNumber: root ? root.chapterNumber : (primaryTag?.chapterNumber ?? null),
@@ -1622,6 +1633,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       body: post.body,
       kind: post.kind,
       rating: post.rating,
+      gifUrl: post.gifUrl,
       isSpoiler: post.isSpoiler,
       createdAt: post.createdAt,
       author: identity,
@@ -1663,6 +1675,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
               body: post.quotedPost.body,
               kind: post.quotedPost.kind,
               rating: post.quotedPost.rating,
+              gifUrl: post.quotedPost.gifUrl,
               isSpoiler: post.quotedPost.isSpoiler,
               createdAt: post.quotedPost.createdAt,
               series: post.quotedPost.canonical

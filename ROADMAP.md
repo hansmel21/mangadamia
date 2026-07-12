@@ -194,18 +194,26 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       mode, quote notification, feed/wall/thread actions.
 - [x] Mentions (@user → notification) & #hashtags (tappable topic filter)
 
+### Social v2 — Phase 3a: GIFs ✅ (2026-07-12, checkpoint — not yet verified live)
+- [x] **GIFs on posts/replies** — `Post.gifUrl` (migration `post_gifs`);
+      `validateGifUrl()` allowlists https Giphy/Tenor media URLs; composer GIF
+      URL field; `PostCard` renders the GIF via `expo-image` (spoiler-shield
+      aware); quoted-post embeds carry it too.
+- [x] Feed fix bundled in: switching type/scope/sort/topic now drops cached
+      feed pages (`clearFeedPages`) and remounts the list, so stale pages don't
+      flash.
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Phase 2 (post functions) is complete. Next recommended track: Social Phase 3 media, starting with GIFs because hosted provider URLs avoid upload/storage/moderation complexity._
+_Next track in progress: **Guilds Phase 4 (full depth)** — invites first._
 
-**Social — Phase 3: media in posts, comments & replies**
+**Social — Phase 3b: images in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress
   (`expo-image-picker`/`-manipulator`); `api/src/storage.ts` abstraction
   (local-disk dev adapter now, Cloudinary adapter for prod); `Post.imageUrls`;
   Cloudinary AI moderation gating in prod for Play compliance.
-- **GIFs** (simpler — no upload/storage/moderation): a Giphy/Tenor GIF picker;
-  posting/replying/commenting stores the provider GIF URL on the post. Ship
-  GIFs first since the provider handles hosting + content safety.
+- A proper **GIF picker** (Giphy/Tenor search UI) to replace the paste-a-URL
+  field shipped in 3a.
 
 **Guilds — Phase 4: full depth** (currently way too basic)
 - **Invites** (net-new `GuildInvite` model + endpoints + UI — can't invite today)

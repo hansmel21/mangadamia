@@ -59,6 +59,7 @@ export function PostComposer({
   const [kind, setKind] = useState<PostKind>("record");
   const [rating, setRating] = useState(0);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [gifUrl, setGifUrl] = useState("");
   // Prefilled from the reader's last read position; ✕ removes it.
   const [autoTag, setAutoTag] = useState<
     { canonicalId: string; title: string; chapterNumber: number } | null
@@ -72,6 +73,7 @@ export function PostComposer({
       setKind(replyTo ? "record" : (initialKind ?? "record"));
       setRating(0);
       setPollOptions(["", ""]);
+      setGifUrl("");
       if (!replyTo && !quote && !context) {
         try {
           setAutoTag(getLastReadTag() ?? null);
@@ -126,6 +128,7 @@ export function PostComposer({
         isSpoiler: kind === "spoiler_intel" ? true : spoiler,
         kind: replyTo || isQuote ? undefined : kind,
         rating: isReview ? rating : undefined,
+        gifUrl: gifUrl.trim() || undefined,
         pollOptions: isPoll ? cleanPollOptions : undefined,
         quotedPostId: isQuote ? quote.id : undefined,
         seriesTags: replyTo
@@ -154,6 +157,7 @@ export function PostComposer({
       setSeriesQuery("");
       setRating(0);
       setPollOptions(["", ""]);
+      setGifUrl("");
       queryClient.invalidateQueries({ queryKey: ["feed"] });
       onPosted?.(created);
       onClose();
@@ -323,6 +327,27 @@ export function PostComposer({
           maxLength={1000}
         />
 
+        <View style={styles.gifBox}>
+          <Text style={styles.gifLabel}>GIF ATTACHMENT</Text>
+          <View style={styles.gifInputRow}>
+            <TextInput
+              style={styles.gifInput}
+              value={gifUrl}
+              onChangeText={setGifUrl}
+              placeholder="Paste direct Giphy or Tenor GIF URL"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {gifUrl ? (
+              <Pressable hitSlop={8} onPress={() => setGifUrl("")} accessibilityLabel="Remove GIF">
+                <Text style={styles.gifRemove}>×</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Text style={styles.gifHint}>Direct hosted GIF/media URLs only.</Text>
+        </View>
+
         {/* Spoiler shield toggle + char counter */}
         <View style={styles.metaRow}>
           {kind === "spoiler_intel" ? (
@@ -464,6 +489,22 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlignVertical: "top",
   },
+  gifBox: { marginTop: 10, gap: 5 },
+  gifLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
+  gifInputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  gifInput: {
+    flex: 1,
+    color: colors.text,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+  },
+  gifRemove: { color: colors.muted, fontSize: 20, fontWeight: "800", paddingHorizontal: 4 },
+  gifHint: { color: colors.muted, fontSize: 10 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
   shieldPill: {
     flexDirection: "row",

@@ -6,6 +6,7 @@
 // Renders the record type, the author's hunter rank, review ratings, the
 // reaction bar, spoiler shields, and reply / delete / report.
 import { router } from "expo-router";
+import { Image as ExpoImage } from "expo-image";
 import { EyeOff, Flag, MessageSquare, Repeat2, Trash2 } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -180,6 +181,16 @@ export function PostCard({
           {post.body}
         </LinkedText>
       )}
+
+      {!shielded && post.gifUrl ? (
+        <ExpoImage
+          source={{ uri: post.gifUrl }}
+          style={styles.gif}
+          contentFit="cover"
+          transition={140}
+          accessibilityLabel="Attached GIF"
+        />
+      ) : null}
 
       {post.kind === "poll" && post.poll ? (
         <PollView
@@ -375,6 +386,15 @@ const styles = StyleSheet.create({
   reviewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   reviewLabel: { color: colors.muted, fontSize: 11, fontWeight: "700" },
   body: { color: colors.text, fontSize: 15, lineHeight: 21, marginTop: 10 },
+  gif: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    marginTop: 11,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
   shield: {
     marginTop: 10,
     borderWidth: 1.5,
