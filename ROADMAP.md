@@ -85,7 +85,8 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
 - [x] **Polls** — `poll` record kind + `PollOption`/`PollVote` models
       (migration `polls`); composer poll builder (2–6 options); one-tap vote
       with live result bars (`PollView`); `POST /posts/:id/vote`. Verified live.
-- [ ] Feed sorting (Hot / Top / New)
+- [x] Feed sorting — **New** (chronological) / **Top** (most-reacted all-time) /
+      **Hot** (most-reacted this week); selector on the feed, cross-fades on switch.
 - [ ] Quote-repost (`Post.quotedPostId`)
 - [ ] Mentions (@user → notification) & #hashtags (tappable topic filter)
 

@@ -598,11 +598,12 @@ export const api = {
     canonicalId?: string,
     feed: "global" | "following" = "global",
     kind?: "theory" | "review",
+    sort: "new" | "top" | "hot" = "new",
   ) =>
     get<PostInfo[]>(
-      `/posts?page=${page}&feed=${feed}${canonicalId ? `&canonicalId=${canonicalId}` : ""}${
-        kind ? `&kind=${kind}` : ""
-      }`,
+      `/posts?page=${page}&feed=${feed}&sort=${sort}${
+        canonicalId ? `&canonicalId=${canonicalId}` : ""
+      }${kind ? `&kind=${kind}` : ""}`,
     ),
   post: (id: string) => get<PostInfo>(`/posts/${encodeURIComponent(id)}`),
   seriesReviews: (canonicalId: string) =>

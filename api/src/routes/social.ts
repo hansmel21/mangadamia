@@ -1156,12 +1156,13 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   };
 
   app.get("/posts", async (req) => {
-    const { page, canonicalId, feed, kind } = z
+    const { page, canonicalId, feed, kind, sort } = z
       .object({
         page: z.coerce.number().int().min(1).default(1),
         canonicalId: z.string().optional(),
         feed: z.enum(["global", "following"]).default("global"),
         kind: z.enum(["theory", "review"]).optional(),
+        sort: z.enum(["new", "top", "hot"]).default("new"),
       })
       .parse(req.query);
     const me = await getUser(req);
@@ -1176,6 +1177,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
             })
           ).map((row) => row.followingId)
         : null;
+    // new = chronological; top = most-reacted all-time; hot = most-reacted in
+    // the last week (a small-app-friendly "what's popular right now").
+    const orderBy =
+      sort === "new"
+        ? [{ createdAt: "desc" as const }]
+        : [{ likes: { _count: "desc" as const } }, { createdAt: "desc" as const }];
     const rows = await prisma.post.findMany({
       where: {
         parentId: null,
@@ -1183,11 +1190,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         userId: { notIn: blockedIds },
         ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
         ...(kind ? { kind } : {}),
+        ...(sort === "hot" ? { createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } : {}),
         ...(canonicalId
           ? { OR: [{ canonicalId }, { seriesTags: { some: { canonicalId } } }] }
           : {}),
       },
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip: (page - 1) * 25,
       take: 25,
       include: postInclude(me?.id),

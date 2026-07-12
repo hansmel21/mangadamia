@@ -25,19 +25,20 @@ export default function FeedScreen() {
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [feedMode, setFeedMode] = useState<"global" | "following">("global");
   const [typeFilter, setTypeFilter] = useState<"all" | "theory" | "review">("all");
-  const queryKey = ["feed", feedMode, typeFilter] as const;
+  const [sort, setSort] = useState<"new" | "top" | "hot">("new");
+  const queryKey = ["feed", feedMode, typeFilter, sort] as const;
 
   const feed = useInfiniteQuery({
     queryKey,
     initialPageParam: 1,
     queryFn: ({ pageParam }) =>
-      api.feed(pageParam, undefined, feedMode, typeFilter === "all" ? undefined : typeFilter),
+      api.feed(pageParam, undefined, feedMode, typeFilter === "all" ? undefined : typeFilter, sort),
     getNextPageParam: (last, pages) => (last.length > 0 ? pages.length + 1 : undefined),
   });
 
   const posts = feed.data?.pages.flat() ?? [];
-  // Cross-fade + rise the list whenever the type/scope tab changes.
-  const listFade = useSwitchFade(`${feedMode}:${typeFilter}`);
+  // Cross-fade + rise the list whenever the type/scope/sort changes.
+  const listFade = useSwitchFade(`${feedMode}:${typeFilter}:${sort}`);
 
   const patch = (id: string, fn: (p: PostInfo) => PostInfo) => {
     queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(queryKey, (old) => {
@@ -101,22 +102,37 @@ export default function FeedScreen() {
         ))}
       </View>
       <View style={styles.scopeRow}>
-        {(["global", "following"] as const).map((mode) => (
-          <Pressable
-            key={mode}
-            disabled={mode === "following" && !user}
-            style={[
-              styles.scopeChip,
-              feedMode === mode && styles.scopeChipActive,
-              mode === "following" && !user && { opacity: 0.35 },
-            ]}
-            onPress={() => setFeedMode(mode)}
-          >
-            <Text style={[styles.scopeText, feedMode === mode && styles.scopeTextActive]}>
-              {mode.toUpperCase()}
-            </Text>
-          </Pressable>
-        ))}
+        <View style={styles.scopeGroup}>
+          {(["global", "following"] as const).map((mode) => (
+            <Pressable
+              key={mode}
+              disabled={mode === "following" && !user}
+              style={[
+                styles.scopeChip,
+                feedMode === mode && styles.scopeChipActive,
+                mode === "following" && !user && { opacity: 0.35 },
+              ]}
+              onPress={() => setFeedMode(mode)}
+            >
+              <Text style={[styles.scopeText, feedMode === mode && styles.scopeTextActive]}>
+                {mode.toUpperCase()}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.scopeGroup}>
+          {(["hot", "top", "new"] as const).map((s) => (
+            <Pressable
+              key={s}
+              style={[styles.scopeChip, sort === s && styles.scopeChipActive]}
+              onPress={() => setSort(s)}
+            >
+              <Text style={[styles.scopeText, sort === s && styles.scopeTextActive]}>
+                {s.toUpperCase()}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
       {feed.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
@@ -198,8 +214,16 @@ const styles = StyleSheet.create({
   },
   typeTabText: { color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 1.2 },
   typeTabTextActive: { color: colors.accentText },
-  scopeRow: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 8, marginBottom: 2 },
-  scopeChip: { paddingHorizontal: 13, paddingVertical: 5, borderRadius: 999 },
+  scopeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  scopeGroup: { flexDirection: "row", gap: 4 },
+  scopeChip: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999 },
   scopeChipActive: { backgroundColor: "rgba(124,92,255,0.16)" },
   scopeText: { color: colors.muted, fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2 },
   scopeTextActive: { color: colors.accentSoft },
