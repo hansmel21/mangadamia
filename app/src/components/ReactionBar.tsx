@@ -1,8 +1,9 @@
-// Reaction bar for System Records. Tapping "React" springs a floating emote
-// tray up over the card and animates closed into itself (Facebook-style). The
-// reactions a post has are shown as one condensed cluster (up to 3 emojis + a
-// total), so it never sprawls no matter how many people react. One reaction per
-// reader: tap your current one to clear it, another to swap.
+// Reaction bar for System Records. Tapping "React" opens a floating emote tray
+// with the same "status window" choreography as SystemModal (stretch to a line,
+// unfold, squeeze flat on close). The reactions a post has are shown as one
+// condensed cluster (up to 3 emojis + a total) so it never sprawls. One
+// reaction per reader: tap your current one to clear it, another to swap.
+import { usePathname } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ReactionType } from "../api";
@@ -22,29 +23,57 @@ export function ReactionBar({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [trayMounted, setTrayMounted] = useState(false);
-  const anim = useRef(new Animated.Value(0)).current;
+  const sx = useRef(new Animated.Value(0.08)).current;
+  const sy = useRef(new Animated.Value(0.045)).current;
+  const op = useRef(new Animated.Value(0)).current;
+  const pathname = usePathname();
 
   const total = Object.values(reactions).reduce((sum, n) => sum + n, 0);
   const present = REACTIONS.filter((r) => (reactions[r.type] ?? 0) > 0).slice(0, 3);
   const myEmoji = myReaction ? reactionEmoji[myReaction] : null;
 
+  // Never leave the tray open when the screen changes underneath it (e.g. you
+  // opened it, then tapped a post and navigated away).
+  useEffect(() => {
+    setPickerOpen(false);
+  }, [pathname]);
+
   useEffect(() => {
     if (pickerOpen) {
       setTrayMounted(true);
-      Animated.spring(anim, {
-        toValue: 1,
-        useNativeDriver: true,
-        damping: 12,
-        stiffness: 220,
-        mass: 0.7,
-      }).start();
+      sx.setValue(0.08);
+      sy.setValue(0.045);
+      op.setValue(0);
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(op, { toValue: 1, duration: 90, useNativeDriver: true }),
+          Animated.timing(sx, {
+            toValue: 1,
+            duration: 170,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.spring(sy, { toValue: 1, damping: 13, stiffness: 160, useNativeDriver: true }),
+      ]).start();
     } else if (trayMounted) {
-      Animated.timing(anim, {
-        toValue: 0,
-        duration: 170,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }).start(({ finished }) => finished && setTrayMounted(false));
+      Animated.sequence([
+        Animated.timing(sy, {
+          toValue: 0.045,
+          duration: 170,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.parallel([
+          Animated.timing(sx, {
+            toValue: 0.08,
+            duration: 150,
+            easing: Easing.in(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(op, { toValue: 0, duration: 140, useNativeDriver: true }),
+        ]),
+      ]).start(({ finished }) => finished && setTrayMounted(false));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickerOpen]);
@@ -58,16 +87,7 @@ export function ReactionBar({
     <View style={styles.wrap}>
       {trayMounted ? (
         <Animated.View
-          style={[
-            styles.tray,
-            {
-              opacity: anim,
-              transform: [
-                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
-                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
-              ],
-            },
-          ]}
+          style={[styles.tray, { opacity: op, transform: [{ scaleX: sx }, { scaleY: sy }] }]}
         >
           {REACTIONS.map((r) => (
             <Pressable
