@@ -216,9 +216,22 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       list on the Roster tab. Notifications: `guild_invite`,
       `guild_invite_accepted`.
 
+### Guilds — Phase 4b: hall board access + contribution board ✅ (2026-07-12, checkpoint — not yet verified live)
+- [x] Audit: the **guild wall/board already shipped** in the Phase-4 war/raid/board
+      commit (`GET/POST /guilds/:id/board`, officer pinning, members-only
+      threads, feed exclusion, `guild/board/[id]` screen) — the old "Guild wall"
+      backlog bullet was stale. What was missing: the Guild Hall never linked
+      to it.
+- [x] **BOARD ↗** entry in the Guild Hall tab row → board screen.
+- [x] **Contribution board** — RANK / WEEKLY / ALL-TIME ordering chips on the
+      Roster tab with position numbers (#1 in foil), weekly-first stat line in
+      WEEKLY mode.
+- [x] **This Week's Vanguard** — top-3 weekly contributors card on the Hall tab
+      (from the HQ sketch in `GUILDS_PLAN.md`).
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅; guild wall next._
+_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board access + contribution board ✅; guild events & customization next._
 
 **Social — Phase 3b: images in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress
@@ -228,11 +241,11 @@ _Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅; guild 
 - A proper **GIF picker** (Giphy/Tenor search UI) to replace the paste-a-URL
   field shipped in 3a.
 
-**Guilds — Phase 4: full depth** (invites ✅ — see Phase 4a above)
-- **Guild wall** (wire `Post.guildId` into `/posts` + Hall Wall tab)
-- **Guild events** (net-new `GuildEvent` models; co-op weekly goals + rewards)
-- **Customization & perks** (edit hall, level unlocks, guild title/decorations)
-- **Contribution board** (weekly + all-time member board in the Hall)
+**Guilds — Phase 4: full depth** (invites ✅ 4a; wall + contribution board ✅ 4b)
+- **Guild events** (net-new `GuildEvent` models; co-op weekly goals + rewards
+  beyond the fixed weekly raid — varied objectives, reward grants, history)
+- **Customization & perks** (edit-guild UI for the existing `PATCH /guilds/:id`,
+  level unlocks, guild title/decorations)
 
 **Arena — Phase 5 (its own track):** PvP turn-based manga-character battles,
 online vs other players + async — matchmaking, server-authoritative game state,

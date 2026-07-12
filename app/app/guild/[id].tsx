@@ -127,6 +127,13 @@ export default function GuildHallScreen() {
                 </Text>
               </Pressable>
             ))}
+            {/* The board lives on its own screen (inline composer + threads). */}
+            <Pressable
+              style={styles.tab}
+              onPress={() => router.push({ pathname: "/guild/board/[id]", params: { id } })}
+            >
+              <Text style={styles.tabText}>BOARD ↗</Text>
+            </Pressable>
           </View>
 
           {tab === "hall" ? (
@@ -223,6 +230,8 @@ function HallTab({
 
       {guild.description ? <Text style={styles.description}>{guild.description}</Text> : null}
 
+      <WeeklyVanguard members={guild.members} />
+
       <View style={styles.actions}>
         {guild.myRole ? (
           <Pressable style={[styles.leaveBtn, busy && { opacity: 0.5 }]} disabled={busy} onPress={onLeave}>
@@ -277,6 +286,30 @@ function HallTab({
   );
 }
 
+// The plan's "this week's contribution leaders (top 3)" card on the Hall tab.
+function WeeklyVanguard({ members }: { members: GuildMemberInfo[] }) {
+  const leaders = [...members]
+    .filter((m) => m.weeklyXp > 0 && m.identity)
+    .sort((a, b) => b.weeklyXp - a.weeklyXp)
+    .slice(0, 3);
+  if (leaders.length === 0) return null;
+  return (
+    <SystemWindow title="This Week's Vanguard" dim style={{ marginHorizontal: 4 }}>
+      <View style={{ gap: 10 }}>
+        {leaders.map((m, i) => (
+          <View key={m.identity!.id ?? i} style={styles.vanguardRow}>
+            <Text style={[styles.vanguardRank, i === 0 && { color: colors.foil }]}>{i + 1}</Text>
+            <View style={{ flex: 1 }}>
+              <UserIdentity identity={m.identity!} compact />
+            </View>
+            <Text style={styles.vanguardXp}>{m.weeklyXp} GXP</Text>
+          </View>
+        ))}
+      </View>
+    </SystemWindow>
+  );
+}
+
 function Stat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.stat}>
@@ -304,6 +337,15 @@ function RosterTab({
   onRevokeInvite: (userId: string) => void;
 }) {
   const canManage = guild.myRole === "guildmaster" || guild.myRole === "officer";
+  // Contribution board: the server sends role-ordered members; WEEKLY and
+  // ALL-TIME re-rank them by contribution so the guild sees who's carrying.
+  const [order, setOrder] = useState<"rank" | "weekly" | "alltime">("rank");
+  const members =
+    order === "rank"
+      ? guild.members
+      : [...guild.members].sort((a, b) =>
+          order === "weekly" ? b.weeklyXp - a.weeklyXp : b.contributionXp - a.contributionXp,
+        );
   const [inviteName, setInviteName] = useState("");
   const sendInvite = () => {
     const name = inviteName.trim().replace(/^@/, "");
@@ -387,7 +429,27 @@ function RosterTab({
         </View>
       ) : null}
 
-      {guild.members.map((m) => {
+      <View style={styles.orderRow}>
+        {(
+          [
+            ["rank", "RANK"],
+            ["weekly", "WEEKLY"],
+            ["alltime", "ALL-TIME"],
+          ] as const
+        ).map(([key, label]) => (
+          <Pressable
+            key={key}
+            style={[styles.orderChip, order === key && styles.orderChipActive]}
+            onPress={() => setOrder(key)}
+          >
+            <Text style={[styles.orderChipText, order === key && styles.orderChipTextActive]}>
+              {label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {members.map((m, i) => {
         const manageable =
           canManage &&
           m.identity?.id !== meId &&
@@ -395,10 +457,15 @@ function RosterTab({
           (guild.myRole === "guildmaster" || m.role === "member");
         return (
           <View key={m.identity?.id ?? m.joinedAt} style={styles.memberRow}>
+            {order !== "rank" ? (
+              <Text style={[styles.boardPos, i === 0 && { color: colors.foil }]}>{i + 1}</Text>
+            ) : null}
             <View style={{ flex: 1 }}>
               {m.identity ? <UserIdentity identity={m.identity} compact /> : null}
               <Text style={styles.contribution}>
-                {m.contributionXp} GXP total · {m.weeklyXp} this week
+                {order === "weekly"
+                  ? `${m.weeklyXp} GXP this week · ${m.contributionXp} total`
+                  : `${m.contributionXp} GXP total · ${m.weeklyXp} this week`}
               </Text>
             </View>
             <View style={styles.memberRight}>
@@ -603,6 +670,33 @@ const styles = StyleSheet.create({
   },
   inviteSendText: { color: colors.accentSoft, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
   invitePendingLabel: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.3 },
+  vanguardRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  vanguardRank: {
+    color: colors.accentSoft,
+    fontFamily: fonts.display,
+    fontSize: 16,
+    width: 18,
+    textAlign: "center",
+  },
+  vanguardXp: { color: colors.muted, fontSize: 11, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  orderRow: { flexDirection: "row", gap: 8 },
+  orderChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  orderChipActive: { borderColor: "rgba(124,92,255,0.65)", backgroundColor: "rgba(124,92,255,0.12)" },
+  orderChipText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.2 },
+  orderChipTextActive: { color: colors.accentSoft },
+  boardPos: {
+    color: colors.muted,
+    fontFamily: fonts.display,
+    fontSize: 15,
+    width: 20,
+    textAlign: "center",
+  },
   requests: {
     borderWidth: 1,
     borderColor: "rgba(245,184,76,0.4)",
