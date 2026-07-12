@@ -92,6 +92,7 @@ export default function PostThreadScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 110, paddingTop: 4 }}>
           <PostCard
             post={post}
+            hideReplies
             onReact={react}
             onReply={startReply}
             onDelete={remove}
@@ -110,6 +111,21 @@ export default function PostThreadScreen() {
               );
             })()}
           </View>
+          {/* Each top-level comment (and its nested replies) is its own clearly
+              separated block, Reddit-style. */}
+          {post.replies.map((comment) => (
+            <View key={comment.id} style={styles.commentThread}>
+              <PostCard
+                post={comment}
+                isReply
+                onReact={react}
+                onReply={startReply}
+                onDelete={remove}
+                onReport={(p) => setReportTarget({ type: "post", id: p.id, username: p.username })}
+                viewerSignedIn={!!user}
+              />
+            </View>
+          ))}
         </ScrollView>
       )}
 
@@ -150,6 +166,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 2,
+  },
+  // Divider + spacing that clearly marks where one comment thread ends and the
+  // next begins.
+  commentThread: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   missing: { alignItems: "center", marginTop: 72, gap: 16, paddingHorizontal: 24 },
   missingText: { color: colors.muted, textAlign: "center", lineHeight: 22 },

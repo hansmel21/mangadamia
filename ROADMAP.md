@@ -74,6 +74,9 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       reaction received (migration `20260712054020_reactions_like`)
 - [x] Richer per-type System Record cards (type-colored accent + banner) +
       new `SeriesEmbed`
+- [x] Polish pass: Facebook-style animated reaction tray (springs up over the
+      card); cross-fade transition when switching tabs; Reddit-style separated
+      comment threads in the post detail; hid the "RECORD" banner on plain posts.
 
 ## 🗺️ Deferred / next (phased — see the plan file)
 
@@ -83,11 +86,14 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
 - Quote-repost (`Post.quotedPostId`)
 - Mentions (@user → notification) & #hashtags (tappable topic filter)
 
-**Social — Phase 3: images in posts** (Cloudinary, built local-first)
-- Client picker + compress (`expo-image-picker`/`-manipulator`)
-- `api/src/storage.ts` storage abstraction: local-disk dev adapter now,
-  Cloudinary adapter for prod; `Post.imageUrls`
-- Moderation gating (Cloudinary AI moderation in prod) for Play compliance
+**Social — Phase 3: media in posts, comments & replies**
+- **Images** (Cloudinary, built local-first): client picker + compress
+  (`expo-image-picker`/`-manipulator`); `api/src/storage.ts` abstraction
+  (local-disk dev adapter now, Cloudinary adapter for prod); `Post.imageUrls`;
+  Cloudinary AI moderation gating in prod for Play compliance.
+- **GIFs** (simpler — no upload/storage/moderation): a Giphy/Tenor GIF picker;
+  posting/replying/commenting stores the provider GIF URL on the post. Ship
+  GIFs first since the provider handles hosting + content safety.
 
 **Guilds — Phase 4: full depth** (currently way too basic)
 - **Invites** (net-new `GuildInvite` model + endpoints + UI — can't invite today)

@@ -45,6 +45,7 @@ export function PostCard({
   preview = false,
   onOpen,
   depth = 0,
+  hideReplies = false,
 }: {
   post: PostInfo;
   isReply?: boolean;
@@ -60,6 +61,9 @@ export function PostCard({
   onOpen?: (p: PostInfo) => void;
   // Nesting level in a thread; caps how far replies keep indenting.
   depth?: number;
+  // The post detail renders top-level comments separately, so the root post
+  // suppresses its own nested replies.
+  hideReplies?: boolean;
 }) {
   const [localRevealed, setLocalRevealed] = useState(false);
   const revealed = threadRevealed ?? localRevealed;
@@ -79,7 +83,7 @@ export function PostCard({
 
   const inner = (
     <>
-      {!isReply ? (
+      {!isReply && post.kind !== "record" ? (
         <View style={styles.banner}>
           <Text style={[styles.bannerText, { color: kindMeta.color }]}>
             {kindMeta.icon} {kindMeta.label}
@@ -186,7 +190,7 @@ export function PostCard({
         </View>
       ) : null}
 
-      {!preview
+      {!preview && !hideReplies
         ? post.replies.map((r) => (
             <PostCard
               key={r.id}
@@ -207,8 +211,20 @@ export function PostCard({
   );
 
   if (isReply) {
-    // Cap how far replies keep stepping right so deep threads stay readable.
-    return <View style={[styles.replyCard, depth > 5 && styles.replyCardFlat]}>{inner}</View>;
+    // Nested replies indent with a left rail; a top-level comment (depth 0,
+    // rendered on its own by the thread screen) stays flush. Deep replies stop
+    // stepping right so the thread stays readable.
+    return (
+      <View
+        style={[
+          styles.replyBase,
+          depth > 0 && styles.replyIndent,
+          depth > 5 && styles.replyIndentFlat,
+        ]}
+      >
+        {inner}
+      </View>
+    );
   }
 
   if (preview) {
@@ -245,13 +261,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cardPressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
-  replyCard: {
+  replyBase: { marginTop: 12 },
+  replyIndent: {
     borderLeftWidth: 2,
     borderLeftColor: "rgba(124,92,255,0.3)",
-    marginTop: 12,
     paddingLeft: 12,
   },
-  replyCardFlat: { paddingLeft: 6, borderLeftColor: "rgba(124,92,255,0.15)" },
+  replyIndentFlat: { paddingLeft: 6, borderLeftColor: "rgba(124,92,255,0.15)" },
   banner: { flexDirection: "row", alignItems: "center", marginBottom: 9 },
   bannerText: { fontSize: 10.5, fontWeight: "900", letterSpacing: 1.8 },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },

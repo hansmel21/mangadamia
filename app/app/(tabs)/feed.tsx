@@ -5,8 +5,8 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Plus } from "lucide-react-native";
 import { useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { pressFx } from "../../src/anim";
+import { ActivityIndicator, Animated, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { pressFx, useSwitchFade } from "../../src/anim";
 import { api, type PostInfo, type ReactionType } from "../../src/api";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
@@ -36,6 +36,8 @@ export default function FeedScreen() {
   });
 
   const posts = feed.data?.pages.flat() ?? [];
+  // Cross-fade + rise the list whenever the type/scope tab changes.
+  const listFade = useSwitchFade(`${feedMode}:${typeFilter}`);
 
   const patch = (id: string, fn: (p: PostInfo) => PostInfo) => {
     queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(queryKey, (old) => {
@@ -110,6 +112,7 @@ export default function FeedScreen() {
       {feed.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
       ) : (
+        <Animated.View style={[{ flex: 1 }, listFade]}>
         <FlatList
           data={posts}
           keyExtractor={(p) => p.id}
@@ -139,6 +142,7 @@ export default function FeedScreen() {
             </Text>
           }
         />
+        </Animated.View>
       )}
 
       {user ? (
