@@ -74,11 +74,15 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       reaction received (migration `20260712054020_reactions_like`)
 - [x] Richer per-type System Record cards (type-colored accent + banner) +
       new `SeriesEmbed`
-- [x] Polish pass: Facebook-style animated reaction tray (springs up over the
-      card, animates closed into itself); condensed reaction cluster (≤3 emojis
-      + total, never sprawls); cross-fade tab transitions; comment threads as
-      distinct contrasting cards (Reddit boxes); guild `[TAG]` inline with the
-      username; removed the confusing rank "E" sigil; hid "RECORD" on plain posts.
+- [x] Polish pass: floating reaction tray that opens/closes with the SystemModal
+      "status window" choreography (stretch→unfold→squeeze) and auto-closes on
+      route change; condensed reaction cluster (≤3 emojis + total, never
+      sprawls); cross-fade tab transitions; comment threads as distinct
+      contrasting cards (Reddit boxes); guild `[TAG]` inline with the username;
+      removed the confusing rank "E" sigil; hid "RECORD" on plain posts.
+
+**Social Feel v2 is done + polished. Next up:** pick a phase from the backlog
+below (recommend Guild depth — invites/wall are the most broken gaps).
 
 ## 🗺️ Deferred / next (phased — see the plan file)
 
