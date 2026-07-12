@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#07080c; font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif; }
+    a { color:#b7a6ff; } a:hover { color:#d6ccff; }
+    @keyframes pulseGlow { 0%,100%{opacity:.55} 50%{opacity:1} }
+    @keyframes crtIn { 0%{transform:scale(1,.04); opacity:0} 40%{transform:scale(1,.04); opacity:1} 100%{transform:scale(1,1); opacity:1} }
+    @keyframes toastIn { 0%{transform:scaleX(.08) scaleY(.04); opacity:0} 45%{transform:scaleX(1) scaleY(.06)} 100%{transform:scale(1); opacity:1} }
+    ::-webkit-scrollbar { width:0; height:0; }
+  </style>
+</helmet>
+
+<div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; gap:18px; padding:36px 20px 60px;">
+  <div style="display:flex; align-items:center; gap:14px;">
+    <div style="font-family:'Bricolage Grotesque'; font-weight:800; font-size:20px; color:#ecedf2;">System Protocol — Interactive Prototype</div>
+    <div style="color:#8a90a0; font-size:12px;">every tap navigates or flashes the API call to wire</div>
+  </div>
+
+  <div style="width:390px; height:844px; background:#0a0b10; border:1px solid #262b36; border-radius:32px; overflow:hidden; display:flex; flex-direction:column; position:relative; box-shadow:0 30px 80px rgba(0,0,0,.6);">
+    <!-- status bar -->
+    <div style="height:34px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 22px; color:#ecedf2; font-size:12px; font-weight:600;"><span>9:41</span><span style="letter-spacing:2px;">▮▮▮</span></div>
+
+    <!-- ═══════════ HOME ═══════════ -->
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:10px; flex:none;">
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(124,92,255,.65);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px; letter-spacing:1px;">MANGADAMIA</span>
+          </div>
+          <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+            <div onClick="{{ openNotifs }}" style="position:relative; width:34px; height:34px; border:1px solid #262b36; border-radius:3px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px; height:17px;"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+              <span style="position:absolute; top:-4px; right:-4px; min-width:15px; height:15px; border-radius:8px; background:#e5484d; border:1.5px solid #0a0b10; color:#fff; font-size:8px; font-weight:900; display:flex; align-items:center; justify-content:center; padding:0 3px;">3</span>
+            </div>
+            <div onClick="{{ goStatus }}" style="display:flex; align-items:center; gap:6px; border:1px solid rgba(245,184,76,.5); border-radius:3px; padding:3px 8px 3px 3px; background:rgba(245,184,76,.06); cursor:pointer;" style-hover="background:rgba(245,184,76,.14);">
+              <div style="width:26px; height:26px; border-radius:7px; background:#A86BFF; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:10px;">K</div>
+              <div><div style="color:#f5b84c; font-size:9px; font-weight:900; line-height:10px;">LV 41</div><div style="width:34px; height:3px; border-radius:2px; background:#171a21; margin-top:2px;"><div style="width:74%; height:100%; border-radius:2px; background:#f5b84c;"></div></div></div>
+            </div>
+          </div>
+        </div>
+        <!-- search key -->
+        <div onClick="{{ focusSearch }}" style="margin:12px 16px 0; flex:none; position:relative; display:flex; align-items:center; gap:9px; background:#10121a; border:1.5px solid rgba(124,92,255,.45); border-radius:3px; padding:11px 13px; cursor:text;" style-hover="border-color:rgba(124,92,255,.8); box-shadow:0 0 14px rgba(124,92,255,.3);">
+          <span style="position:absolute; top:-2px; left:-2px; width:8px; height:8px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+          <span style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" style="width:16px; height:16px;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <span style="color:#8a90a0; font-size:13.5px; flex:1;">Search the archive…</span>
+          <span style="border:1px solid #262b36; border-radius:3px; padding:2px 7px; color:#8a90a0; font-size:9px; font-weight:900; letter-spacing:1px;">SAFE</span>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+          <!-- hero -->
+          <div style="position:relative; margin:14px 16px 0; height:280px; border:1.5px solid rgba(124,92,255,.5); overflow:hidden;">
+            <span style="position:absolute; top:-2px; left:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff; z-index:2;"></span>
+            <span style="position:absolute; top:-2px; right:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff; z-index:2;"></span>
+            <span style="position:absolute; bottom:-2px; left:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff; z-index:2;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff; z-index:2;"></span>
+            <div style="position:absolute; inset:0; background:repeating-linear-gradient(45deg,#1b1f29 0 12px,#171a21 12px 24px); display:flex; align-items:center; justify-content:center;"><span style="color:#8a90a0; font-family:monospace; font-size:11px;">cover art — top series</span></div>
+            <div style="position:absolute; inset:0; background:linear-gradient(rgba(10,11,16,0) 30%, rgba(10,11,16,.95) 85%);"></div>
+            <div style="position:absolute; top:10px; left:10px; background:#0a0b10; border:1px solid #f5b84c; padding:2px 9px; color:#FFE09A; font-size:9px; font-weight:900; letter-spacing:1.6px;">◆ TOP 1 GATE</div>
+            <div style="position:absolute; left:14px; right:14px; bottom:12px;">
+              <div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:23px; line-height:27px;">Shadow Monarch's Return</div>
+              <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                <span style="width:14px; height:14px; border-radius:3px; border:1.2px solid #FF4D87; background:rgba(255,77,135,.15); color:#FF4D87; font-size:8px; font-weight:900; display:inline-flex; align-items:center; justify-content:center;">S</span>
+                <span style="color:#8a90a0; font-size:11.5px;">Action · Fantasy · Leveling · 89 posts/hr</span>
+              </div>
+              <div style="display:flex; gap:8px; margin-top:10px;">
+                <div onClick="{{ resumeHero }}" style="display:flex; align-items:center; gap:6px; background:linear-gradient(135deg,#7c5cff,#6247d1); border-radius:3px; padding:9px 16px; box-shadow:0 3px 12px rgba(124,92,255,.5); cursor:pointer;" style-hover="filter:brightness(1.15);" style-active="transform:scale(.97);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                  <span style="color:#fff; font-size:11px; font-weight:900; letter-spacing:1.2px;">CONTINUE CH.112</span>
+                </div>
+                <div onClick="{{ goDungeon }}" style="display:flex; align-items:center; gap:6px; background:rgba(10,11,16,.75); border:1px solid #3a3f4e; border-radius:3px; padding:9px 13px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+                  <span style="color:#b7a6ff; font-size:12px;">⚔</span><span style="color:#b7a6ff; font-size:11px; font-weight:900; letter-spacing:1px;">WALL</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- daily directive -->
+          <div onClick="{{ goQuests }}" style="display:flex; align-items:center; gap:10px; margin:12px 16px 0; background:#10121a; border:1px solid rgba(245,184,76,.4); border-radius:3px; padding:10px 12px; cursor:pointer;" style-hover="background:rgba(245,184,76,.06);">
+            <span style="color:#f5b84c; font-size:9px;">◆</span>
+            <span style="color:#FFE09A; font-size:9.5px; font-weight:900; letter-spacing:1.4px; flex:none;">DAILY DIRECTIVE</span>
+            <span style="color:#ecedf2; font-size:12px; font-weight:700; flex:1;">Dungeon Chatter — 1/3</span>
+            <div style="width:60px; height:4px; border-radius:2px; background:#0a0b10; overflow:hidden;"><div style="width:33%; height:100%; background:#f5b84c;"></div></div>
+            <span style="color:#FFE09A; font-size:10px; font-weight:800;">+60 XP</span>
+          </div>
+          <!-- latest rail -->
+          <div style="display:flex; align-items:center; padding:16px 16px 8px;">
+            <span style="color:#b7a6ff; font-size:11px; font-weight:800; letter-spacing:2.5px;">◆ LATEST DROPS</span>
+            <span onClick="{{ wireLatest }}" style="margin-left:auto; color:#54D6FF; font-size:9.5px; font-weight:900; cursor:pointer;">ALL ▸</span>
+          </div>
+          <div style="display:flex; gap:10px; padding:0 16px; overflow-x:auto;">
+            <sc-for list="{{ latestRail }}" as="s" hint-placeholder-count="4">
+              <div onClick="{{ s.open }}" style="width:104px; flex:none; cursor:pointer;" style-hover="opacity:.85;">
+                <div style="position:relative; width:104px; height:146px; border:1px solid #262b36; background:repeating-linear-gradient(45deg,#1b1f29 0 8px,#171a21 8px 16px);"><span style="position:absolute; top:0; left:0; background:#7c5cff; color:#fff; font-size:8px; font-weight:900; padding:2px 6px;">{{ s.badge }}</span></div>
+                <div style="color:#ecedf2; font-size:11px; font-weight:700; margin-top:6px; line-height:14px;">{{ s.title }}</div>
+                <div style="color:#8a90a0; font-size:9.5px; margin-top:2px;">{{ s.when }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <!-- ranks rail -->
+          <div style="display:flex; align-items:center; padding:16px 16px 8px;">
+            <span style="color:#b7a6ff; font-size:11px; font-weight:800; letter-spacing:2.5px;">◆ RANKS — MOST READ</span>
+            <span onClick="{{ wireRanks }}" style="margin-left:auto; color:#54D6FF; font-size:9.5px; font-weight:900; cursor:pointer;">ALL ▸</span>
+          </div>
+          <div style="display:flex; gap:10px; padding:0 16px; overflow-x:auto;">
+            <sc-for list="{{ ranksRail }}" as="r" hint-placeholder-count="4">
+              <div onClick="{{ r.open }}" style="width:104px; flex:none; position:relative; cursor:pointer;" style-hover="opacity:.85;">
+                <div style="width:104px; height:146px; border:1px solid #262b36; background:repeating-linear-gradient(45deg,#1b1f29 0 8px,#171a21 8px 16px);"></div>
+                <span style="position:absolute; bottom:8px; left:5px; font-family:'Bricolage Grotesque'; font-weight:800; font-size:42px; color:#f5b84c; text-shadow:0 1px 6px rgba(0,0,0,.9);">{{ r.n }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ SEARCH (focus + results) ═══════════ -->
+    <sc-if value="{{ isSearch }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; animation:crtIn .28s ease-out;">
+        <div style="margin:12px 16px 0; flex:none; position:relative; display:flex; align-items:center; gap:9px; background:#10121a; border:1.5px solid rgba(124,92,255,.8); border-radius:3px; padding:11px 13px; box-shadow:0 0 16px rgba(124,92,255,.35);">
+          <span style="position:absolute; top:-2px; left:-2px; width:8px; height:8px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+          <span style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" style="width:16px; height:16px;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="Search the archive…" autofocus="{{ true }}" style="flex:1; background:transparent; border:none; outline:none; color:#ecedf2; font-size:13.5px; font-weight:600; font-family:inherit;"></input>
+          <span onClick="{{ closeSearch }}" style="width:22px; height:22px; border-radius:11px; background:#262b36; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#3a3f4e;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ecedf2" stroke-width="2.4" stroke-linecap="round" style="width:12px; height:12px;"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </span>
+        </div>
+        <!-- results when typing -->
+        <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:6px; margin:10px 16px 0; flex:none;">
+            <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.4px;">{{ resultCount }} RESULTS</span>
+            <div style="flex:1;"></div>
+            <sc-for list="{{ statusFilters }}" as="f" hint-placeholder-count="3">
+              <div onClick="{{ f.set }}" style="display:flex; align-items:center; gap:5px; padding:6px 11px; border:{{ f.border }}; background:{{ f.bg }}; border-radius:3px; cursor:pointer;">
+                <span style="color:{{ f.color }}; font-size:9.5px; font-weight:900; letter-spacing:1px;">{{ f.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+            <sc-for list="{{ results }}" as="r" hint-placeholder-count="3">
+              <div style="display:flex; gap:12px; margin:10px 16px 0; padding:11px; background:#10121a; border:1px solid #1c2029; border-radius:3px;">
+                <div onClick="{{ r.openSeries }}" style="width:62px; height:88px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 7px,#171a21 7px 14px); border:1px solid #262b36; flex:none; cursor:pointer;"></div>
+                <div style="flex:1;">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span onClick="{{ r.openSeries }}" style="color:#ecedf2; font-size:14.5px; font-weight:800; cursor:pointer;" style-hover="color:#b7a6ff;">{{ r.title }}</span>
+                    <span style="width:14px; height:14px; border-radius:3px; border:1.2px solid {{ r.rankColor }}; background:{{ r.rankBg }}; color:{{ r.rankColor }}; font-size:8px; font-weight:900; display:inline-flex; align-items:center; justify-content:center;">{{ r.rank }}</span>
+                  </div>
+                  <div style="color:#b7a6ff; font-size:10.5px; font-weight:700; margin-top:3px;">{{ r.meta }}</div>
+                  <div style="color:#8a90a0; font-size:11.5px; line-height:16px; margin-top:5px;">{{ r.desc }}</div>
+                  <div style="display:flex; align-items:center; gap:10px; margin-top:7px;">
+                    <span style="color:#FFE09A; font-size:9.5px; font-weight:900;">★ {{ r.rating }}</span>
+                    <span style="color:#8a90a0; font-size:9.5px;">{{ r.reads }}</span>
+                    <span onClick="{{ r.libAction }}" style="margin-left:auto; color:{{ r.libColor }}; font-size:9px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="text-decoration:underline;">{{ r.libLabel }}</span>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <!-- focus panel when empty -->
+        <sc-if value="{{ noQuery }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1; overflow-y:auto;">
+            <div style="display:flex; align-items:center; padding:18px 20px 8px;">
+              <span style="color:#8a90a0; font-size:9px; font-weight:900; letter-spacing:1.8px;">RECENT SCANS</span>
+              <span onClick="{{ clearRecents }}" style="margin-left:auto; color:#8a90a0; font-size:9px; font-weight:800; letter-spacing:1.2px; cursor:pointer;" style-hover="color:#ecedf2;">CLEAR</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; padding:0 16px;">
+              <sc-for list="{{ recents }}" as="rc" hint-placeholder-count="3">
+                <div onClick="{{ rc.use }}" style="display:flex; align-items:center; gap:6px; border:1px solid #262b36; border-radius:3px; padding:6px 11px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px; height:12px;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
+                  <span style="color:#ecedf2; font-size:11.5px;">{{ rc.q }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="color:#8a90a0; font-size:9px; font-weight:900; letter-spacing:1.8px; padding:18px 20px 8px;">TRENDING IN THE DUNGEONS</div>
+            <div style="padding:0 16px; display:flex; flex-direction:column; gap:8px;">
+              <sc-for list="{{ trending }}" as="t" hint-placeholder-count="2">
+                <div onClick="{{ t.open }}" style="display:flex; align-items:center; gap:10px; padding:9px 12px; background:#10121a; border:1px solid #1c2029; border-radius:3px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.5);">
+                  <span style="color:#f5b84c; font-size:12px;">🔥</span><span style="color:#ecedf2; font-size:12.5px; font-weight:700; flex:1;">{{ t.topic }}</span><span style="color:#8a90a0; font-size:10px;">{{ t.count }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="color:#8a90a0; font-size:10.5px; text-align:center; margin-top:22px;">Results come from the MangaDex safe catalog.</div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ DUNGEON FEED ═══════════ -->
+    <sc-if value="{{ isDungeon }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:10px; flex:none;">
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(124,92,255,.65);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px; letter-spacing:1px;">DUNGEON</span>
+          </div>
+          <div onClick="{{ openArena }}" style="display:flex; align-items:center; gap:5px; padding:5px 11px; border:1px solid #262b36; border-radius:3px; cursor:pointer;" style-hover="border-color:rgba(245,184,76,.6);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#f5b84c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+            <span style="color:#FFE09A; font-size:9.5px; font-weight:900; letter-spacing:1px;">ARENA</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+            <span style="width:7px; height:7px; border-radius:50%; background:#4cc38a; animation:pulseGlow 2s infinite;"></span>
+            <span style="color:#4cc38a; font-size:10px; font-weight:800; letter-spacing:.5px;">312 ONLINE</span>
+          </div>
+        </div>
+        <!-- ticker -->
+        <div onClick="{{ openTicker }}" style="margin:10px 16px 0; flex:none; display:flex; align-items:center; gap:8px; padding:9px 12px; background:linear-gradient(90deg, rgba(124,92,255,.14), rgba(124,92,255,.03)); border:1px solid rgba(124,92,255,.35); border-radius:4px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.7);">
+          <span style="color:#f5b84c; font-size:13px;">🔥</span>
+          <span style="color:#8a90a0; font-size:10px; font-weight:900; letter-spacing:1.4px;">RAID THREAD</span>
+          <span style="color:#ecedf2; font-size:12px; font-weight:700; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Ch.112 gate sigil megathread · 89 comments/hr</span>
+          <span style="color:#b7a6ff; font-size:14px;">›</span>
+        </div>
+        <!-- filter deck -->
+        <div style="display:flex; align-items:center; gap:4px; margin:10px 16px 0; flex:none;">
+          <sc-for list="{{ feedFilters }}" as="f" hint-placeholder-count="4">
+            <div onClick="{{ f.set }}" style="flex:none; display:flex; align-items:center; gap:5px; padding:8px 11px; background:{{ f.bg }}; border:{{ f.border }}; border-radius:4px; box-shadow:{{ f.glow }}; cursor:pointer;">
+              <span style="color:{{ f.color }}; font-size:10px; font-weight:900; letter-spacing:1px;">{{ f.label }}</span>
+            </div>
+          </sc-for>
+          <div onClick="{{ cycleSort }}" style="margin-left:auto; flex:none; display:flex; align-items:center; gap:4px; padding:8px 9px; border:1px solid #262b36; border-radius:4px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+            <span style="color:#b7a6ff; font-size:10px; font-weight:900; letter-spacing:1px;">{{ sortLabel }} ▾</span>
+          </div>
+        </div>
+        <!-- posts -->
+        <div style="flex:1; overflow-y:auto; padding-bottom:80px;">
+          <sc-for list="{{ posts }}" as="p" hint-placeholder-count="3">
+            <div>
+              <sc-if value="{{ p.war }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ wireContribute }}" style="position:relative; background:linear-gradient(180deg, rgba(229,72,77,.10), #10121a 55%); border:1px solid rgba(229,72,77,.45); border-radius:4px; margin:16px 16px 0; padding:13px 14px; cursor:pointer;" style-hover="border-color:rgba(229,72,77,.8);">
+                  <div style="position:absolute; top:-9px; left:14px; background:#0a0b10; border:1px solid #E5484D; padding:1px 8px; color:#E5484D; font-size:9px; font-weight:900; letter-spacing:1.8px;">⚔ GUILD WAR</div>
+                  <div style="display:flex; align-items:center; gap:10px; margin-top:6px;">
+                    <span style="width:34px; height:34px; border-radius:9px; border:1.2px solid #E5484D; background:rgba(255,77,135,.13); display:inline-flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3c2 3 4 4 4 8a4 4 0 0 1-8 0c0-2 1-3 2-4 0 1 1 2 2 2 0-2-1-4-0-6z" fill="#E5484D"></path></svg></span>
+                    <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:15px;">ASH</span>
+                    <div style="flex:1; display:flex; flex-direction:column; gap:3px;">
+                      <div style="height:6px; border-radius:3px; background:#0a0b10; overflow:hidden; display:flex;"><div style="width:58%; background:#E5484D;"></div><div style="flex:1;"></div><div style="width:38%; background:#4BA3FF;"></div></div>
+                      <div style="display:flex; justify-content:space-between;"><span style="color:#E5484D; font-size:10px; font-weight:900;">8,420</span><span style="color:#8a90a0; font-size:9px; font-weight:800; letter-spacing:1px;">ENDS IN 2D 6H</span><span style="color:#4BA3FF; font-size:10px; font-weight:900;">6,105</span></div>
+                    </div>
+                    <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:15px;">EYE</span>
+                    <span style="width:34px; height:34px; border-radius:9px; border:1.2px solid #4BA3FF; background:rgba(75,163,255,.13); display:inline-flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M3 12c3-5 15-5 18 0-3 5-15 5-18 0z" stroke="#4BA3FF" stroke-width="2" fill="none"></path><circle cx="12" cy="12" r="2.4" fill="#4BA3FF"></circle></svg></span>
+                  </div>
+                  <div style="color:#8a90a0; font-size:12px; margin-top:9px;">Your reads today: <span style="color:#ecedf2; font-weight:800;">+120 pts</span> — tap to contribute</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ p.kindColor }}" hint-placeholder-val="{{ true }}">
+                <div style="position:relative; background:#10121a; border:1px solid rgba(124,92,255,.4); border-radius:4px; margin:16px 16px 0; padding:13px 14px;">
+                  <span style="position:absolute; top:-1.5px; left:-1.5px; width:9px; height:9px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+                  <span style="position:absolute; top:-1.5px; right:-1.5px; width:9px; height:9px; border-top:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+                  <div style="position:absolute; top:-9px; left:14px; background:#0a0b10; border:1px solid {{ p.kindColor }}; padding:1px 8px; color:{{ p.kindColor }}; font-size:9px; font-weight:900; letter-spacing:1.8px;">{{ p.kindIcon }} {{ p.kind }}</div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                    <div style="position:relative; width:38px; height:38px; flex:none;">
+                      <div style="width:38px; height:38px; border-radius:10px; border:2px solid {{ p.rankColor }}; background:{{ p.avatarBg }}; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:15px;">{{ p.initial }}</div>
+                      <span style="position:absolute; bottom:-5px; right:-5px; width:16px; height:16px; border-radius:4px; border:1.3px solid {{ p.rankColor }}; background:#0a0b10; color:{{ p.rankColor }}; font-size:9px; font-weight:900; display:flex; align-items:center; justify-content:center;">{{ p.rank }}</span>
+                    </div>
+                    <div style="flex:1;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="color:#ecedf2; font-size:14px; font-weight:800;">{{ p.user }}</span>
+                        <span style="color:#f5b84c; font-size:10px; font-weight:900;">LV {{ p.lv }}</span>
+                        <span style="color:#8a90a0; font-size:11px; margin-left:auto;">{{ p.time }}</span>
+                        <span onClick="{{ p.report }}" style="color:#8a90a0; font-size:11px; cursor:pointer;" style-hover="color:#e5484d;">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" x2="4" y1="22" y2="15"></line></svg>
+                        </span>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:6px; margin-top:3px;">
+                        <span style="display:inline-flex; align-items:center; gap:4px; border:1px solid {{ p.guildColor }}; background:rgba(229,72,77,.08); padding:1px 6px; border-radius:3px;"><span style="color:{{ p.guildColor }}; font-size:9px; font-weight:900; letter-spacing:.5px;">[{{ p.guild }}]</span></span>
+                        <sc-if value="{{ p.hasTitle }}" hint-placeholder-val="{{ false }}"><span style="border:1px solid #4BA3FF; background:rgba(75,163,255,.14); color:#9ED0FF; border-radius:3px; padding:1px 5px; font-size:8px; font-weight:800; letter-spacing:.5px;">{{ p.title }}</span></sc-if>
+                      </div>
+                    </div>
+                  </div>
+                  <sc-if value="{{ p.hasSeries }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding:6px 8px; background:#0a0b10; border-left:2px solid #7c5cff;">
+                      <div style="width:26px; height:36px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 5px,#171a21 5px 10px);"></div>
+                      <div style="flex:1;"><div style="color:#ecedf2; font-size:12px; font-weight:800;">{{ p.series }}</div><div style="color:#b7a6ff; font-size:10.5px; font-weight:700;">{{ p.chLabel }}</div></div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ p.hasStars }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:9px;"><span style="color:#f5b84c; font-size:15px; letter-spacing:2px;">{{ p.stars }}</span><span style="color:#8a90a0; font-size:10.5px; font-weight:700;">rated this series</span></div>
+                  </sc-if>
+                  <div style="color:#ecedf2; font-size:14.5px; line-height:21px; margin-top:10px;">{{ p.body }}</div>
+                  <sc-if value="{{ p.isPoll }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+                      <sc-for list="{{ pollOpts }}" as="o" hint-placeholder-count="2">
+                        <div onClick="{{ o.vote }}" style="position:relative; border:{{ o.border }}; border-radius:3px; overflow:hidden; height:34px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.7);">
+                          <div style="position:absolute; inset:0; width:{{ o.pct }}%; background:{{ o.fillBg }};"></div>
+                          <div style="position:relative; display:flex; justify-content:space-between; align-items:center; height:100%; padding:0 10px;"><span style="color:{{ o.textColor }}; font-size:12.5px; font-weight:700;">{{ o.check }}{{ o.text }}</span><span style="color:{{ o.textColor }}; font-size:11px; font-weight:800;">{{ o.pct }}%</span></div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+                    <div onClick="{{ p.react }}" style="display:flex; align-items:center; gap:6px; padding:6px 12px; border:{{ p.reactBorder }}; border-radius:3px; background:{{ p.reactBg }}; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.8);" style-active="transform:scale(.94);"><span style="font-size:13px;">{{ p.emoji }}</span><span style="color:{{ p.reactColor }}; font-size:11px; font-weight:900;">{{ p.reacts }}</span></div>
+                    <div onClick="{{ p.open }}" style="display:flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid #262b36; border-radius:3px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                      <span style="color:#8a90a0; font-size:11px; font-weight:900;">{{ p.comments }}</span>
+                    </div>
+                    <div onClick="{{ p.share }}" style="display:flex; align-items:center; padding:6px 12px; border:1px solid #262b36; border-radius:3px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px;"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>
+                    </div>
+                    <span onClick="{{ p.open }}" style="margin-left:auto; color:#54D6FF; font-size:10px; font-weight:900; letter-spacing:1.2px; cursor:pointer;" style-hover="text-decoration:underline;">OPEN THREAD ▸</span>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <!-- new record key -->
+        <div onClick="{{ openComposer }}" style="position:absolute; right:16px; bottom:104px; display:flex; align-items:center; gap:8px; padding:13px 18px; background:linear-gradient(135deg, #7c5cff, #6247d1); border-radius:4px; box-shadow:0 4px 18px rgba(124,92,255,.55); cursor:pointer; z-index:30;" style-hover="filter:brightness(1.15);" style-active="transform:scale(.96);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" style="width:15px; height:15px;"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+          <span style="color:#fff; font-size:11px; font-weight:900; letter-spacing:1.6px;">NEW RECORD</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ THREAD ═══════════ -->
+    <sc-if value="{{ isThread }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; animation:crtIn .28s ease-out;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:12px; flex:none;">
+          <span onClick="{{ closeThread }}" style="cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ecedf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          </span>
+          <div style="position:relative; padding:2px 10px; border:1.5px solid {{ thread.kindColor }};">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid {{ thread.kindColor }}; border-left:2px solid {{ thread.kindColor }};"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid {{ thread.kindColor }}; border-right:2px solid {{ thread.kindColor }};"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:15px; letter-spacing:1px;">{{ thread.kind }} THREAD</span>
+          </div>
+          <span onClick="{{ thread.report }}" style="margin-left:auto; cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px;"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" x2="4" y1="22" y2="15"></line></svg>
+          </span>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding-bottom:14px;">
+          <div style="position:relative; background:#10121a; border:1.5px solid rgba(124,92,255,.55); border-radius:4px; margin:16px 16px 0; padding:14px; box-shadow:0 0 14px rgba(124,92,255,.18);">
+            <span style="position:absolute; top:-2px; left:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff;"></span>
+            <span style="position:absolute; top:-2px; right:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; left:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff;"></span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="position:relative; width:42px; height:42px; flex:none;">
+                <div style="width:42px; height:42px; border-radius:11px; border:2px solid {{ thread.rankColor }}; background:{{ thread.avatarBg }}; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:16px;">{{ thread.initial }}</div>
+                <span style="position:absolute; bottom:-5px; right:-5px; width:17px; height:17px; border-radius:4px; border:1.3px solid {{ thread.rankColor }}; background:#0a0b10; color:{{ thread.rankColor }}; font-size:9.5px; font-weight:900; display:flex; align-items:center; justify-content:center;">{{ thread.rank }}</span>
+              </div>
+              <div style="flex:1;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="color:#ecedf2; font-size:14.5px; font-weight:800;">{{ thread.user }}</span>
+                  <span style="color:#f5b84c; font-size:10px; font-weight:900;">LV {{ thread.lv }}</span>
+                  <span style="background:rgba(124,92,255,.2); border:1px solid rgba(124,92,255,.55); color:#b7a6ff; font-size:8px; font-weight:900; letter-spacing:1px; border-radius:3px; padding:1px 6px;">OP</span>
+                  <span style="color:#8a90a0; font-size:11px; margin-left:auto;">{{ thread.time }}</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px; margin-top:3px;">
+                  <span style="display:inline-flex; align-items:center; border:1px solid {{ thread.guildColor }}; background:rgba(229,72,77,.08); padding:1px 6px; border-radius:3px;"><span style="color:{{ thread.guildColor }}; font-size:9px; font-weight:900;">[{{ thread.guild }}]</span></span>
+                  <sc-if value="{{ thread.hasTitle }}" hint-placeholder-val="{{ false }}"><span style="border:1px solid #4BA3FF; background:rgba(75,163,255,.14); color:#9ED0FF; border-radius:3px; padding:1px 5px; font-size:8px; font-weight:800;">{{ thread.title }}</span></sc-if>
+                </div>
+              </div>
+            </div>
+            <sc-if value="{{ thread.hasSeries }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ resumeHero }}" style="display:flex; align-items:center; gap:8px; margin-top:11px; padding:6px 8px; background:#0a0b10; border-left:2px solid #7c5cff; cursor:pointer;" style-hover="background:#0e1018;">
+                <div style="width:26px; height:36px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 5px,#171a21 5px 10px);"></div>
+                <div style="flex:1;"><div style="color:#ecedf2; font-size:12px; font-weight:800;">{{ thread.series }}</div><div style="color:#b7a6ff; font-size:10.5px; font-weight:700;">{{ thread.chLabel }}</div></div>
+                <span style="color:#54D6FF; font-size:9.5px; font-weight:900;">READ ▸</span>
+              </div>
+            </sc-if>
+            <div style="color:#ecedf2; font-size:15px; line-height:22px; margin-top:11px;">{{ thread.body }}</div>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:13px;">
+              <div onClick="{{ thread.react }}" style="display:flex; align-items:center; gap:6px; padding:6px 12px; border:{{ thread.reactBorder }}; border-radius:3px; background:{{ thread.reactBg }}; cursor:pointer;" style-active="transform:scale(.94);"><span style="font-size:13px;">{{ thread.emoji }}</span><span style="color:{{ thread.reactColor }}; font-size:11px; font-weight:900;">{{ thread.reacts }}</span></div>
+              <div onClick="{{ thread.share }}" style="display:flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid #262b36; border-radius:3px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px;"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>
+                <span style="color:#8a90a0; font-size:11px; font-weight:900;">SHARE</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; margin:14px 16px 0;">
+            <span style="color:#8a90a0; font-size:9px; font-weight:900; letter-spacing:1.8px;">REPLIES</span>
+            <div style="flex:1; height:1px; background:#1c2029;"></div>
+            <span style="color:#b7a6ff; font-size:9.5px; font-weight:900;">TOP ◆</span>
+            <span onClick="{{ replyBar }}" style="color:#8a90a0; font-size:9.5px; font-weight:800; cursor:pointer;">NEW</span>
+          </div>
+          <sc-for list="{{ thread.replies }}" as="r" hint-placeholder-count="2">
+            <div style="margin:10px 16px 0; background:#10121a; border:1px solid #1c2029; border-radius:4px; padding:11px 12px;">
+              <div style="display:flex; align-items:center; gap:7px;">
+                <div style="width:28px; height:28px; border-radius:8px; background:{{ r.bg }}; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:11px;">{{ r.initial }}</div>
+                <span style="color:#ecedf2; font-size:13px; font-weight:800;">{{ r.user }}</span>
+                <span style="width:14px; height:14px; border-radius:3px; border:1.2px solid {{ r.rankColor }}; background:#0a0b10; color:{{ r.rankColor }}; font-size:8px; font-weight:900; display:inline-flex; align-items:center; justify-content:center;">{{ r.rank }}</span>
+                <sc-if value="{{ r.op }}" hint-placeholder-val="{{ false }}"><span style="background:rgba(124,92,255,.2); border:1px solid rgba(124,92,255,.55); color:#b7a6ff; font-size:7.5px; font-weight:900; letter-spacing:1px; border-radius:3px; padding:0 5px;">OP</span></sc-if>
+                <span style="color:#8a90a0; font-size:10.5px; margin-left:auto;">{{ r.time }}</span>
+              </div>
+              <div style="color:#dfe2ea; font-size:13.5px; line-height:19px; margin-top:8px;">{{ r.body }}</div>
+              <div style="display:flex; align-items:center; gap:12px; margin-top:9px;">
+                <span onClick="{{ r.react }}" style="display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border:{{ r.reactChip }}; border-radius:3px; cursor:pointer;" style-active="transform:scale(.94);"><span style="font-size:11px;">{{ r.emoji }}</span><span style="color:#b7a6ff; font-size:10px; font-weight:900;">{{ r.reacts }}</span></span>
+                <span onClick="{{ r.reply }}" style="color:#8a90a0; font-size:10px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="color:#b7a6ff;">REPLY</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border-top:1px solid #1c2029; background:#0d0f14; padding:10px 16px 14px; display:flex; align-items:center; gap:9px; flex:none;">
+          <div style="width:30px; height:30px; border-radius:8px; background:#A86BFF; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:11px; flex:none;">K</div>
+          <div onClick="{{ replyBar }}" style="flex:1; border:1px solid rgba(124,92,255,.4); border-radius:3px; background:#10121a; padding:9px 12px; cursor:text;"><span style="color:#8a90a0; font-size:12.5px;">Add to the record…</span></div>
+          <div onClick="{{ replyBar }}" style="width:38px; height:38px; border-radius:3px; background:linear-gradient(135deg,#7c5cff,#6247d1); display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(124,92,255,.45); flex:none; cursor:pointer;" style-active="transform:scale(.94);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px;"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ COMPOSER OVERLAY ═══════════ -->
+    <sc-if value="{{ hasComposer }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; inset:0; background:rgba(0,0,0,.7); z-index:50; display:flex; align-items:flex-end;">
+        <div onClick="{{ closeComposer }}" style="position:absolute; inset:0;"></div>
+        <div style="position:relative; width:100%; background:rgba(13,15,20,.98); border-top:1.5px solid rgba(124,92,255,.65); padding:18px 16px 26px; box-shadow:0 -6px 30px rgba(124,92,255,.25); animation:crtIn .28s ease-out;">
+          <span style="position:absolute; top:-2px; left:14px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff;"></span>
+          <span style="position:absolute; top:-2px; right:14px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff;"></span>
+          <div style="display:flex; align-items:center; justify-content:center; gap:9px; position:relative;">
+            <span style="width:15px; height:15px; border:1.5px solid #b7a6ff; transform:rotate(45deg); display:inline-flex; align-items:center; justify-content:center;"><span style="color:#b7a6ff; font-size:9px; font-weight:900; transform:rotate(-45deg);">!</span></span>
+            <span style="color:#b7a6ff; font-size:11px; font-weight:800; letter-spacing:3.5px;">NEW RECORD</span>
+            <span onClick="{{ closeComposer }}" style="position:absolute; right:0; cursor:pointer;" style-hover="opacity:.7;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" style="width:18px; height:18px;"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </span>
+          </div>
+          <div style="height:1px; background:rgba(124,92,255,.35); margin:13px 0;"></div>
+          <div style="display:flex; gap:6px;">
+            <sc-for list="{{ composeKinds }}" as="ck" hint-placeholder-count="5">
+              <div onClick="{{ ck.set }}" style="flex:1; text-align:center; padding:9px 0; border:{{ ck.border }}; background:{{ ck.bg }}; border-radius:3px; cursor:pointer;">
+                <div style="font-size:14px;">{{ ck.icon }}</div>
+                <div style="color:{{ ck.color }}; font-size:8.5px; font-weight:900; letter-spacing:1px; margin-top:2px;">{{ ck.k }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:12px; padding:8px 10px; background:#10121a; border:1px solid rgba(124,92,255,.35); border-radius:3px;">
+            <div style="width:22px; height:30px; border-radius:2px; background:repeating-linear-gradient(45deg,#1b1f29 0 4px,#171a21 4px 8px);"></div>
+            <div style="flex:1;"><div style="color:#ecedf2; font-size:12px; font-weight:800;">Shadow Monarch's Return</div><div style="color:#b7a6ff; font-size:10px; font-weight:700;">CH. 112 — auto-tagged from your last read</div></div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" style="width:14px; height:14px; cursor:pointer;"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </div>
+          <textarea value="{{ composeText }}" onInput="{{ onCompose }}" placeholder="Log your record…" style="margin-top:12px; width:100%; box-sizing:border-box; min-height:110px; border:1px solid rgba(124,92,255,.4); border-radius:3px; background:#10121a; padding:12px; color:#ecedf2; font-size:14.5px; line-height:21px; font-family:inherit; outline:none; resize:none;"></textarea>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+            <div onClick="{{ toggleSpoiler }}" style="display:flex; align-items:center; gap:7px; padding:7px 12px; border:1px solid #262b36; border-radius:3px; cursor:pointer;">
+              <span style="color:#8a90a0; font-size:10px; font-weight:900; letter-spacing:1px;">SPOILER SHIELD</span>
+              <span style="width:26px; height:15px; border-radius:8px; background:{{ spTrack }}; position:relative; transition:background .2s;"><span style="position:absolute; top:2px; left:{{ spKnobLeft }}; width:11px; height:11px; border-radius:6px; background:#ecedf2; transition:left .2s;"></span></span>
+            </div>
+            <span style="margin-left:auto; color:#8a90a0; font-size:10px;">{{ charCount }}</span>
+          </div>
+          <div onClick="{{ publish }}" style="margin-top:14px; text-align:center; padding:13px 0; background:linear-gradient(135deg,#7c5cff,#6247d1); border-radius:3px; box-shadow:0 3px 14px rgba(124,92,255,.5); color:#fff; font-size:12px; font-weight:900; letter-spacing:2px; cursor:pointer;" style-hover="filter:brightness(1.15);" style-active="transform:scale(.98);">▸ PUBLISH RECORD</div>
+          <div style="color:#8a90a0; font-size:10px; text-align:center; margin-top:9px;">+15 XP for your first record today · counts toward war points</div>
+        </div>
+      </div>
+    </sc-if>
+    <!-- ═══════════ GUILD HALL ═══════════ -->
+    <sc-if value="{{ isGuild }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+        <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+          <div style="position:relative; padding:14px 16px 16px; background:linear-gradient(180deg, rgba(229,72,77,.16), rgba(229,72,77,0)); border-bottom:1px solid rgba(229,72,77,.25);">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="width:64px; height:64px; border-radius:16px; border:2px solid #E5484D; background:rgba(255,77,135,.13); box-shadow:0 0 14px rgba(229,72,77,.4); display:inline-flex; align-items:center; justify-content:center;"><svg width="42" height="42" viewBox="0 0 24 24"><path d="M12 3c2 3 4 4 4 8a4 4 0 0 1-8 0c0-2 1-3 2-4 0 1 1 2 2 2 0-2-1-4-0-6z" fill="#E5484D"></path></svg></span>
+              <div style="flex:1;">
+                <div style="display:flex; align-items:center; gap:8px;"><span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:22px;">Ashen Covenant</span><span style="color:#E5484D; font-size:13px; font-weight:900;">[ASH]</span></div>
+                <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
+                  <span style="color:#f5b84c; font-family:'Bricolage Grotesque'; font-weight:800; font-size:13px;">LV 23</span>
+                  <span style="color:#b7a6ff; font-size:10.5px; font-weight:900;">⚔ 12,840</span>
+                  <span style="display:flex; align-items:center; gap:4px;"><span style="width:6px; height:6px; border-radius:3px; background:#4cc38a; animation:pulseGlow 2s infinite;"></span><span style="color:#4cc38a; font-size:10px; font-weight:800;">14 ONLINE</span></span>
+                </div>
+                <div style="height:5px; border-radius:3px; background:#0a0b10; overflow:hidden; margin-top:7px; max-width:210px;"><div style="height:100%; width:62%; background:linear-gradient(90deg,#7c5cff,#b7a6ff);"></div></div>
+              </div>
+            </div>
+          </div>
+          <!-- war window -->
+          <div style="position:relative; background:rgba(13,15,20,.97); border:1.5px solid rgba(229,72,77,.55); border-radius:4px; margin:14px 16px 0; padding:14px; box-shadow:0 0 14px rgba(229,72,77,.22);">
+            <span style="position:absolute; top:-2px; left:-2px; width:11px; height:11px; border-top:2.5px solid #E5484D; border-left:2.5px solid #E5484D;"></span>
+            <span style="position:absolute; top:-2px; right:-2px; width:11px; height:11px; border-top:2.5px solid #E5484D; border-right:2.5px solid #E5484D;"></span>
+            <span style="position:absolute; bottom:-2px; left:-2px; width:11px; height:11px; border-bottom:2.5px solid #E5484D; border-left:2.5px solid #E5484D;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-bottom:2.5px solid #E5484D; border-right:2.5px solid #E5484D;"></span>
+            <div style="text-align:center; color:#E5484D; font-size:11px; font-weight:800; letter-spacing:3px;">⚔ GUILD WAR · WEEK 31</div>
+            <div style="height:1px; background:rgba(229,72,77,.3); margin:11px 0;"></div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="text-align:center;"><div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:24px;">8,420</div><div style="color:#E5484D; font-size:9px; font-weight:900; letter-spacing:1px;">ASH</div></div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+                <div style="height:8px; border-radius:4px; background:#0a0b10; overflow:hidden; display:flex;"><div style="width:58%; background:#E5484D;"></div><div style="flex:1;"></div><div style="width:42%; background:#4BA3FF;"></div></div>
+                <div style="color:#8a90a0; font-size:9px; font-weight:800; letter-spacing:1.2px; text-align:center;">ENDS SUNDAY 00:00 UTC</div>
+              </div>
+              <div style="text-align:center;"><div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:24px;">6,105</div><div style="color:#4BA3FF; font-size:9px; font-weight:900; letter-spacing:1px;">EYE</div></div>
+            </div>
+            <div style="margin-top:10px; display:flex; gap:8px;">
+              <div onClick="{{ wireContribute }}" style="flex:1; text-align:center; padding:9px 0; background:rgba(229,72,77,.14); border:1.5px solid rgba(229,72,77,.6); border-radius:3px; color:#ff8a8e; font-size:10px; font-weight:900; letter-spacing:1.4px; cursor:pointer;" style-hover="background:rgba(229,72,77,.24);">CONTRIBUTE — READ &amp; POST</div>
+              <div onClick="{{ wireWarHistory }}" style="flex:none; padding:9px 12px; border:1px solid #262b36; border-radius:3px; color:#8a90a0; font-size:10px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="border-color:rgba(229,72,77,.5);">HISTORY</div>
+            </div>
+          </div>
+          <!-- quick keys -->
+          <div style="display:flex; gap:8px; margin:12px 16px 0;">
+            <div onClick="{{ wireBoardPost }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:11px 0; background:#10121a; border:1px solid rgba(124,92,255,.4); border-radius:4px; cursor:pointer;" style-hover="background:rgba(124,92,255,.08);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span style="color:#ecedf2; font-size:9px; font-weight:900; letter-spacing:1px;">BOARD</span>
+            </div>
+            <div onClick="{{ goQuests }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:11px 0; background:#10121a; border:1px solid rgba(124,92,255,.4); border-radius:4px; position:relative; cursor:pointer;" style-hover="background:rgba(124,92,255,.08);">
+              <span style="color:#b7a6ff; font-size:15px; line-height:18px;">◆</span>
+              <span style="color:#ecedf2; font-size:9px; font-weight:900; letter-spacing:1px;">RAIDS</span>
+              <span style="position:absolute; top:6px; right:10px; width:7px; height:7px; border-radius:4px; background:#f5b84c;"></span>
+            </div>
+            <div onClick="{{ openRoster }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:11px 0; background:#10121a; border:1px solid rgba(124,92,255,.4); border-radius:4px; cursor:pointer;" style-hover="background:rgba(124,92,255,.08);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span style="color:#ecedf2; font-size:9px; font-weight:900; letter-spacing:1px;">ROSTER</span>
+            </div>
+            <div onClick="{{ manageGuild }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:11px 0; background:#10121a; border:1px solid rgba(124,92,255,.4); border-radius:4px; cursor:pointer;" style-hover="background:rgba(124,92,255,.08);">
+              <span style="color:#b7a6ff; font-size:15px; line-height:18px;">⚙</span>
+              <span style="color:#ecedf2; font-size:9px; font-weight:900; letter-spacing:1px;">MANAGE</span>
+            </div>
+          </div>
+          <!-- raid -->
+          <div onClick="{{ goQuests }}" style="margin:12px 16px 0; padding:12px 14px; background:#10121a; border:1px solid rgba(245,184,76,.4); border-radius:4px; cursor:pointer;" style-hover="background:rgba(245,184,76,.04);">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="color:#f5b84c; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">◆ GUILD RAID · WEEKLY</span>
+              <span style="margin-left:auto; color:#8a90a0; font-size:9px; font-weight:800;">RESETS 2D 6H</span>
+            </div>
+            <div style="color:#ecedf2; font-size:14px; font-weight:800; margin-top:6px;">Clear 400 chapters together</div>
+            <div style="height:7px; border-radius:4px; background:#0a0b10; overflow:hidden; margin-top:8px;"><div style="height:100%; width:71%; background:linear-gradient(90deg,#f5b84c,#ffd98a);"></div></div>
+            <div style="display:flex; justify-content:space-between; margin-top:5px;"><span style="color:#8a90a0; font-size:10.5px;">284 / 400 · your share <span style="color:#FFE09A; font-weight:800;">31</span></span><span style="color:#FFE09A; font-size:10px; font-weight:800;">☐ Frame: Ember Wreath</span></div>
+          </div>
+          <!-- board -->
+          <div style="margin:12px 16px 0; background:#10121a; border:1px solid #1c2029; border-radius:4px;">
+            <div style="display:flex; align-items:center; padding:10px 14px; border-bottom:1px solid #1c2029;">
+              <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">GUILD BOARD</span>
+              <span onClick="{{ wireBoardPost }}" style="margin-left:auto; color:#54D6FF; font-size:9.5px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="text-decoration:underline;">POST ▸</span>
+            </div>
+            <div style="padding:10px 14px; display:flex; gap:9px; border-bottom:1px solid #14161d;">
+              <div style="width:28px; height:28px; border-radius:8px; background:#F5B84C; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:11px; flex:none;">R</div>
+              <div style="flex:1;"><div style="display:flex; gap:6px; align-items:center;"><span style="color:#ecedf2; font-size:12.5px; font-weight:800;">rendral</span><span style="color:#f5b84c; font-size:8px; font-weight:900; letter-spacing:1px;">GUILDMASTER</span><span style="color:#8a90a0; font-size:10px; margin-left:auto;">12m</span></div><div style="color:#c9cdd8; font-size:12.5px; line-height:17px; margin-top:2px;">📌 War tiebreaker is comment count — hit the wall threads tonight!</div></div>
+            </div>
+            <div style="padding:10px 14px; display:flex; gap:9px; border-bottom:1px solid #14161d;">
+              <div style="width:28px; height:28px; border-radius:8px; background:#A86BFF; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:11px; flex:none;">K</div>
+              <div style="flex:1;"><div style="display:flex; gap:6px; align-items:center;"><span style="color:#ecedf2; font-size:12.5px; font-weight:800;">kazehunter</span><span style="color:#8a90a0; font-size:10px; margin-left:auto;">44m</span></div><div style="color:#c9cdd8; font-size:12.5px; line-height:17px; margin-top:2px;">dropped a megathread on the ch.112 sigil, come argue</div></div>
+            </div>
+            <div style="padding:10px 14px; display:flex; gap:9px;">
+              <div style="width:28px; height:28px; border-radius:8px; background:#4CC38A; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:11px; flex:none;">T</div>
+              <div style="flex:1;"><div style="display:flex; gap:6px; align-items:center;"><span style="color:#ecedf2; font-size:12.5px; font-weight:800;">tealeaf</span><span style="color:#b7a6ff; font-size:8px; font-weight:900; letter-spacing:1px;">OFFICER</span><span style="color:#8a90a0; font-size:10px; margin-left:auto;">1h</span></div><div style="color:#c9cdd8; font-size:12.5px; line-height:17px; margin-top:2px;">welcome the 3 new members from today's requests 👋</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ ROSTER ═══════════ -->
+    <sc-if value="{{ isRoster }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; animation:crtIn .28s ease-out;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:12px; flex:none;">
+          <span onClick="{{ backToHall }}" style="cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ecedf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          </span>
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(229,72,77,.6);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #E5484D; border-left:2px solid #E5484D;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #E5484D; border-right:2px solid #E5484D;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:16px; letter-spacing:1px;">ASH · ROSTER 48/50</span>
+          </div>
+          <span onClick="{{ inviteMember }}" style="margin-left:auto; cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" x2="19" y1="8" y2="14"></line><line x1="22" x2="16" y1="11" y2="11"></line></svg>
+          </span>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+          <sc-if value="{{ hasRequests }}" hint-placeholder-val="{{ true }}">
+            <div style="position:relative; margin:14px 16px 0; background:rgba(13,15,20,.97); border:1.5px solid rgba(245,184,76,.5); border-radius:3px; padding:12px; box-shadow:0 0 10px rgba(245,184,76,.15);">
+              <span style="position:absolute; top:-2px; left:-2px; width:9px; height:9px; border-top:2px solid #f5b84c; border-left:2px solid #f5b84c;"></span>
+              <span style="position:absolute; bottom:-2px; right:-2px; width:9px; height:9px; border-bottom:2px solid #f5b84c; border-right:2px solid #f5b84c;"></span>
+              <div style="color:#FFE09A; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">! JOIN REQUESTS · {{ requestCount }}</div>
+              <sc-for list="{{ guildRequests }}" as="rq" hint-placeholder-count="2">
+                <div style="display:flex; align-items:center; gap:9px; margin-top:10px;">
+                  <div style="width:30px; height:30px; border-radius:8px; background:{{ rq.bg }}; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:11px;">{{ rq.initial }}</div>
+                  <div style="flex:1;">
+                    <div style="display:flex; gap:6px; align-items:center;"><span style="color:#ecedf2; font-size:12.5px; font-weight:800;">{{ rq.name }}</span><span style="color:#f5b84c; font-size:9px; font-weight:900;">LV {{ rq.lv }}</span><span style="width:13px; height:13px; border-radius:3px; border:1.2px solid {{ rq.rankColor }}; background:{{ rq.rankBg }}; color:{{ rq.rankColor }}; font-size:7.5px; font-weight:900; display:inline-flex; align-items:center; justify-content:center;">{{ rq.rank }}</span></div>
+                    <div style="color:#8a90a0; font-size:10px; margin-top:1px;">{{ rq.meta }}</div>
+                  </div>
+                  <span onClick="{{ rq.accept }}" style="padding:6px 12px; background:rgba(76,195,138,.12); border:1.5px solid rgba(76,195,138,.55); border-radius:3px; color:#4cc38a; font-size:9px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="background:rgba(76,195,138,.24);">ACCEPT</span>
+                  <span onClick="{{ rq.reject }}" style="padding:6px 9px; border:1px solid #262b36; border-radius:3px; color:#8a90a0; font-size:10px; font-weight:800; cursor:pointer;" style-hover="border-color:#e5484d; color:#e5484d;">✕</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="display:flex; align-items:center; gap:6px; margin:14px 16px 0;">
+            <span style="color:#8a90a0; font-size:9px; font-weight:900; letter-spacing:1.8px;">MEMBERS</span>
+            <div style="flex:1; height:1px; background:#1c2029;"></div>
+            <span style="color:#b7a6ff; font-size:9.5px; font-weight:900;">WEEKLY GXP ◆</span>
+            <span onClick="{{ sortByRole }}" style="color:#8a90a0; font-size:9.5px; font-weight:800; cursor:pointer;">ROLE</span>
+          </div>
+          <sc-for list="{{ roster }}" as="m" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:10px; margin:8px 16px 0; padding:11px 12px; background:#10121a; border:1px solid #1c2029; border-radius:3px;">
+              <span style="color:#8a90a0; font-size:11px; font-weight:900; width:16px;">{{ m.n }}</span>
+              <div style="position:relative; width:34px; height:34px; flex:none;">
+                <div style="width:34px; height:34px; border-radius:9px; background:{{ m.bg }}; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:13px;">{{ m.initial }}</div>
+                <span style="position:absolute; bottom:-4px; right:-4px; width:14px; height:14px; border-radius:3px; border:1.2px solid {{ m.rankColor }}; background:#0a0b10; color:{{ m.rankColor }}; font-size:8px; font-weight:900; display:flex; align-items:center; justify-content:center;">{{ m.rank }}</span>
+              </div>
+              <div style="flex:1;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="color:#ecedf2; font-size:13px; font-weight:800;">{{ m.name }}</span>
+                  <sc-if value="{{ m.role }}" hint-placeholder-val="{{ false }}"><span style="background:{{ m.roleBg }}; border:1px solid {{ m.roleBorder }}; color:{{ m.roleColor }}; font-size:7.5px; font-weight:900; letter-spacing:1px; border-radius:2px; padding:1px 5px;">{{ m.role }}</span></sc-if>
+                  <sc-if value="{{ m.online }}" hint-placeholder-val="{{ false }}"><span style="width:6px; height:6px; border-radius:3px; background:#4cc38a;"></span></sc-if>
+                  <sc-if value="{{ m.you }}" hint-placeholder-val="{{ false }}"><span style="color:#8a90a0; font-size:9px;">you</span></sc-if>
+                </div>
+                <div style="color:#8a90a0; font-size:10px; margin-top:2px;">{{ m.total }} GXP total</div>
+              </div>
+              <div style="text-align:right;"><div style="color:{{ m.weekColor }}; font-size:12px; font-weight:900;">{{ m.week }}</div><div style="color:#8a90a0; font-size:8.5px; letter-spacing:1px;">THIS WEEK</div></div>
+              <sc-if value="{{ m.manageable }}" hint-placeholder-val="{{ false }}"><span onClick="{{ m.manage }}" style="color:#b7a6ff; font-size:16px; font-weight:900; padding-left:2px; cursor:pointer;" style-hover="opacity:.7;">⋯</span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <!-- ═══════════ ARENA (Dungeon sub-view) ═══════════ -->
+    <sc-if value="{{ isArena }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; animation:crtIn .28s ease-out;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:10px; flex:none;">
+          <span onClick="{{ backToFeed }}" style="cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ecedf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          </span>
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(245,184,76,.65);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #f5b84c; border-left:2px solid #f5b84c;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #f5b84c; border-right:2px solid #f5b84c;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px; letter-spacing:1px;">ARENA</span>
+          </div>
+          <span style="margin-left:auto; color:#8a90a0; font-size:10px; font-weight:800; letter-spacing:1.2px;">WEEK 31 · ENDS 2D 6H</span>
+        </div>
+        <sc-if value="{{ isQuiz }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+            <sc-if value="{{ quiz.done }}" hint-placeholder-val="{{ false }}">
+              <div style="position:relative; margin:60px 24px 0; background:rgba(13,15,20,.97); border:1.5px solid rgba(245,184,76,.6); border-radius:4px; padding:24px; text-align:center; box-shadow:0 0 18px rgba(245,184,76,.25); animation:crtIn .3s ease-out;">
+                <span style="position:absolute; top:-2px; left:-2px; width:11px; height:11px; border-top:2.5px solid #f5b84c; border-left:2.5px solid #f5b84c;"></span>
+                <span style="position:absolute; top:-2px; right:-2px; width:11px; height:11px; border-top:2.5px solid #f5b84c; border-right:2.5px solid #f5b84c;"></span>
+                <span style="position:absolute; bottom:-2px; left:-2px; width:11px; height:11px; border-bottom:2.5px solid #f5b84c; border-left:2.5px solid #f5b84c;"></span>
+                <span style="position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-bottom:2.5px solid #f5b84c; border-right:2.5px solid #f5b84c;"></span>
+                <div style="color:#FFE09A; font-size:10px; font-weight:900; letter-spacing:2.5px;">! QUIZ COMPLETE</div>
+                <div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:34px; margin-top:10px;">{{ quiz.scoreLabel }}</div>
+                <div style="color:#8a90a0; font-size:12px; margin-top:6px;">Rank pending — ties broken by speed</div>
+                <div onClick="{{ quiz.finish }}" style="margin-top:16px; padding:12px 0; background:linear-gradient(135deg,#7c5cff,#6247d1); border-radius:3px; color:#fff; font-size:11px; font-weight:900; letter-spacing:2px; cursor:pointer; box-shadow:0 3px 14px rgba(124,92,255,.5);" style-active="transform:scale(.98);">▸ SUBMIT SCORE</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ quiz.notDone }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; gap:10px; margin:16px 16px 0;">
+                <span style="color:#b7a6ff; font-size:10px; font-weight:900; letter-spacing:1.4px;">Q {{ quiz.qNum }} / {{ quiz.qTotal }}</span>
+                <div style="flex:1; height:5px; border-radius:3px; background:#10121a; overflow:hidden;"><div style="width:{{ quiz.progressW }}; height:100%; background:linear-gradient(90deg,#7c5cff,#b7a6ff); transition:width .3s;"></div></div>
+                <span style="color:#FFE09A; font-size:10px; font-weight:900;">SCORE {{ quiz.score }}</span>
+              </div>
+              <div style="position:relative; margin:14px 16px 0; background:#10121a; border:1.5px solid rgba(124,92,255,.5); border-radius:4px; padding:18px 16px;">
+                <span style="position:absolute; top:-2px; left:-2px; width:9px; height:9px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+                <span style="position:absolute; bottom:-2px; right:-2px; width:9px; height:9px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+                <div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:19px; line-height:24px;">{{ quiz.question }}</div>
+              </div>
+              <div style="margin:12px 16px 0; display:flex; flex-direction:column; gap:8px;">
+                <sc-for list="{{ quiz.opts }}" as="o" hint-placeholder-count="4">
+                  <div onClick="{{ o.pick }}" style="padding:13px 14px; background:{{ o.bg }}; border:{{ o.border }}; border-radius:3px; color:{{ o.color }}; font-size:13.5px; font-weight:700; cursor:pointer; transition:all .15s;" style-hover="border-color:rgba(124,92,255,.7);" style-active="transform:scale(.98);">{{ o.text }}</div>
+                </sc-for>
+              </div>
+              <div style="color:#8a90a0; font-size:10px; text-align:center; margin-top:14px;">90s total · ties broken by speed</div>
+            </sc-if>
+          </div>
+        </sc-if>
+        <sc-if value="{{ quizClosed }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+            <!-- live quiz card -->
+            <div style="position:relative; margin:14px 16px 0; background:linear-gradient(160deg, rgba(124,92,255,.2), #10121a 60%); border:1.5px solid rgba(124,92,255,.6); border-radius:4px; padding:16px 14px; box-shadow:0 0 16px rgba(124,92,255,.25);">
+              <span style="position:absolute; top:-2px; left:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff;"></span>
+              <span style="position:absolute; top:-2px; right:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff;"></span>
+              <span style="position:absolute; bottom:-2px; left:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff;"></span>
+              <span style="position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff;"></span>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="display:flex; align-items:center; gap:5px; background:rgba(76,195,138,.14); border:1px solid rgba(76,195,138,.5); border-radius:3px; padding:2px 8px;"><span style="width:6px; height:6px; border-radius:3px; background:#4cc38a; animation:pulseGlow 1.6s infinite;"></span><span style="color:#4cc38a; font-size:9px; font-weight:900; letter-spacing:1.2px;">LIVE</span></span>
+                <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">WEEKLY QUIZ</span>
+                <span style="margin-left:auto; color:#8a90a0; font-size:10px;">1,204 entries</span>
+              </div>
+              <div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:21px; margin-top:10px; line-height:25px;">Shadow Monarch's Return — 10 questions, 90 seconds</div>
+              <div style="color:#8a90a0; font-size:12px; margin-top:6px;">Top 10% earn the weekly title <span style="color:#FFE09A; font-weight:800;">"Gate Scholar"</span> + 500 XP</div>
+              <div style="display:flex; gap:8px; margin-top:14px;">
+                <div onClick="{{ enterQuiz }}" style="flex:1; text-align:center; padding:12px 0; background:linear-gradient(135deg,#7c5cff,#6247d1); border-radius:3px; box-shadow:0 3px 14px rgba(124,92,255,.5); color:#fff; font-size:12px; font-weight:900; letter-spacing:2px; cursor:pointer;" style-hover="filter:brightness(1.15);" style-active="transform:scale(.98);">▸ ENTER QUIZ</div>
+                <div onClick="{{ wireRules }}" style="flex:none; padding:12px 16px; border:1px solid #262b36; border-radius:3px; color:#8a90a0; font-size:11px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.5);">RULES</div>
+              </div>
+            </div>
+            <!-- draw comp -->
+            <div style="margin:12px 16px 0; background:#10121a; border:1px solid #1c2029; border-radius:4px; padding:14px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">DRAW COMPETITION</span>
+                <span style="margin-left:auto; background:rgba(245,184,76,.12); border:1px solid rgba(245,184,76,.5); color:#FFE09A; border-radius:3px; padding:2px 8px; font-size:9px; font-weight:900; letter-spacing:1px;">VOTING OPEN</span>
+              </div>
+              <div style="color:#ecedf2; font-size:15px; font-weight:800; margin-top:7px;">Theme: "The 8th Gate opens"</div>
+              <div style="display:flex; gap:8px; margin-top:10px;">
+                <div onClick="{{ voteArt1 }}" style="flex:1; height:86px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 8px,#171a21 8px 16px); border:1px solid #262b36; display:flex; align-items:flex-end; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);"><span style="color:#8a90a0; font-family:monospace; font-size:9px; padding:4px 6px;">entry art</span></div>
+                <div onClick="{{ voteArt2 }}" style="flex:1; height:86px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 8px,#171a21 8px 16px); border:1.5px solid rgba(124,92,255,.6); display:flex; align-items:flex-end; cursor:pointer;"><span style="color:#b7a6ff; font-family:monospace; font-size:9px; padding:4px 6px;">your vote ◆</span></div>
+                <div onClick="{{ voteArt3 }}" style="flex:1; height:86px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 8px,#171a21 8px 16px); border:1px solid #262b36; display:flex; align-items:flex-end; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);"><span style="color:#8a90a0; font-family:monospace; font-size:9px; padding:4px 6px;">entry art</span></div>
+              </div>
+              <div style="color:#8a90a0; font-size:10.5px; margin-top:8px;">37 entries · closes Saturday · winner's art badges their profile</div>
+            </div>
+            <!-- board -->
+            <div style="margin:12px 16px 0; background:#10121a; border:1px solid #1c2029; border-radius:4px; padding:14px;">
+              <div style="display:flex; align-items:center;">
+                <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">WEEKLY EXP BOARD</span>
+                <span onClick="{{ wireFullBoard }}" style="margin-left:auto; color:#54D6FF; font-size:9.5px; font-weight:900; cursor:pointer;" style-hover="text-decoration:underline;">FULL BOARD ▸</span>
+              </div>
+              <div style="display:flex; align-items:flex-end; gap:10px; margin-top:12px; justify-content:center;">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <div style="width:40px; height:40px; border-radius:12px; background:#4BA3FF; border:2px solid #C7CDD8; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900;">M</div>
+                  <span style="color:#ecedf2; font-size:10.5px; font-weight:700;">mothrose</span>
+                  <div style="width:64px; height:34px; background:linear-gradient(180deg, rgba(199,205,216,.25), rgba(199,205,216,.05)); border:1px solid rgba(199,205,216,.4); border-bottom:none; border-radius:3px 3px 0 0; display:flex; align-items:center; justify-content:center; color:#C7CDD8; font-family:'Bricolage Grotesque'; font-weight:800;">2</div>
+                </div>
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <span style="color:#FFE09A; font-size:14px;">♛</span>
+                  <div style="width:46px; height:46px; border-radius:13px; background:#A86BFF; border:2px solid #F5B84C; box-shadow:0 0 12px rgba(245,184,76,.5); display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:17px;">K</div>
+                  <span style="color:#ecedf2; font-size:10.5px; font-weight:800;">kazehunter</span>
+                  <div style="width:64px; height:50px; background:linear-gradient(180deg, rgba(245,184,76,.3), rgba(245,184,76,.06)); border:1px solid rgba(245,184,76,.55); border-bottom:none; border-radius:3px 3px 0 0; display:flex; align-items:center; justify-content:center; color:#FFE09A; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px;">1</div>
+                </div>
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <div style="width:40px; height:40px; border-radius:12px; background:#4CC38A; border:2px solid #d0a06a; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900;">T</div>
+                  <span style="color:#ecedf2; font-size:10.5px; font-weight:700;">tealeaf</span>
+                  <div style="width:64px; height:26px; background:linear-gradient(180deg, rgba(208,160,106,.25), rgba(208,160,106,.05)); border:1px solid rgba(208,160,106,.45); border-bottom:none; border-radius:3px 3px 0 0; display:flex; align-items:center; justify-content:center; color:#d0a06a; font-family:'Bricolage Grotesque'; font-weight:800;">3</div>
+                </div>
+              </div>
+              <div onClick="{{ wireFullBoard }}" style="display:flex; align-items:center; gap:8px; margin-top:2px; padding:8px 10px; background:rgba(124,92,255,.1); border:1px solid rgba(124,92,255,.4); border-radius:3px; cursor:pointer;">
+                <span style="color:#b7a6ff; font-size:10px; font-weight:900;">#47</span>
+                <span style="color:#ecedf2; font-size:11.5px; font-weight:700;">you</span>
+                <span style="margin-left:auto; color:#8a90a0; font-size:10.5px;">1,840 XP this week · <span style="color:#b7a6ff; font-weight:800;">+3 ▲</span></span>
+              </div>
+            </div>
+            <!-- pool -->
+            <div style="margin:12px 16px 0; background:#10121a; border:1px solid #1c2029; border-radius:4px; padding:14px;">
+              <div style="display:flex; align-items:center;">
+                <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">PREDICTION POOL</span>
+                <span style="margin-left:auto; color:#8a90a0; font-size:10px;">closes Fri · 891 votes</span>
+              </div>
+              <div style="color:#ecedf2; font-size:14px; font-weight:700; margin-top:7px;">Does the Monarch survive ch.113?</div>
+              <div style="display:flex; gap:8px; margin-top:9px;">
+                <div onClick="{{ poolYes }}" style="flex:1; text-align:center; padding:9px 0; border:1.5px solid rgba(76,195,138,.55); background:rgba(76,195,138,.1); border-radius:3px; color:#4cc38a; font-size:11px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="background:rgba(76,195,138,.2);">YES · 71%</div>
+                <div onClick="{{ poolNo }}" style="flex:1; text-align:center; padding:9px 0; border:1px solid #262b36; border-radius:3px; color:#8a90a0; font-size:11px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.5);">NO · 29%</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ STATUS ═══════════ -->
+    <sc-if value="{{ isStatus }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; flex:none;">
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(124,92,255,.65);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px; letter-spacing:1px;">STATUS</span>
+          </div>
+          <span onClick="{{ openNotifs }}" style="margin-left:auto; cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+          </span>
+          <span onClick="{{ wireSettings }}" style="margin-left:14px; color:#8a90a0; font-size:18px; cursor:pointer;" style-hover="opacity:.7;">⚙</span>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:14px; padding:18px 20px 0;">
+            <div style="position:relative; width:88px; height:88px; flex:none;">
+              <svg width="88" height="88" viewBox="0 0 88 88" style="position:absolute; inset:0; transform:rotate(-90deg);"><circle cx="44" cy="44" r="41" stroke="#171a21" stroke-width="5" fill="none"></circle><circle cx="44" cy="44" r="41" stroke="#7c5cff" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="258" stroke-dashoffset="67"></circle></svg>
+              <div style="position:absolute; inset:10px; border-radius:50%; background:#A86BFF; display:flex; align-items:center; justify-content:center; color:#0B0B11; font-weight:900; font-size:30px;">K</div>
+              <span style="position:absolute; bottom:-4px; right:-4px; width:26px; height:26px; border-radius:7px; border:1.5px solid #F5B84C; background:#0a0b10; color:#F5B84C; font-size:13px; font-weight:900; display:flex; align-items:center; justify-content:center; box-shadow:0 0 8px rgba(245,184,76,.45);">A</span>
+            </div>
+            <div style="flex:1;">
+              <div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:24px;">kazehunter</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:3px;">
+                <span style="border:1px solid #F5B84C; background:rgba(245,184,76,.16); color:#FFE09A; border-radius:3px; padding:1px 7px; font-size:9.5px; font-weight:800; letter-spacing:.7px;">BINGE LORD</span>
+                <span onClick="{{ goGuild }}" style="color:#E5484D; font-size:9.5px; font-weight:900; cursor:pointer;">[ASH]</span>
+              </div>
+              <div style="display:flex; align-items:baseline; gap:6px; margin-top:7px;">
+                <span style="color:#f5b84c; font-family:'Bricolage Grotesque'; font-weight:800; font-size:16px;">LV 41</span>
+                <span style="color:#8a90a0; font-size:10.5px;">74% · 2,900 XP to LV 42</span>
+              </div>
+            </div>
+          </div>
+          <!-- hunter record -->
+          <div style="position:relative; background:rgba(13,15,20,.97); border:1.5px solid rgba(124,92,255,.5); border-radius:4px; margin:18px 16px 0; padding:16px 14px; box-shadow:0 0 12px rgba(124,92,255,.22);">
+            <span style="position:absolute; top:-2px; left:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff;"></span>
+            <span style="position:absolute; top:-2px; right:-2px; width:11px; height:11px; border-top:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; left:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-left:2.5px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-bottom:2.5px solid #b7a6ff; border-right:2.5px solid #b7a6ff;"></span>
+            <div style="display:flex; align-items:center; justify-content:center; gap:9px;">
+              <span style="width:15px; height:15px; border:1.5px solid #b7a6ff; transform:rotate(45deg); display:inline-flex; align-items:center; justify-content:center;"><span style="color:#b7a6ff; font-size:9px; font-weight:900; transform:rotate(-45deg);">!</span></span>
+              <span style="color:#b7a6ff; font-size:11px; font-weight:800; letter-spacing:3.5px;">HUNTER RECORD</span>
+            </div>
+            <div style="height:1px; background:rgba(124,92,255,.35); margin:12px 0;"></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px 8px;">
+              <div style="text-align:center;"><div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:19px;">2,431</div><div style="color:#8a90a0; font-size:9.5px; letter-spacing:1px; margin-top:2px;">CHAPTERS</div></div>
+              <div style="text-align:center;"><div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:19px;">312</div><div style="color:#8a90a0; font-size:9.5px; letter-spacing:1px; margin-top:2px;">RECORDS</div></div>
+              <div style="text-align:center;"><div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:19px;">1,208</div><div style="color:#8a90a0; font-size:9.5px; letter-spacing:1px; margin-top:2px;">REACTIONS</div></div>
+              <div style="text-align:center;"><div style="color:#FFE09A; font-family:'Bricolage Grotesque'; font-weight:800; font-size:19px;">9/14</div><div style="color:#8a90a0; font-size:9.5px; letter-spacing:1px; margin-top:2px;">BADGES</div></div>
+              <div style="text-align:center;"><div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:19px;">418</div><div style="color:#8a90a0; font-size:9.5px; letter-spacing:1px; margin-top:2px;">DAY STREAK</div></div>
+              <div style="text-align:center;"><div style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:19px;">#47</div><div style="color:#8a90a0; font-size:9.5px; letter-spacing:1px; margin-top:2px;">WEEKLY RANK</div></div>
+            </div>
+          </div>
+          <!-- equipped -->
+          <div style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.8px; padding:18px 20px 8px;">EQUIPPED</div>
+          <div style="display:flex; gap:8px; padding:0 16px;">
+            <div onClick="{{ equipTitle }}" style="flex:1; background:#10121a; border:1px solid rgba(245,184,76,.45); border-radius:4px; padding:10px; display:flex; flex-direction:column; gap:4px; cursor:pointer;" style-hover="background:rgba(245,184,76,.05);">
+              <span style="color:#8a90a0; font-size:8px; font-weight:900; letter-spacing:1.4px;">TITLE</span>
+              <span style="color:#FFE09A; font-size:11.5px; font-weight:800;">Binge Lord</span>
+              <span style="color:#8a90a0; font-size:9px;">legendary · 12 owned</span>
+            </div>
+            <div onClick="{{ equipFrame }}" style="flex:1; background:#10121a; border:1px solid rgba(245,184,76,.45); border-radius:4px; padding:10px; display:flex; flex-direction:column; gap:4px; cursor:pointer;" style-hover="background:rgba(245,184,76,.05);">
+              <span style="color:#8a90a0; font-size:8px; font-weight:900; letter-spacing:1.4px;">FRAME</span>
+              <span style="color:#FFE09A; font-size:11.5px; font-weight:800;">♛ Crown</span>
+              <span style="color:#8a90a0; font-size:9px;">legendary · 6 owned</span>
+            </div>
+            <div onClick="{{ equipAvatar }}" style="flex:1; background:#10121a; border:1px solid #262b36; border-radius:4px; padding:10px; display:flex; flex-direction:column; gap:4px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.5);">
+              <span style="color:#8a90a0; font-size:8px; font-weight:900; letter-spacing:1.4px;">AVATAR</span>
+              <span style="color:#D6B7FF; font-size:11.5px; font-weight:800;">Violet Sigil</span>
+              <span style="color:#8a90a0; font-size:9px;">epic · 9 owned</span>
+            </div>
+          </div>
+          <!-- badges -->
+          <div style="display:flex; align-items:center; padding:18px 20px 8px;">
+            <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.8px;">BADGES · 9/14</span>
+            <span onClick="{{ badgeAll }}" style="margin-left:auto; color:#54D6FF; font-size:9.5px; font-weight:900; cursor:pointer;" style-hover="text-decoration:underline;">ALL ▸</span>
+          </div>
+          <div style="display:flex; gap:10px; padding:0 16px; overflow-x:auto;">
+            <div onClick="{{ badge1 }}" style="flex:none; width:64px; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;"><span style="width:52px; height:52px; border-radius:50%; border:2px solid #f5b84c; box-shadow:0 0 10px rgba(245,184,76,.5); display:inline-flex; align-items:center; justify-content:center; font-size:22px; background:#10121a;">📖</span><span style="color:#8a90a0; font-size:9px; text-align:center;">Chapter 100</span></div>
+            <div onClick="{{ badge2 }}" style="flex:none; width:64px; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;"><span style="width:52px; height:52px; border-radius:50%; border:2px solid #4BA3FF; box-shadow:0 0 10px rgba(75,163,255,.4); display:inline-flex; align-items:center; justify-content:center; font-size:22px; background:#10121a;">💬</span><span style="color:#8a90a0; font-size:9px; text-align:center;">Loudmouth</span></div>
+            <div onClick="{{ badge3 }}" style="flex:none; width:64px; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;"><span style="width:52px; height:52px; border-radius:50%; border:2px solid #A86BFF; box-shadow:0 0 10px rgba(168,107,255,.4); display:inline-flex; align-items:center; justify-content:center; font-size:22px; background:#10121a;">🌙</span><span style="color:#8a90a0; font-size:9px; text-align:center;">Night Owl</span></div>
+            <div onClick="{{ badge4 }}" style="flex:none; width:64px; display:flex; flex-direction:column; align-items:center; gap:4px; opacity:.35; cursor:pointer;"><span style="width:52px; height:52px; border-radius:50%; border:2px solid #262b36; display:inline-flex; align-items:center; justify-content:center; font-size:22px; background:#10121a;">🏆</span><span style="color:#8a90a0; font-size:9px; text-align:center;">Arena Victor</span></div>
+            <div onClick="{{ badge5 }}" style="flex:none; width:64px; display:flex; flex-direction:column; align-items:center; gap:4px; opacity:.35; cursor:pointer;"><span style="width:52px; height:52px; border-radius:50%; border:2px solid #262b36; display:inline-flex; align-items:center; justify-content:center; font-size:22px; background:#10121a;">⚔</span><span style="color:#8a90a0; font-size:9px; text-align:center;">War Hero</span></div>
+          </div>
+          <!-- today's quests -->
+          <div style="margin:16px 16px 0; background:#10121a; border:1px solid #1c2029; border-radius:4px; padding:12px 14px;">
+            <div style="display:flex; align-items:center;">
+              <span style="color:#8a90a0; font-size:9.5px; font-weight:900; letter-spacing:1.6px;">TODAY'S QUESTS · 2/3</span>
+              <span onClick="{{ goQuests }}" style="margin-left:auto; color:#54D6FF; font-size:9.5px; font-weight:900; cursor:pointer;" style-hover="text-decoration:underline;">ALL QUESTS ▸</span>
+            </div>
+            <sc-for list="{{ questRows }}" as="q" hint-placeholder-count="3">
+              <div onClick="{{ q.go }}" style="display:flex; align-items:center; gap:10px; margin-top:9px; cursor:pointer;">
+                <sc-if value="{{ q.done }}" hint-placeholder-val="{{ false }}"><span style="color:#4cc38a; font-size:13px;">✓</span></sc-if>
+                <sc-if value="{{ q.notDone }}" hint-placeholder-val="{{ true }}"><span style="width:12px; height:12px; border:1.5px solid #7c5cff; border-radius:2px; flex:none;"></span></sc-if>
+                <span style="color:{{ q.nameColor }}; font-size:12.5px; font-weight:600; flex:1; text-decoration:{{ q.deco }};">{{ q.name }}</span>
+                <span style="color:{{ q.xpColor }}; font-size:10px; font-weight:800;">{{ q.xp }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ QUEST LOG ═══════════ -->
+    <sc-if value="{{ isQuests }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; animation:crtIn .28s ease-out;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:12px; flex:none;">
+          <span onClick="{{ backToStatus }}" style="cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ecedf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          </span>
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(245,184,76,.65);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #f5b84c; border-left:2px solid #f5b84c;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #f5b84c; border-right:2px solid #f5b84c;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px; letter-spacing:1px;">QUEST LOG</span>
+          </div>
+          <span style="margin-left:auto; color:#8a90a0; font-size:10px; font-weight:800;">RESET 14:22:08</span>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:10px; margin:12px 16px 0; padding:10px 12px; background:#10121a; border:1px solid rgba(124,92,255,.35); border-radius:3px;">
+            <span style="color:#b7a6ff; font-size:12px;">◆◆◇</span>
+            <span style="color:#ecedf2; font-size:11.5px; font-weight:700; flex:1;">Clear all 3 dailies → chain bonus</span>
+            <span style="color:#FFE09A; font-size:10px; font-weight:900;">+100 XP</span>
+          </div>
+          <div onClick="{{ questDetail1 }}" style="position:relative; margin:12px 16px 0; padding:13px 14px; background:rgba(245,184,76,.05); border:1px solid rgba(245,184,76,.5); border-radius:3px; cursor:pointer;">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <span style="width:22px; height:22px; border-radius:3px; background:rgba(245,184,76,.15); border:1.5px solid #f5b84c; display:inline-flex; align-items:center; justify-content:center; color:#f5b84c; font-size:12px; font-weight:900;">✓</span>
+              <div style="flex:1;">
+                <div style="color:#ecedf2; font-size:14.5px; font-weight:800; text-decoration:line-through; opacity:.7;">First Read of the Day</div>
+                <div style="color:#8a90a0; font-size:11px; margin-top:2px;">Finish one chapter of any series</div>
+              </div>
+              <span style="color:#f5b84c; font-size:9.5px; font-weight:900; letter-spacing:1px;">CLAIMED +40 XP</span>
+            </div>
+          </div>
+          <div style="position:relative; margin:8px 16px 0; padding:13px 14px; background:#10121a; border:1px solid rgba(124,92,255,.4); border-radius:3px;">
+            <span style="position:absolute; top:-1.5px; left:-1.5px; width:9px; height:9px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-1.5px; right:-1.5px; width:9px; height:9px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+            <div style="display:flex; align-items:center; gap:9px;">
+              <span style="width:22px; height:22px; border-radius:3px; border:1.5px solid #7c5cff; display:inline-flex; align-items:center; justify-content:center; color:#b7a6ff; font-size:10px; font-weight:900;">!</span>
+              <div style="flex:1;">
+                <div style="color:#ecedf2; font-size:14.5px; font-weight:800;">Dungeon Chatter</div>
+                <div style="color:#8a90a0; font-size:11px; margin-top:2px;">Leave 3 comments on posts or chapters</div>
+              </div>
+              <span style="color:#b7a6ff; font-size:12px; font-weight:900;">1/3</span>
+            </div>
+            <div style="height:6px; border-radius:3px; background:#0a0b10; overflow:hidden; margin-top:10px;"><div style="height:100%; width:33%; background:linear-gradient(90deg,#7c5cff,#b7a6ff);"></div></div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:9px;">
+              <span style="border:1px solid #8992A3; color:#C7CDD8; border-radius:2px; padding:2px 7px; font-size:9px; font-weight:800;">+60 XP</span>
+              <span onClick="{{ goDungeon }}" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; padding:6px 12px; background:rgba(124,92,255,.14); border:1px solid rgba(124,92,255,.55); border-radius:3px; color:#b7a6ff; font-size:9.5px; font-weight:900; letter-spacing:1px; cursor:pointer;" style-hover="background:rgba(124,92,255,.26);">GO TO DUNGEON ▸</span>
+            </div>
+          </div>
+          <div onClick="{{ questDetail2 }}" style="margin:14px 16px 0; padding:13px 14px; background:linear-gradient(160deg, rgba(168,107,255,.12), #10121a 60%); border:1px solid rgba(168,107,255,.5); border-radius:3px; cursor:pointer;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="color:#D6B7FF; font-size:9px; font-weight:900; letter-spacing:1.6px;">WEEKLY · EPIC REWARD</span>
+              <span style="margin-left:auto; color:#8a90a0; font-size:9px; font-weight:800;">RESETS 2D 6H</span>
+            </div>
+            <div style="color:#ecedf2; font-size:15px; font-weight:800; margin-top:7px;">Marathon Reader — 20 chapters</div>
+            <div style="height:6px; border-radius:3px; background:#0a0b10; overflow:hidden; margin-top:9px;"><div style="height:100%; width:60%; background:linear-gradient(90deg,#A86BFF,#D6B7FF);"></div></div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:9px;">
+              <span style="color:#8a90a0; font-size:10.5px;">12 / 20</span>
+              <span style="margin-left:auto; border:1px solid #F5B84C; color:#FFE09A; border-radius:2px; padding:2px 7px; font-size:9px; font-weight:800;">TITLE: BINGE LORD</span>
+              <span style="border:1px solid #8992A3; color:#C7CDD8; border-radius:2px; padding:2px 7px; font-size:9px; font-weight:800;">+250 XP</span>
+            </div>
+          </div>
+          <div onClick="{{ goQuests }}" style="margin:12px 16px 0; padding:13px 14px; background:#10121a; border:1px solid #1c2029; border-radius:3px;">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <span style="width:22px; height:22px; border-radius:3px; border:1.5px solid #262b36; display:inline-flex; align-items:center; justify-content:center; color:#8a90a0; font-size:10px; font-weight:900;">!</span>
+              <div style="flex:1;">
+                <div style="color:#ecedf2; font-size:14.5px; font-weight:800;">Guild Raid — Clear 400 chapters</div>
+                <div style="color:#8a90a0; font-size:11px; margin-top:2px;">Shared with Ashen Covenant · 284/400</div>
+              </div>
+              <span style="color:#FFE09A; font-size:9px; font-weight:800; border:1px solid rgba(245,184,76,.5); border-radius:2px; padding:2px 7px;">FRAME</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <!-- ═══════════ ARCHIVE (shelf) ═══════════ -->
+    <sc-if value="{{ isArchive }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:10px; flex:none;">
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(124,92,255,.65);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px; letter-spacing:1px;">ARCHIVE</span>
+          </div>
+          <div onClick="{{ openHistory }}" style="display:flex; align-items:center; gap:5px; padding:5px 11px; border:1px solid #262b36; border-radius:3px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.6);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
+            <span style="color:#b7a6ff; font-size:9.5px; font-weight:900; letter-spacing:1px;">HISTORY</span>
+          </div>
+          <span onClick="{{ wireSync }}" style="margin-left:auto; display:flex; align-items:center; gap:5px; cursor:pointer;" style-hover="opacity:.7;">
+            <span style="width:6px; height:6px; border-radius:3px; background:#4cc38a;"></span>
+            <span style="color:#4cc38a; font-size:9.5px; font-weight:800; letter-spacing:1px;">SYNCED</span>
+          </span>
+        </div>
+        <!-- resume -->
+        <div onClick="{{ resume.open }}" style="margin:12px 16px 0; flex:none; position:relative; background:#10121a; border:1.5px solid rgba(124,92,255,.5); border-radius:3px; padding:12px; display:flex; align-items:center; gap:12px; box-shadow:0 0 12px rgba(124,92,255,.18); cursor:pointer;" style-hover="border-color:rgba(124,92,255,.8);">
+          <span style="position:absolute; top:-2px; left:-2px; width:9px; height:9px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+          <span style="position:absolute; bottom:-2px; right:-2px; width:9px; height:9px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+          <div style="width:48px; height:66px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 6px,#171a21 6px 12px); border:1px solid #262b36; flex:none;"></div>
+          <div style="flex:1;">
+            <div style="color:#b7a6ff; font-size:8.5px; font-weight:900; letter-spacing:1.6px;">RESUME EXPEDITION</div>
+            <div style="color:#ecedf2; font-size:14px; font-weight:800; margin-top:3px;">{{ resume.title }}</div>
+            <div style="color:#8a90a0; font-size:11px; margin-top:2px;">Ch.{{ resume.ch }} · page {{ resume.page }} of {{ resume.pages }} · {{ resume.last }}</div>
+            <div style="height:4px; border-radius:2px; background:#0a0b10; overflow:hidden; margin-top:6px;"><div style="width:{{ resume.barW }}; height:100%; background:#7c5cff;"></div></div>
+          </div>
+          <div style="width:42px; height:42px; border-radius:3px; background:linear-gradient(135deg,#7c5cff,#6247d1); display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(124,92,255,.45); flex:none;">
+            <svg viewBox="0 0 24 24" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round" style="width:16px; height:16px;"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+          </div>
+        </div>
+        <!-- shelf chips -->
+        <div style="display:flex; gap:4px; margin:12px 16px 0; flex:none;">
+          <sc-for list="{{ shelfChips }}" as="c" hint-placeholder-count="4">
+            <div onClick="{{ c.set }}" style="flex:none; padding:8px 12px; background:{{ c.bg }}; border:{{ c.border }}; border-radius:3px; cursor:pointer;">
+              <span style="color:{{ c.color }}; font-size:10px; font-weight:900; letter-spacing:1px;">{{ c.dot }}{{ c.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <!-- grid -->
+        <div style="flex:1; overflow-y:auto;">
+          <div style="display:flex; flex-wrap:wrap; gap:12px; padding:14px 16px 20px;">
+            <sc-for list="{{ shelf }}" as="s" hint-placeholder-count="4">
+              <div onClick="{{ s.open }}" style="width:104px; cursor:pointer;" style-hover="opacity:.88;">
+                <div style="position:relative; width:104px; height:146px; border:1px solid #262b36; background:repeating-linear-gradient(45deg,#1b1f29 0 8px,#171a21 8px 16px);">
+                  <sc-if value="{{ s.unread }}" hint-placeholder-val="{{ false }}">
+                    <span style="position:absolute; top:-6px; right:-6px; min-width:20px; height:20px; border-radius:3px; background:#7c5cff; border:1.5px solid #0a0b10; color:#fff; font-size:9.5px; font-weight:900; display:flex; align-items:center; justify-content:center; padding:0 4px; box-shadow:0 0 8px rgba(124,92,255,.5);">{{ s.unreadLabel }}</span>
+                  </sc-if>
+                  <span onClick="{{ s.toggleFav }}" style="position:absolute; top:5px; left:5px; width:22px; height:22px; border-radius:3px; background:rgba(10,11,16,.8); display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="transform:scale(1.15);">
+                    <svg viewBox="0 0 24 24" fill="{{ s.favFill }}" stroke="{{ s.favColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px; height:13px;"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>
+                  </span>
+                  <div style="position:absolute; left:0; right:0; bottom:0; height:3px; background:#0a0b10;"><div style="width:{{ s.barW }}; height:100%; background:{{ s.barColor }};"></div></div>
+                </div>
+                <div style="color:#ecedf2; font-size:11px; font-weight:700; margin-top:6px; line-height:14px;">{{ s.title }}</div>
+                <div style="color:#8a90a0; font-size:9.5px; margin-top:2px;">{{ s.chLabel }}</div>
+              </div>
+            </sc-for>
+            <div onClick="{{ addSeries }}" style="width:104px; cursor:pointer;">
+              <div style="width:104px; height:146px; border:1.5px dashed #262b36; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;" style-hover="border-color:rgba(124,92,255,.6);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#8a90a0" stroke-width="2" stroke-linecap="round" style="width:20px; height:20px;"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                <span style="color:#8a90a0; font-size:9px; font-weight:800; letter-spacing:1px;">ADD SERIES</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ HISTORY ═══════════ -->
+    <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; animation:crtIn .28s ease-out;">
+        <div style="padding:8px 16px 0; display:flex; align-items:center; gap:12px; flex:none;">
+          <span onClick="{{ backToShelf }}" style="cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ecedf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          </span>
+          <div style="position:relative; padding:2px 10px; border:1.5px solid rgba(124,92,255,.65);">
+            <span style="position:absolute; top:-2px; left:-2px; width:7px; height:7px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+            <span style="position:absolute; bottom:-2px; right:-2px; width:7px; height:7px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+            <span style="color:#ecedf2; font-family:'Bricolage Grotesque'; font-weight:800; font-size:18px; letter-spacing:1px;">EXPEDITION LOG</span>
+          </div>
+          <span onClick="{{ clearHistory }}" style="margin-left:auto; color:#8a90a0; font-size:9px; font-weight:800; letter-spacing:1.2px; cursor:pointer;" style-hover="color:#e5484d;">CLEAR</span>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding-bottom:16px;">
+          <sc-for list="{{ historyRows }}" as="h" hint-placeholder-count="5">
+            <div onClick="{{ h.open }}" style="display:flex; align-items:center; gap:11px; margin:10px 16px 0; padding:11px 12px; background:#10121a; border:1px solid #1c2029; border-radius:3px; cursor:pointer;" style-hover="border-color:rgba(124,92,255,.5);">
+              <div style="width:34px; height:46px; border-radius:3px; background:repeating-linear-gradient(45deg,#1b1f29 0 5px,#171a21 5px 10px); border:1px solid #262b36; flex:none;"></div>
+              <div style="flex:1;">
+                <div style="color:#ecedf2; font-size:13px; font-weight:800;">{{ h.series }}</div>
+                <div style="color:#8a90a0; font-size:10.5px; margin-top:2px;">{{ h.pageLabel }}</div>
+                <div style="height:3px; border-radius:2px; background:#0a0b10; overflow:hidden; margin-top:6px; max-width:160px;"><div style="width:{{ h.pctW }}; height:100%; background:#7c5cff;"></div></div>
+              </div>
+              <div style="text-align:right;">
+                <div style="color:#8a90a0; font-size:9.5px;">{{ h.when }}</div>
+                <div style="color:#54D6FF; font-size:9px; font-weight:900; letter-spacing:1px; margin-top:6px;">RESUME ▸</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ READER ═══════════ -->
+    <sc-if value="{{ isReader }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; background:#000; animation:crtIn .28s ease-out;">
+        <div style="padding:8px 16px; display:flex; align-items:center; gap:12px; flex:none; background:#0a0b10; border-bottom:1px solid #1c2029;">
+          <span onClick="{{ readerData.exit }}" style="cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ecedf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+          </span>
+          <div style="flex:1;">
+            <div style="color:#ecedf2; font-size:13px; font-weight:800;">{{ readerData.title }}</div>
+            <div style="color:#b7a6ff; font-size:10px; font-weight:700;">{{ readerData.chLabel }}</div>
+          </div>
+          <span onClick="{{ readerData.comment }}" style="cursor:pointer;" style-hover="opacity:.7;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#b7a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px; height:18px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          </span>
+        </div>
+        <div style="flex:1; position:relative; display:flex;">
+          <div onClick="{{ readerData.prev }}" style="position:absolute; left:0; top:0; bottom:0; width:35%; z-index:5; cursor:w-resize;"></div>
+          <div onClick="{{ readerData.next }}" style="position:absolute; right:0; top:0; bottom:0; width:35%; z-index:5; cursor:e-resize;"></div>
+          <div style="flex:1; margin:14px; background:repeating-linear-gradient(45deg,#14161d 0 14px,#10121a 14px 28px); border:1px solid #1c2029; display:flex; align-items:center; justify-content:center;">
+            <span style="color:#3a3f4e; font-family:monospace; font-size:11px;">manga page — tap sides to turn</span>
+          </div>
+        </div>
+        <div style="padding:10px 16px 16px; flex:none; background:#0a0b10; border-top:1px solid #1c2029;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="color:#8a90a0; font-size:10px; font-weight:800; letter-spacing:1px;">{{ readerData.pageLabel }}</span>
+            <div style="flex:1; height:4px; border-radius:2px; background:#171a21; overflow:hidden;"><div style="width:{{ readerData.pctW }}; height:100%; background:#7c5cff; transition:width .2s;"></div></div>
+            <span onClick="{{ readerData.exit }}" style="color:#54D6FF; font-size:9px; font-weight:900; letter-spacing:1px; cursor:pointer;">SAVE &amp; EXIT ▸</span>
+          </div>
+          <div style="color:#8a90a0; font-size:9px; text-align:center; margin-top:7px;">progress auto-saves · +XP on chapter clear · counts toward war points</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ TOAST (wiring hint) ═══════════ -->
+    <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; left:24px; right:24px; bottom:130px; z-index:60; animation:toastIn .3s ease-out;">
+        <div style="position:relative; background:rgba(13,15,20,.97); border:1.5px solid rgba(124,92,255,.65); border-radius:4px; padding:11px 14px; box-shadow:0 0 18px rgba(124,92,255,.45);">
+          <span style="position:absolute; top:-2px; left:-2px; width:9px; height:9px; border-top:2px solid #b7a6ff; border-left:2px solid #b7a6ff;"></span>
+          <span style="position:absolute; bottom:-2px; right:-2px; width:9px; height:9px; border-bottom:2px solid #b7a6ff; border-right:2px solid #b7a6ff;"></span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="width:14px; height:14px; border:1.5px solid #b7a6ff; transform:rotate(45deg); display:inline-flex; align-items:center; justify-content:center; flex:none;"><span style="color:#b7a6ff; font-size:8px; font-weight:900; transform:rotate(-45deg);">!</span></span>
+            <span style="color:#b7a6ff; font-size:9px; font-weight:900; letter-spacing:1.6px;">WIRE</span>
+            <span style="color:#ecedf2; font-size:11.5px; font-family:monospace; flex:1;">{{ toastMsg }}</span>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══════════ COMMAND BAR ═══════════ -->
+    <div style="position:relative; flex:none; border-top:1.5px solid rgba(124,92,255,.45); background:#0a0b10; display:flex; align-items:flex-end; padding:10px 8px 18px; z-index:40;">
+      <div onClick="{{ goHome }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="{{ cHome }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:21px; height:21px;"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+        <span style="color:{{ cHome }}; font-size:9px; font-weight:800; letter-spacing:1.4px;">HOME</span>
+      </div>
+      <div onClick="{{ goArchive }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="{{ cArchive }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:21px; height:21px;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+        <span style="color:{{ cArchive }}; font-size:9px; font-weight:800; letter-spacing:1.4px;">ARCHIVE</span>
+      </div>
+      <div onClick="{{ goDungeon }}" style="flex:1; display:flex; flex-direction:column; align-items:center; position:relative; top:-18px; cursor:pointer;">
+        <div style="width:58px; height:58px; transform:rotate(45deg); background:#0d0f14; border:2px solid {{ dungeonKeyBorder }}; border-radius:10px; display:flex; align-items:center; justify-content:center; box-shadow:{{ dungeonKeyGlow }};">
+          <span style="transform:rotate(-45deg); color:{{ cDungeon }}; font-size:22px; line-height:1;">⚔</span>
+        </div>
+        <span style="color:{{ cDungeon }}; font-size:9px; font-weight:900; letter-spacing:1.4px; margin-top:10px;">DUNGEON</span>
+      </div>
+      <div onClick="{{ goGuild }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="{{ cGuild }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:21px; height:21px;"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>
+        <span style="color:{{ cGuild }}; font-size:9px; font-weight:800; letter-spacing:1.4px;">GUILD</span>
+      </div>
+      <div onClick="{{ goStatus }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; position:relative;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="{{ cStatus }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:21px; height:21px;"><circle cx="12" cy="8" r="5"></circle><path d="M20 21a8 8 0 0 0-16 0"></path></svg>
+        <span style="color:{{ cStatus }}; font-size:9px; font-weight:800; letter-spacing:1.4px;">STATUS</span>
+        <span style="position:absolute; top:-2px; right:24%; width:8px; height:8px; border-radius:4px; background:#e5484d; border:1.5px solid #0a0b10;"></span>
+      </div>
+    </div>
+  </div>
+
+  <div style="color:#8a90a0; font-size:12px; max-width:560px; text-align:center; line-height:18px;">Arena lives inside the Dungeon key (FEED / ARENA sub-tabs) so the Archive gets its own key. Reading progress, favorites and history persist locally.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem("sp-proto") || "{}"); } catch (e) {}
+    this.state = {
+      tab: saved.tab || "home",
+      search: false, query: "",
+      statusFilter: "all",
+      recents: ["murim regression", "tower climb", "tea house"],
+      // dungeon
+      dungeonView: "feed", feedFilter: "ALL", sort: "HOT",
+      activeThread: null, composer: false, composeKind: "THEORY", composeText: "", spoiler: false,
+      posts: this.seedPosts(),
+      polls: { p3: { voted: null, opts: [{ id: "a", text: "The twins", pct: 64 }, { id: "b", text: "The Monarch himself", pct: 36 }] } },
+      // guild
+      guildView: "hall", requests: [
+        { id: "r1", name: "veilpiercer", lv: 22, rank: "B", rankColor: "#A86BFF", bg: "#4BA3FF", meta: "812 chapters read · applied 2h ago" },
+        { id: "r2", name: "newpage", lv: 6, rank: "D", rankColor: "#6FBF8F", bg: "#8992A3", meta: "44 chapters read · applied 1d ago" },
+      ],
+      // arena
+      arenaView: "main", quizIdx: 0, quizScore: 0, quizAnswered: null,
+      // status
+      statusView: "main",
+      equippedTitle: "Binge Lord",
+      // archive
+      archView: saved.archView || "shelf", shelfFilter: "reading",
+      library: saved.library || this.seedLibrary(),
+      history: saved.history || this.seedHistory(),
+      // reader
+      reading: null, readerPage: saved.readerPage || 14,
+      toast: null,
+    };
+    this._toastTimer = null;
+  }
+
+  seedPosts() {
+    return [
+      { id: "p1", kind: "THEORY", kindColor: "#4BA3FF", kindIcon: "🧠", user: "kazehunter", lv: 41, rank: "A", rankColor: "#F5B84C", avatarBg: "#A86BFF", guild: "ASH", guildColor: "#E5484D", title: "THEORY CRAFTER", time: "2h", series: "Shadow Monarch's Return", ch: 112, body: "The gate in ch.112 has the same sigil as the prologue shrine — the twins are the two halves of the seal. Re-read page 14.", emoji: "🔥", reacts: 23, mine: false, comments: 2, war: false, poll: null,
+        replies: [
+          { id: "c1", user: "tealeaf", bg: "#4CC38A", rank: "B", rankColor: "#A86BFF", guild: "ASH", guildColor: "#E5484D", time: "1h", body: "Page 14 spiral also shows on the twin's pendant in the cover of vol.2. This tracks.", emoji: "🤯", reacts: 11, mine: false, op: false },
+          { id: "c2", user: "kazehunter", bg: "#A86BFF", rank: "A", rankColor: "#F5B84C", guild: "ASH", guildColor: "#E5484D", time: "44m", body: "Vol.2 cover!! That's the third appearance then. Updating the theory.", emoji: "❤️", reacts: 4, mine: false, op: true },
+        ] },
+      { id: "p2", kind: "WAR", war: true },
+      { id: "p3", kind: "POLL", kindColor: "#4CC38A", kindIcon: "📊", user: "mothrose", lv: 17, rank: "C", rankColor: "#4BA3FF", avatarBg: "#4BA3FF", guild: "EYE", guildColor: "#4BA3FF", title: null, time: "5h", series: null, ch: null, body: "Who opens the 8th gate?", emoji: "🙂", reacts: 9, mine: false, comments: 5, poll: "p3", replies: [] },
+      { id: "p4", kind: "REVIEW", kindColor: "#F5B84C", kindIcon: "★", user: "tealeaf", lv: 28, rank: "B", rankColor: "#A86BFF", avatarBg: "#4CC38A", guild: "ASH", guildColor: "#E5484D", title: "THEORY CRAFTER", time: "1d", series: "Tea House Chronicle", ch: null, stars: "★★★★☆", body: "Slow first arc but the payoff in the tournament chapters is worth it. Art gets dramatically better after ch.30.", emoji: "❤️", reacts: 54, mine: false, comments: 12, poll: null, replies: [] },
+    ];
+  }
+  seedLibrary() {
+    return [
+      { id: "s1", title: "Shadow Monarch's Return", ch: 112, total: 114, page: 14, pages: 39, fav: true, status: "reading", last: "2h ago" },
+      { id: "s2", title: "The 8th Gate", ch: 81, total: 88, page: 1, pages: 30, fav: true, status: "reading", last: "1d ago" },
+      { id: "s3", title: "Blade of the Hollow Court", ch: 63, total: 64, page: 8, pages: 28, fav: false, status: "reading", last: "3d ago" },
+      { id: "s4", title: "Murim Regression Log", ch: 9, total: 41, page: 2, pages: 33, fav: false, status: "reading", last: "1w ago" },
+      { id: "s5", title: "Tea House Chronicle", ch: 201, total: 201, page: 22, pages: 22, fav: true, status: "caught", last: "5h ago" },
+      { id: "s6", title: "The Silent Baker", ch: 40, total: 40, page: 18, pages: 18, fav: false, status: "done", last: "2mo ago" },
+    ];
+  }
+  seedHistory() {
+    return [
+      { series: "Shadow Monarch's Return", ch: 112, page: 14, pages: 39, when: "Today · 9:12" },
+      { series: "Tea House Chronicle", ch: 201, page: 22, pages: 22, when: "Today · 8:40" },
+      { series: "Shadow Monarch's Return", ch: 111, page: 39, pages: 39, when: "Yesterday · 23:05" },
+      { series: "The 8th Gate", ch: 81, page: 30, pages: 30, when: "Yesterday · 21:48" },
+      { series: "Blade of the Hollow Court", ch: 63, page: 8, pages: 28, when: "Mon · 22:10" },
+    ];
+  }
+
+  persist() {
+    const { tab, archView, library, history, readerPage } = this.state;
+    try { localStorage.setItem("sp-proto", JSON.stringify({ tab, archView, library, history, readerPage })); } catch (e) {}
+  }
+  set(patch) { this.setState(patch, () => this.persist()); }
+
+  wire(msg) {
+    clearTimeout(this._toastTimer);
+    this.setState({ toast: msg });
+    this._toastTimer = setTimeout(() => this.setState({ toast: null }), 2400);
+  }
+
+  go(tab) { this.set({ tab, search: false, dungeonView: "feed", guildView: "hall", statusView: "main", activeThread: null, composer: false, reading: null }); }
+
+  // ---- reader ----
+  openReader(id) {
+    const s = this.state.library.find((x) => x.id === id);
+    if (!s) return;
+    this.set({ reading: id, tab: "reader" });
+    this.wire("router.push('/reader/" + id + "?ch=" + s.ch + "&page=" + s.page + "')");
+  }
+  turnPage(dir) {
+    const lib = this.state.library.map((s) => {
+      if (s.id !== this.state.reading) return s;
+      let page = Math.max(1, Math.min(s.pages, s.page + dir));
+      return { ...s, page };
+    });
+    this.set({ library: lib });
+  }
+  exitReader() {
+    const s = this.state.library.find((x) => x.id === this.state.reading);
+    if (s) {
+      const h = [{ series: s.title, ch: s.ch, page: s.page, pages: s.pages, when: "Just now" }, ...this.state.history].slice(0, 12);
+      this.set({ history: h, reading: null, tab: "archive" });
+      this.wire("library.saveProgress({seriesId, ch:" + s.ch + ", page:" + s.page + "}) + sync.push()");
+    } else this.set({ reading: null, tab: "archive" });
+  }
+
+  renderVals() {
+    const st = this.state;
+    const A = "#b7a6ff", I = "#8a90a0";
+    const tab = st.tab;
+    const posts = st.posts.map((p) => this.decoratePost(p));
+    const thread = st.activeThread ? this.decoratePost(st.posts.find((x) => x.id === st.activeThread) || st.posts[0]) : null;
+
+    // library decorations
+    const shelfAll = st.library.map((s) => ({
+      ...s,
+      pct: Math.round((s.ch - 1 + s.page / s.pages) / s.total * 100),
+      unread: s.total - s.ch,
+      unreadLabel: "+" + (s.total - s.ch),
+      chLabel: "Ch." + s.ch + " / " + s.total,
+      barColor: s.status === "reading" ? "#7c5cff" : "#4cc38a",
+      barW: Math.min(100, Math.round(s.ch / s.total * 100)) + "%",
+      favColor: s.fav ? "#FF4D87" : "#3a3f4e",
+      favFill: s.fav ? "#FF4D87" : "none",
+      open: () => this.openReader(s.id),
+      toggleFav: (e) => { if (e && e.stopPropagation) e.stopPropagation(); const lib = st.library.map((x) => x.id === s.id ? { ...x, fav: !x.fav } : x); this.set({ library: lib }); this.wire("api.setFavorite('" + s.id + "', " + !s.fav + ")"); },
+    }));
+    const shelfCounts = { reading: shelfAll.filter((s) => s.status === "reading").length, fav: shelfAll.filter((s) => s.fav).length, caught: shelfAll.filter((s) => s.status === "caught").length, done: shelfAll.filter((s) => s.status === "done").length };
+    const shelf = shelfAll.filter((s) => st.shelfFilter === "fav" ? s.fav : s.status === st.shelfFilter);
+    const resume = shelfAll[0];
+
+    const mkChip = (key, label) => ({
+      label, set: () => this.set({ shelfFilter: key }),
+      bg: st.shelfFilter === key ? "rgba(124,92,255,.16)" : "transparent",
+      border: st.shelfFilter === key ? "1.5px solid rgba(124,92,255,.6)" : "1px solid #262b36",
+      color: st.shelfFilter === key ? "#ecedf2" : I,
+      dot: st.shelfFilter === key ? "◆ " : "",
+    });
+
+    return {
+      // nav
+      isHome: tab === "home" && !st.search,
+      isSearch: tab === "home" && st.search,
+      isDungeon: tab === "dungeon" && !st.activeThread && st.dungeonView === "feed",
+      isArena: tab === "dungeon" && !st.activeThread && st.dungeonView === "arena",
+      isThread: tab === "dungeon" && !!st.activeThread,
+      isGuild: tab === "guild" && st.guildView !== "roster",
+      isRoster: tab === "guild" && st.guildView === "roster",
+      isStatus: tab === "status" && st.statusView === "main",
+      isQuests: tab === "status" && st.statusView === "quests",
+      isArchive: tab === "archive" && st.archView === "shelf",
+      isHistory: tab === "archive" && st.archView === "history",
+      isReader: tab === "reader",
+      goHome: () => this.go("home"), goArchive: () => this.go("archive"),
+      goDungeon: () => this.go("dungeon"), goGuild: () => this.go("guild"), goStatus: () => this.go("status"),
+      goQuests: () => this.set({ tab: "status", statusView: "quests" }),
+      cHome: tab === "home" ? A : I, cArchive: tab === "archive" || tab === "reader" ? A : I,
+      cDungeon: tab === "dungeon" ? A : I, cGuild: tab === "guild" ? A : I, cStatus: tab === "status" ? A : I,
+      dungeonKeyBorder: tab === "dungeon" ? "#7c5cff" : "#3a3f4e",
+      dungeonKeyGlow: tab === "dungeon" ? "0 0 18px rgba(124,92,255,.6)" : "none",
+      // toast
+      hasToast: !!st.toast, toastMsg: st.toast || "",
+      // home
+      openNotifs: () => this.wire("router.push('/notifications')"),
+      focusSearch: () => this.set({ search: true, query: "" }),
+      resumeHero: () => this.openReader("s1"),
+      wireLatest: () => this.wire("api.browseLatest(page)"), wireRanks: () => this.wire("api.ranks()"),
+      latestRail: [
+        { badge: "CH.64", title: "Blade of the Hollow Court", when: "2h ago", open: () => this.wire("router.push('/series/blade-hollow-court')") },
+        { badge: "CH.201", title: "Tea House Chronicle", when: "5h ago", open: () => this.wire("router.push('/series/tea-house')") },
+        { badge: "CH.88", title: "The 8th Gate", when: "9h ago", open: () => this.wire("router.push('/series/8th-gate')") },
+        { badge: "CH.41", title: "Murim Regression Log", when: "12h ago", open: () => this.wire("router.push('/series/murim-log')") },
+      ],
+      ranksRail: [1, 2, 3, 4].map((n) => ({ n, open: () => this.wire("router.push('/series/rank-" + n + "')") })),
+      // search
+      query: st.query, hasQuery: st.query.trim().length > 0, noQuery: st.query.trim().length === 0,
+      onQuery: (e) => this.setState({ query: e.target.value }),
+      closeSearch: () => this.set({ search: false, query: "" }),
+      clearRecents: () => { this.set({ recents: [] }); this.wire("clearRecentSearches()"); },
+      recents: st.recents.map((q) => ({ q, use: () => this.set({ query: q }) })),
+      trending: [
+        { topic: "the 8th gate identity", count: "2.1k posts", open: () => { this.go("dungeon"); this.wire("feed filter: tag='8th-gate'"); } },
+        { topic: "ch.112 sigil", count: "890 posts", open: () => { this.set({ tab: "dungeon", activeThread: "p1" }); } },
+      ],
+      resultCount: 3,
+      statusFilters: [["all", "ALL"], ["ongoing", "ONGOING"], ["done", "DONE"]].map(([k, label]) => ({
+        label, set: () => { this.set({ statusFilter: k }); this.wire("api.searchAll(q, page, status='" + k + "')"); },
+        bg: st.statusFilter === k ? "rgba(124,92,255,.16)" : "transparent",
+        border: st.statusFilter === k ? "1.5px solid rgba(124,92,255,.6)" : "1px solid #262b36",
+        color: st.statusFilter === k ? "#ecedf2" : I,
+      })),
+      results: [
+        { title: "Shadow Monarch's Return", rank: "S", rankColor: "#FF4D87", rankBg: "rgba(255,77,135,.15)", meta: "ONGOING · Action · Fantasy · Leveling", desc: "A hunter dies at the lowest gate and wakes with the System's ledger — every debt is a life he…", rating: "4.8", reads: "2.1M reads", libLabel: "IN LIBRARY", libColor: "#54D6FF", libAction: () => this.wire("router.push('/series/s1') — already in library"), openSeries: () => this.openReader("s1") },
+        { title: "Monarch of the Shadowfen", rank: "B", rankColor: "#A86BFF", rankBg: "rgba(168,107,255,.15)", meta: "ONGOING · Fantasy · Political", desc: "The heir to a drowned kingdom bargains with the marsh spirits to reclaim a throne nobody wants…", rating: "4.2", reads: "310k reads", libLabel: "+ LIBRARY", libColor: "#b7a6ff", libAction: () => this.wire("library.add(canonicalId) + sync.push()"), openSeries: () => this.wire("router.push('/series/shadowfen')") },
+        { title: "Return of the Shadow Chef", rank: "D", rankColor: "#6FBF8F", rankBg: "rgba(111,191,143,.15)", meta: "COMPLETED · Comedy · Cooking", desc: "An S-rank hunter retires to run a midnight diner for monsters. The broth is mid; the regulars are not…", rating: "3.9", reads: "98k reads", libLabel: "+ LIBRARY", libColor: "#b7a6ff", libAction: () => this.wire("library.add(canonicalId) + sync.push()"), openSeries: () => this.wire("router.push('/series/shadow-chef')") },
+      ],
+      // dungeon (stage 2)
+      posts, thread,
+      feedFilters: ["ALL", "THEORIES", "REVIEWS", "GUILD"].map((f) => ({
+        label: f, set: () => { this.set({ feedFilter: f }); this.wire(f === "GUILD" ? "api.feed(page, mode='guild')" : "api.feed(page, type='" + f.toLowerCase() + "')"); },
+        active: st.feedFilter === f,
+        bg: st.feedFilter === f ? "rgba(124,92,255,.18)" : "transparent",
+        border: st.feedFilter === f ? "1.5px solid rgba(124,92,255,.7)" : "1px solid #262b36",
+        color: st.feedFilter === f ? "#ecedf2" : I,
+        glow: st.feedFilter === f ? "0 0 10px rgba(124,92,255,.35)" : "none",
+      })),
+      sortLabel: st.sort,
+      cycleSort: () => { const order = ["HOT", "TOP", "NEW"]; const s = order[(order.indexOf(st.sort) + 1) % 3]; this.set({ sort: s }); this.wire("api.feed(page, sort='" + s.toLowerCase() + "')"); },
+      setDungeonView: (v) => () => this.set({ dungeonView: v }),
+      dvFeedActive: st.dungeonView === "feed", dvArenaActive: st.dungeonView === "arena",
+      openTicker: () => this.set({ activeThread: "p1" }),
+      openComposer: () => this.set({ composer: true }),
+      closeComposer: () => this.set({ composer: false, composeText: "" }),
+      hasComposer: st.composer,
+      composeKinds: [["THEORY", "🧠", "#4BA3FF"], ["RECORD", "◇", "#b7a6ff"], ["REVIEW", "★", "#F5B84C"], ["POLL", "📊", "#4CC38A"], ["INTEL", "👁", "#e5484d"]].map(([k, icon, color]) => ({
+        k, icon, set: () => this.set({ composeKind: k }),
+        border: st.composeKind === k ? "1.5px solid " + color : "1px solid #262b36",
+        bg: st.composeKind === k ? "rgba(124,92,255,.08)" : "transparent",
+        color: st.composeKind === k ? color : I,
+      })),
+      composeText: st.composeText,
+      onCompose: (e) => this.setState({ composeText: e.target.value }),
+      charCount: st.composeText.length + " / 2,000",
+      spoilerOn: st.spoiler,
+      toggleSpoiler: () => this.set({ spoiler: !st.spoiler }),
+      spKnobLeft: st.spoiler ? "13px" : "2px", spTrack: st.spoiler ? "#7c5cff" : "#262b36",
+      publish: () => {
+        const kindMap = { THEORY: ["THEORY", "#4BA3FF", "🧠"], RECORD: ["RECORD", "#b7a6ff", "◇"], REVIEW: ["REVIEW", "#F5B84C", "★"], POLL: ["POLL", "#4CC38A", "📊"], INTEL: ["SPOILER INTEL", "#e5484d", "👁"] };
+        const [kind, kindColor, kindIcon] = kindMap[st.composeKind];
+        const p = { id: "new" + Date.now(), kind, kindColor, kindIcon, user: "kazehunter", lv: 41, rank: "A", rankColor: "#F5B84C", avatarBg: "#A86BFF", guild: "ASH", guildColor: "#E5484D", title: "THEORY CRAFTER", time: "now", series: "Shadow Monarch's Return", ch: 112, body: st.composeText || "…", emoji: "🙂", reacts: 0, mine: true, comments: 0, poll: null, replies: [], war: false };
+        this.set({ posts: [st.posts[0].war ? p : p, ...st.posts], composer: false, composeText: "" });
+        this.wire("api.createPost({kind, body, seriesTag, isSpoiler:" + st.spoiler + "})");
+      },
+      closeThread: () => this.set({ activeThread: null }),
+      replyBar: () => this.wire("api.replyToPost(threadId, body) → +XP quest tick"),
+      // guild (stage 3)
+      setGuildView: (v) => () => this.set({ guildView: v }),
+      guildRequests: st.requests.map((r) => ({
+        ...r,
+        rankBg: "rgba(168,107,255,.15)",
+        initial: r.name[0].toUpperCase(),
+        accept: () => { this.set({ requests: st.requests.filter((x) => x.id !== r.id) }); this.wire("api.answerGuildRequest(guildId, '" + r.name + "', 'accept')"); },
+        reject: () => { this.set({ requests: st.requests.filter((x) => x.id !== r.id) }); this.wire("api.answerGuildRequest(guildId, '" + r.name + "', 'reject')"); },
+      })),
+      hasRequests: st.requests.length > 0,
+      requestCount: st.requests.length,
+      wireContribute: () => { this.go("dungeon"); this.wire("war points accrue from reads/posts — route to feed"); },
+      wireWarHistory: () => this.wire("GET /guilds/:id/wars"),
+      wireBoardPost: () => this.wire("api.createGuildPost(guildId, body)"),
+      wireManage: (n) => () => this.wire("MemberManageModal → api.setGuildRole / kickGuildMember ('" + n + "')"),
+      roster: [
+        { n: 1, name: "rendral", bg: "#F5B84C", rank: "S", rankColor: "#FF4D87", role: "GUILDMASTER", roleColor: "#FFE09A", roleBg: "rgba(245,184,76,.15)", roleBorder: "rgba(245,184,76,.5)", total: "8,120", week: "2,204", weekColor: "#FFE09A", online: true, manageable: false, you: false },
+        { n: 2, name: "kazehunter", bg: "#A86BFF", rank: "A", rankColor: "#F5B84C", role: "", roleColor: "", roleBg: "", roleBorder: "", total: "6,840", week: "1,840", weekColor: "#ecedf2", online: true, manageable: false, you: true },
+        { n: 3, name: "tealeaf", bg: "#4CC38A", rank: "B", rankColor: "#A86BFF", role: "OFFICER", roleColor: "#b7a6ff", roleBg: "rgba(124,92,255,.18)", roleBorder: "rgba(124,92,255,.5)", total: "5,310", week: "1,310", weekColor: "#ecedf2", online: false, manageable: true, you: false },
+        { n: 4, name: "halfmoon_ink", bg: "#4BA3FF", rank: "C", rankColor: "#4BA3FF", role: "", roleColor: "", roleBg: "", roleBorder: "", total: "3,908", week: "964", weekColor: "#ecedf2", online: false, manageable: true, you: false },
+        { n: 5, name: "pagefright", bg: "#8992A3", rank: "E", rankColor: "#8992A3", role: "", roleColor: "", roleBg: "", roleBorder: "", total: "2,110", week: "0", weekColor: "#8a90a0", online: false, manageable: true, you: false },
+      ].map((m) => ({ ...m, initial: m.name[0].toUpperCase(), manage: () => this.wire("MemberManageModal('" + m.name + "')"), rankN: "#" + m.n })),
+      // arena (stage 4)
+      enterQuiz: () => { this.set({ arenaView: "quiz", quizIdx: 0, quizScore: 0, quizAnswered: null }); this.wire("api.arenaEnter('quiz-w31')"); },
+      wireRules: () => this.wire("router.push('/arena/quiz-w31/rules')"),
+      wireFullBoard: () => this.wire("GET /leaderboard/weekly?around=me"),
+      wireVoteArt: (n) => () => this.wire("api.arenaVote('draw-w31', entry" + n + ")"),
+      votePool: (side) => () => this.wire("api.votePoll('pool-w31', '" + side + "')"),
+      isQuiz: st.arenaView === "quiz",
+      quizClosed: st.arenaView !== "quiz",
+      quiz: this.quizVals(),
+      backFromQuiz: () => this.set({ arenaView: "main" }),
+      // poll voting in feed
+      pollOpts: (st.polls.p3.opts || []).map((o) => ({
+        ...o, mine: st.polls.p3.voted === o.id,
+        border: st.polls.p3.voted === o.id ? "1px solid rgba(76,195,138,.5)" : "1px solid #262b36",
+        fillBg: st.polls.p3.voted === o.id ? "rgba(76,195,138,.18)" : "rgba(124,92,255,.15)",
+        textColor: st.polls.p3.voted === o.id ? "#4cc38a" : "#ecedf2",
+        check: st.polls.p3.voted === o.id ? "✓ " : "",
+        vote: () => { this.set({ polls: { p3: { ...st.polls.p3, voted: o.id } } }); this.wire("api.votePoll(postId, '" + o.id + "')"); },
+      })),
+      // status (stage 4)
+      setStatusView: (v) => () => this.set({ statusView: v }),
+      wireEquip: (slot) => () => this.wire(slot === "TITLE" ? "TitlesModal → api.equipTitle(id)" : "router.push('/account/appearance')"),
+      wireSettings: () => this.wire("router.push('/account/settings') — edit profile, legal, sign out"),
+      // no-arg closures for template holes (holes are dotted lookups only)
+      openArena: () => this.set({ dungeonView: "arena" }),
+      backToFeed: () => this.set({ dungeonView: "feed" }),
+      openHistory: () => this.set({ archView: "history" }),
+      backToShelf: () => this.set({ archView: "shelf" }),
+      openRoster: () => this.set({ guildView: "roster" }),
+      backToHall: () => this.set({ guildView: "hall" }),
+      backToStatus: () => this.set({ statusView: "main" }),
+      equipTitle: () => this.wire("TitlesModal → api.equipTitle(id)"),
+      equipFrame: () => this.wire("router.push('/account/appearance')"),
+      equipAvatar: () => this.wire("router.push('/account/appearance')"),
+      badgeAll: () => this.wire("router.push('/account/badges')"),
+      badge1: () => this.wire("BadgeDetailModal('Chapter 100')"),
+      badge2: () => this.wire("BadgeDetailModal('Loudmouth')"),
+      badge3: () => this.wire("BadgeDetailModal('Night Owl')"),
+      badge4: () => this.wire("BadgeDetailModal('Arena Victor')"),
+      badge5: () => this.wire("BadgeDetailModal('War Hero')"),
+      manageGuild: () => this.wire("guild settings → api.updateGuild(...)"),
+      inviteMember: () => this.wire("invite flow → api.inviteToGuild(userId)"),
+      sortByRole: () => this.wire("roster sort: role"),
+      voteArt1: () => this.wire("api.arenaVote('draw-w31', entry1)"),
+      voteArt2: () => this.wire("api.arenaVote('draw-w31', entry2)"),
+      voteArt3: () => this.wire("api.arenaVote('draw-w31', entry3)"),
+      poolYes: () => this.wire("api.votePoll('pool-w31', 'yes')"),
+      poolNo: () => this.wire("api.votePoll('pool-w31', 'no')"),
+      questDetail1: () => this.wire("QuestDetailModal — SystemModal('First Read of the Day')"),
+      questDetail2: () => this.wire("QuestDetailModal — SystemModal('Marathon Reader')"),
+      wireBadge: (n) => () => this.wire("BadgeDetailModal('" + n + "')"),
+      questRows: [
+        { done: true, name: "First Read of the Day", xp: "+40 XP" },
+        { done: true, name: "React to 5 records", xp: "+30 XP" },
+        { done: false, name: "Dungeon Chatter — 1/3 comments", xp: "+60 XP" },
+      ].map((q) => ({ ...q, notDone: !q.done, nameColor: q.done ? "#8a90a0" : "#ecedf2", deco: q.done ? "line-through" : "none", xpColor: q.done ? "#8a90a0" : "#FFE09A", go: () => q.done ? null : this.go("dungeon") })),
+      wireQuestDetail: (n) => () => this.wire("QuestDetailModal — SystemModal('" + n + "')"),
+      // archive (stage 5)
+      setArchView: (v) => () => this.set({ archView: v }),
+      archShelfActive: st.archView === "shelf", archHistActive: st.archView === "history",
+      shelf, resume,
+      shelfChips: [mkChip("reading", "READING " + shelfCounts.reading), mkChip("fav", "♥ FAVES " + shelfCounts.fav), mkChip("caught", "CAUGHT UP"), mkChip("done", "DONE")],
+      historyRows: st.history.map((h) => ({
+        ...h, pageLabel: "Ch." + h.ch + " · page " + h.page + "/" + h.pages,
+        pctW: Math.round(h.page / h.pages * 100) + "%",
+        open: () => { const s = st.library.find((x) => x.title === h.series); if (s) this.openReader(s.id); },
+      })),
+      clearHistory: () => { this.set({ history: [] }); this.wire("library.clearHistory() (local SQLite)"); },
+      wireSync: () => this.wire("sync.pullCloud() / sync.push()"),
+      addSeries: () => this.set({ tab: "home", search: true, query: "" }),
+      // reader (stage 5)
+      readerData: this.readerVals(),
+    };
+  }
+
+  decoratePost(p) {
+    if (!p || p.war) return p;
+    const st = this.state;
+    return {
+      ...p,
+      initial: p.user[0].toUpperCase(),
+      rankBg: "rgba(245,184,76,.12)",
+      hasSeries: !!p.series, hasTitle: !!p.title, hasStars: !!p.stars, isPoll: !!p.poll,
+      chLabel: p.ch ? "CH. " + p.ch : "",
+      reactBorder: p.mine ? "1.5px solid rgba(124,92,255,.6)" : "1px solid #262b36",
+      reactBg: p.mine ? "rgba(124,92,255,.12)" : "transparent",
+      reactColor: p.mine ? "#b7a6ff" : "#8a90a0",
+      react: () => {
+        const posts = st.posts.map((x) => x.id === p.id ? { ...x, mine: !x.mine, reacts: x.reacts + (x.mine ? -1 : 1), emoji: x.mine ? x.emoji : "🔥" } : x);
+        this.set({ posts });
+        this.wire("api.reactToPost('" + p.id + "', 'hype')");
+      },
+      open: () => this.set({ tab: "dungeon", activeThread: p.id }),
+      share: () => this.wire("Share.share({url: post/" + p.id + "})"),
+      report: () => this.wire("ReportModal → api.report({type:'post', id:'" + p.id + "'})"),
+      replies: (p.replies || []).map((r) => ({
+        ...r, initial: r.user[0].toUpperCase(),
+        reactChip: r.mine ? "1px solid rgba(124,92,255,.5)" : "1px solid #262b36",
+        react: () => {
+          const posts = st.posts.map((x) => x.id !== p.id ? x : { ...x, replies: x.replies.map((y) => y.id === r.id ? { ...y, mine: !y.mine, reacts: y.reacts + (y.mine ? -1 : 1) } : y) });
+          this.set({ posts });
+          this.wire("api.reactToPost('" + r.id + "', 'mindblown')");
+        },
+        reply: () => this.wire("reply composer → api.replyToPost('" + r.id + "')"),
+      })),
+    };
+  }
+
+  quizVals() {
+    const st = this.state;
+    const questions = [
+      { q: "What sigil marks the ch.112 gate?", opts: ["The shrine spiral", "The Monarch's crest", "A twin's pendant", "The 8th seal"], correct: 0 },
+      { q: "Who first names the System's ledger?", opts: ["The twins", "The archivist", "The Monarch", "Nobody — it's unnamed"], correct: 1 },
+      { q: "How many gates open in the prologue?", opts: ["One", "Two", "Seven", "None"], correct: 1 },
+    ];
+    const done = st.quizIdx >= questions.length;
+    const q = questions[Math.min(st.quizIdx, questions.length - 1)];
+    return {
+      done, notDone: !done, qNum: Math.min(st.quizIdx + 1, questions.length), qTotal: questions.length,
+      question: q.q, score: st.quizScore, scoreLabel: st.quizScore + " / " + questions.length,
+      progressW: Math.round(Math.min(st.quizIdx, questions.length) / questions.length * 100) + "%",
+      finish: () => { this.set({ arenaView: "main" }); this.wire("api.arenaSubmit('quiz-w31', {score:" + st.quizScore + ", ms}) → rewards pipeline"); },
+      opts: q.opts.map((text, i) => {
+        const answered = st.quizAnswered != null;
+        const isPick = st.quizAnswered === i, isCorrect = i === q.correct;
+        return {
+          text,
+          border: answered && isCorrect ? "1.5px solid rgba(76,195,138,.7)" : answered && isPick ? "1.5px solid rgba(229,72,77,.7)" : "1px solid #262b36",
+          bg: answered && isCorrect ? "rgba(76,195,138,.12)" : answered && isPick ? "rgba(229,72,77,.1)" : "#10121a",
+          color: answered && isCorrect ? "#4cc38a" : answered && isPick ? "#ff8a8e" : "#ecedf2",
+          pick: () => {
+            if (st.quizAnswered != null) return;
+            this.setState({ quizAnswered: i, quizScore: st.quizScore + (i === q.correct ? 1 : 0) });
+            setTimeout(() => this.setState({ quizIdx: this.state.quizIdx + 1, quizAnswered: null }), 700);
+          },
+        };
+      }),
+    };
+  }
+
+  readerVals() {
+    const st = this.state;
+    const s = st.library.find((x) => x.id === st.reading) || st.library[0];
+    return {
+      title: s.title, chLabel: "CH. " + s.ch, pageLabel: s.page + " / " + s.pages,
+      pctW: Math.round(s.page / s.pages * 100) + "%",
+      prev: () => this.turnPage(-1), next: () => this.turnPage(1),
+      exit: () => this.exitReader(),
+      comment: () => this.wire("CommentsSheet(chapterId) → api.chapterComments"),
+    };
+  }
+}
+</script>
+</body>
+</html>

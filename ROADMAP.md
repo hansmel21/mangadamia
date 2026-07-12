@@ -47,6 +47,34 @@ _Last updated: 2026-07-12._
 - **SystemModal keyboard avoidance** (composer/inputs no longer hidden behind
   the keyboard).
 
+## 🎨 System Protocol UI/UX redesign (in progress)
+
+Full-app redesign to the "System Protocol" spec in `UI-UX/` (interactive
+prototype `System Protocol App.dc.html` + `IMPLEMENTATION.md`). Backlog of
+not-yet-built features and ⚠ backend endpoints: **`UI-UX/NOT_YET_IMPLEMENTED.md`**.
+
+**Phase 1 — foundation + nav (done, typechecks clean):**
+- **Tokens** locked to spec — `bg #0a0b10`, `surface #10121a`, `hairline #1c2029`,
+  cyan `data #54D6FF`, tight 3–4px radii (`app/src/theme.ts`).
+- **Primitives**: `ScreenTitle` (bracketed page title), `SystemKey`
+  (primary/outline/chip), `HunterAvatar` (squircle + rank sigil), `GuildChip`
+  (bordered `[TAG]`) — in `SystemUI.tsx`, `HunterAvatar.tsx`, `GuildCrest.tsx`.
+- **Motion helpers**: `useCrtOpen`, `usePulseGlow`, `useProgressGrow` (`anim.ts`).
+- **Nav → 5-key command bar**: HOME · ARCHIVE · **DUNGEON** (center diamond) ·
+  GUILD (new tab) · STATUS, with unread badge on STATUS (`(tabs)/_layout.tsx`).
+  New `(tabs)/guild.tsx` (recruit state + Hall banner/quick-keys shell).
+  HeaderMenu retained on not-yet-redesigned screens until each gets its own
+  in-screen header.
+- **Identity treatment app-wide**: `UserIdentity` now uses `HunterAvatar` +
+  `GuildChip`, so feed/thread/profiles get the squircle + rank sigil look.
+- **PostCard** → mini System-window: kind **notch** breaking the top border,
+  corner ticks, square radius, `OPEN THREAD ▸` in cyan `data`.
+
+**Next phases (build order):** Feed layout (ticker/filter deck/online) + Composer
+sheet + Thread view → Home/Search + Status + Quest Log + Library/History → full
+Guild Hall (war/raid/board, ⚠ backend) → Arena (⚠ backend). See
+`NOT_YET_IMPLEMENTED.md` for the endpoint list.
+
 ## 🔨 In progress
 
 ### Social rework → "The System" in-world social (Core scope)

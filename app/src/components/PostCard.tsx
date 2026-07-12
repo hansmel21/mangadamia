@@ -89,15 +89,21 @@ export function PostCard({
 
   const inner = (
     <>
-      {!isReply && post.kind !== "record" ? (
-        <View style={styles.banner}>
-          <Text style={[styles.bannerText, { color: kindMeta.color }]}>
-            {kindMeta.icon} {kindMeta.label}
-          </Text>
-        </View>
+      {!isReply ? (
+        <>
+          {/* Kind notch breaking the top border + two corner ticks — the
+              mini System-window treatment from the redesign. */}
+          <View style={[styles.notch, { borderColor: kindMeta.color }]} pointerEvents="none">
+            <Text style={[styles.notchText, { color: kindMeta.color }]}>
+              {kindMeta.icon} {kindMeta.label}
+            </Text>
+          </View>
+          <View style={[styles.tick, styles.tickTL]} pointerEvents="none" />
+          <View style={[styles.tick, styles.tickTR]} pointerEvents="none" />
+        </>
       ) : null}
 
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, !isReply && styles.headerRowNotched]}>
         {post.author ? (
           <UserIdentity
             identity={post.author}
@@ -193,11 +199,7 @@ export function PostCard({
               <Repeat2 color={colors.muted} size={16} strokeWidth={1.9} />
             </Pressable>
           ) : null}
-          <Text style={styles.openHint}>
-            {threadCount > 0
-              ? `${threadCount} ${threadCount === 1 ? "comment" : "comments"} ›`
-              : "Comment ›"}
-          </Text>
+          <Text style={styles.openHint}>OPEN THREAD ▸</Text>
         </View>
       ) : canReply ? (
         <View style={styles.replyRow}>
@@ -270,11 +272,7 @@ export function PostCard({
     return (
       <Pressable
         onPress={() => onOpen?.(post)}
-        style={({ pressed }) => [
-          styles.card,
-          { borderLeftWidth: 3, borderLeftColor: kindMeta.color },
-          pressed && styles.cardPressed,
-        ]}
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         accessibilityRole="button"
         accessibilityLabel="Open post thread"
       >
@@ -283,23 +281,22 @@ export function PostCard({
     );
   }
 
-  return (
-    <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: kindMeta.color }]}>{inner}</View>
-  );
+  return <View style={styles.card}>{inner}</View>;
 }
 
 const styles = StyleSheet.create({
   card: {
+    position: "relative",
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
+    borderColor: colors.accentLine,
+    borderRadius: 4,
     paddingHorizontal: 15,
-    paddingVertical: 13,
-    marginHorizontal: 12,
-    marginTop: 10,
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginTop: 16,
   },
-  cardPressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
+  cardPressed: { borderColor: "rgba(124,92,255,0.7)", opacity: 0.96 },
   replyBase: { marginTop: 12 },
   replyIndent: {
     borderLeftWidth: 2,
@@ -307,9 +304,23 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   replyIndentFlat: { paddingLeft: 6, borderLeftColor: "rgba(124,92,255,0.15)" },
-  banner: { flexDirection: "row", alignItems: "center", marginBottom: 9 },
-  bannerText: { fontSize: 10.5, fontWeight: "900", letterSpacing: 1.8 },
+  notch: {
+    position: "absolute",
+    top: -9,
+    left: 14,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderRadius: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+    zIndex: 2,
+  },
+  notchText: { fontSize: 9, fontWeight: "900", letterSpacing: 1.6 },
+  tick: { position: "absolute", width: 9, height: 9 },
+  tickTL: { top: -1.5, left: -1.5, borderTopWidth: 2, borderLeftWidth: 2, borderColor: colors.accentBright },
+  tickTR: { top: -1.5, right: -1.5, borderTopWidth: 2, borderRightWidth: 2, borderColor: colors.accentBright },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  headerRowNotched: { marginTop: 4 },
   time: { color: colors.muted, fontSize: 12 },
   headerActions: { marginLeft: "auto", paddingLeft: 8 },
   reviewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
@@ -350,7 +361,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: 3,
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -363,9 +374,9 @@ const styles = StyleSheet.create({
   },
   openHint: {
     marginLeft: "auto",
-    color: colors.accentSoft,
-    fontSize: 11.5,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    color: colors.data,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.2,
   },
 });

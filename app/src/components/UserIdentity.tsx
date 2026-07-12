@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { PublicIdentity } from "../api";
 import { colors, fonts } from "../theme";
-import { GuildCrest } from "./GuildCrest";
-import { ReaderAvatar } from "./ReaderAvatar";
+import { GuildChip, GuildCrest } from "./GuildCrest";
+import { HunterAvatar } from "./HunterAvatar";
 import { TitleFlair } from "./TitleFlair";
 
 export function UserIdentity({
@@ -18,18 +18,24 @@ export function UserIdentity({
 }) {
   const content = (
     <View style={[styles.wrap, profile && styles.profileWrap]}>
-      <ReaderAvatar identity={identity} size={profile ? 78 : compact ? 30 : 38} />
+      <HunterAvatar identity={identity} size={profile ? 78 : compact ? 32 : 38} />
       <View style={[styles.copy, profile && styles.profileCopy]}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, profile && styles.profileName]} numberOfLines={1}>
             {identity.username}
           </Text>
-          {identity.guild ? (
-            <GuildCrest guild={identity.guild} size={profile ? 18 : 15} />
-          ) : null}
           {identity.level != null ? <Text style={styles.level}>LV {identity.level}</Text> : null}
         </View>
-        {identity.title ? <TitleFlair title={identity.title} compact={compact} /> : null}
+        <View style={styles.metaRow}>
+          {identity.guild ? (
+            profile ? (
+              <GuildCrest guild={identity.guild} size={18} />
+            ) : (
+              <GuildChip guild={identity.guild} />
+            )
+          ) : null}
+          {identity.title ? <TitleFlair title={identity.title} compact={compact} /> : null}
+        </View>
         {identity.staffMarker ? (
           <Text style={styles.staff}>◆ {identity.staffMarker.label.toUpperCase()}</Text>
         ) : null}
@@ -51,6 +57,7 @@ const styles = StyleSheet.create({
   copy: { gap: 3, flexShrink: 1 },
   profileCopy: { alignItems: "center" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, flexWrap: "wrap" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, flexWrap: "wrap" },
   name: { color: colors.text, fontSize: 14, fontWeight: "800", flexShrink: 1 },
   profileName: { fontFamily: fonts.display, fontSize: 23 },
   level: { color: colors.foil, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },

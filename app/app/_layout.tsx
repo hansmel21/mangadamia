@@ -55,7 +55,10 @@ export default function RootLayout() {
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
-          headerTitleStyle: fontsLoaded ? { fontFamily: fonts.displayBold } : undefined,
+          headerShadowVisible: false,
+          headerTitleStyle: fontsLoaded
+            ? { fontFamily: fonts.displayBold, color: colors.accentSoft }
+            : { color: colors.accentSoft, fontWeight: "800" },
           contentStyle: { backgroundColor: colors.bg },
         }}
       >

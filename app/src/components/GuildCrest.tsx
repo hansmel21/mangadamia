@@ -117,10 +117,46 @@ export function GuildCrest({
   );
 }
 
+// Compact bordered [TAG] pill, tinted by the guild's primary color. Used in
+// post headers, boards and war cards where the emblem would be too heavy.
+// Pass `showEmblem` to prefix the glyph, or `name` to spell the full guild name.
+export function GuildChip({
+  guild,
+  showEmblem = false,
+  name = false,
+}: {
+  guild: GuildCrestInfo;
+  showEmblem?: boolean;
+  name?: boolean;
+}) {
+  const color = guild.primaryColor;
+  return (
+    <View style={[styles.chip, { borderColor: color, backgroundColor: color + "16" }]}>
+      {showEmblem ? (
+        <GuildEmblem emblemKey={guild.emblemKey} primaryColor={color} secondaryColor={guild.secondaryColor} size={14} />
+      ) : null}
+      <Text style={[styles.chipTag, { color }]} numberOfLines={1}>
+        {name ? guild.name : `[${guild.tag}]`}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   emblem: { alignItems: "center", justifyContent: "center", borderWidth: 1.2 },
   crest: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
   tag: { fontSize: 10.5, fontWeight: "900", letterSpacing: 0.4 },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    flexShrink: 1,
+  },
+  chipTag: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
 });
 
 // Placeholder color menu the create/edit UI can offer.

@@ -2,6 +2,7 @@
 // corner brackets, diamond-! header). Used for modals, toasts, and the
 // profile status panel to give the whole app its leveling-system feel.
 import type { ReactNode } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { colors } from "../theme";
 
@@ -23,7 +24,14 @@ export function SystemWindow({
   translucent?: boolean;
 }) {
   return (
-    <View
+    <LinearGradient
+      colors={
+        translucent
+          ? ["rgba(17,23,34,0.78)", "rgba(8,11,18,0.7)"]
+          : ["rgba(17,23,34,0.99)", "rgba(8,11,18,0.99)"]
+      }
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={[
         styles.window,
         compact && styles.windowCompact,
@@ -48,16 +56,16 @@ export function SystemWindow({
         </>
       ) : null}
       {children}
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   window: {
-    backgroundColor: "rgba(13,15,20,0.97)",
+    backgroundColor: colors.card,
     borderWidth: 1.5,
     borderColor: "rgba(124,92,255,0.65)",
-    borderRadius: 6,
+    borderRadius: 8,
     padding: 20,
     shadowColor: colors.accent,
     shadowOpacity: 0.5,
@@ -67,14 +75,14 @@ const styles = StyleSheet.create({
   },
   windowCompact: { padding: 14 },
   windowDim: {
-    borderColor: "rgba(124,92,255,0.35)",
+    borderColor: colors.accentLine,
     shadowOpacity: 0.18,
     shadowRadius: 9,
     elevation: 4,
   },
   windowTranslucent: {
-    backgroundColor: "rgba(13,15,20,0.66)",
-    borderColor: "rgba(124,92,255,0.45)",
+    backgroundColor: "rgba(8,11,18,0.66)",
+    borderColor: colors.accentLine,
     shadowOpacity: 0.28,
   },
   corner: {
