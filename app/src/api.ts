@@ -380,17 +380,31 @@ export interface ModerationNotice {
   } | null;
 }
 
+export type PostKind = "record" | "theory" | "review" | "spoiler_intel";
+export type ReactionType = "endorse" | "hype" | "mindblown" | "pain" | "dead";
+
+export interface SeriesReviewSummary {
+  canonicalId: string;
+  count: number;
+  average: number;
+  rank: "E" | "D" | "C" | "B" | "A" | "S" | null;
+  myReview: { id: string; rating: number; body: string } | null;
+}
+
 export interface PostInfo {
   id: string;
   parentId: string | null;
   body: string;
+  kind: PostKind;
+  rating: number | null;
   isSpoiler: boolean;
   createdAt: string;
   author: PublicIdentity | null;
   username: string;
   level: number | null;
-  likeCount: number;
-  likedByMe: boolean;
+  // Per-type reaction counts, e.g. { endorse: 42, hype: 8 }.
+  reactions: Record<string, number>;
+  myReaction: string | null;
   mine: boolean;
   chapterNumber: number | null;
   series: { canonicalId: string; title: string; coverUrl?: string | null } | null;
@@ -571,11 +585,20 @@ export const api = {
       numbers,
     }),
 
-  feed: (page = 1, canonicalId?: string, feed: "global" | "following" = "global") =>
+  feed: (
+    page = 1,
+    canonicalId?: string,
+    feed: "global" | "following" = "global",
+    kind?: "theory" | "review",
+  ) =>
     get<PostInfo[]>(
-      `/posts?page=${page}&feed=${feed}${canonicalId ? `&canonicalId=${canonicalId}` : ""}`,
+      `/posts?page=${page}&feed=${feed}${canonicalId ? `&canonicalId=${canonicalId}` : ""}${
+        kind ? `&kind=${kind}` : ""
+      }`,
     ),
   post: (id: string) => get<PostInfo>(`/posts/${encodeURIComponent(id)}`),
+  seriesReviews: (canonicalId: string) =>
+    get<SeriesReviewSummary>(`/canonical/${encodeURIComponent(canonicalId)}/reviews`),
   createPost: (
     body: string,
     opts?: {
@@ -583,6 +606,8 @@ export const api = {
       chapterNumber?: number;
       parentId?: string;
       isSpoiler?: boolean;
+      kind?: PostKind;
+      rating?: number;
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];
     },
   ) =>
@@ -592,10 +617,11 @@ export const api = {
       { body, ...opts },
     ),
   deletePost: (id: string) => request<{ ok: boolean }>(`/posts/${encodeURIComponent(id)}`, "DELETE"),
-  togglePostLike: (id: string) =>
-    request<{ liked: boolean; likeCount: number }>(
-      `/posts/${encodeURIComponent(id)}/like`,
+  reactToPost: (id: string, type: ReactionType) =>
+    request<{ reactions: Record<string, number>; myReaction: string | null }>(
+      `/posts/${encodeURIComponent(id)}/react`,
       "POST",
+      { type },
     ),
 
   equipTitle: (titleId: string | null) =>

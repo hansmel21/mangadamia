@@ -1,18 +1,22 @@
-// Shared post card for the Dungeons feed, series Walls, and the post thread.
-// Two modes:
+// Shared "System Record" card for the Dungeons feed, series Walls, and post
+// threads. Two modes:
 //   • preview (feed/wall): the whole card is tappable and opens the full
 //     conversation; replies are summarised, not expanded inline.
 //   • thread (post detail): replies render nested beneath the post.
-// Handles tappable usernames, spoiler shields, and like / reply / delete /
-// report with comfortable touch targets.
+// Renders the record type, the author's hunter rank, review ratings, the
+// reaction bar, spoiler shields, and reply / delete / report.
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { EyeOff, Flag, Heart, MessageSquare, Trash2 } from "lucide-react-native";
+import { EyeOff, Flag, MessageSquare, Trash2 } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../anim";
-import type { PostInfo } from "../api";
+import type { PostInfo, ReactionType } from "../api";
+import { hunterRankForLevel, POST_KINDS, rankColors } from "../ranks";
 import { colors } from "../theme";
+import { RankBadge } from "./RankBadge";
+import { ReactionBar } from "./ReactionBar";
+import { ReviewRating } from "./ReviewRating";
 import { UserIdentity } from "./UserIdentity";
 
 function timeAgo(iso: string): string {
@@ -38,7 +42,7 @@ function openSeries(series: NonNullable<PostInfo["series"]>) {
 export function PostCard({
   post,
   isReply,
-  onLike,
+  onReact,
   onReply,
   onDelete,
   onReport,
@@ -51,7 +55,7 @@ export function PostCard({
 }: {
   post: PostInfo;
   isReply?: boolean;
-  onLike: (p: PostInfo) => void;
+  onReact: (p: PostInfo, type: ReactionType) => void;
   onReply?: (p: PostInfo) => void;
   onDelete: (p: PostInfo) => void;
   onReport: (p: PostInfo) => void;
@@ -68,11 +72,11 @@ export function PostCard({
   const revealed = threadRevealed ?? localRevealed;
   const revealThread = onRevealThread ?? (() => setLocalRevealed(true));
   const shielded = viewerSignedIn && !post.mine && post.isSpoiler && !revealed;
-  // Preview cards show the whole thread's comment count; a reply pill shows how
-  // many direct replies it has.
   const threadCount = post.commentCount ?? post.replies.length;
   const directReplies = post.replies.length;
   const canReply = !preview && !!onReply;
+  const kindMeta = POST_KINDS[post.kind] ?? POST_KINDS.record;
+  const rankColor = rankColors[hunterRankForLevel(post.author?.level ?? post.level)];
 
   const seriesChips =
     post.seriesTags.length > 0
@@ -83,6 +87,18 @@ export function PostCard({
 
   const inner = (
     <>
+      {!isReply ? (
+        <View style={styles.recordChip}>
+          <Text style={styles.recordChipText}>◇ SYSTEM RECORD</Text>
+          {post.kind !== "record" ? (
+            <Text style={[styles.recordChipType, { color: kindMeta.color }]}>
+              {" · "}
+              {kindMeta.label}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={styles.headerRow}>
         {post.author ? (
           <UserIdentity
@@ -91,6 +107,7 @@ export function PostCard({
             onPress={() => post.author?.id && openProfile(post.author.username)}
           />
         ) : null}
+        {!isReply ? <RankBadge level={post.author?.level ?? post.level} size={17} /> : null}
         <Text style={styles.time}>· {timeAgo(post.createdAt)}</Text>
         <View style={styles.headerActions}>
           {post.mine ? (
@@ -121,6 +138,13 @@ export function PostCard({
         </Pressable>
       ))}
 
+      {post.kind === "review" && post.rating ? (
+        <View style={styles.reviewRow}>
+          <ReviewRating value={post.rating} size={16} />
+          <Text style={styles.reviewLabel}>rated this series</Text>
+        </View>
+      ) : null}
+
       {shielded ? (
         <Pressable style={styles.shield} onPress={revealThread}>
           <EyeOff color={colors.accentSoft} size={18} strokeWidth={1.8} />
@@ -136,26 +160,17 @@ export function PostCard({
         </Text>
       )}
 
-      <View style={styles.actionsRow}>
-        <Pressable
-          style={(s) => [styles.actionPill, post.likedByMe && styles.actionPillOn, pressFx(s)]}
-          onPress={() => onLike(post)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={post.likedByMe ? "Unlike post" : "Like post"}
-        >
-          <Heart
-            color={post.likedByMe ? colors.danger : colors.muted}
-            fill={post.likedByMe ? colors.danger : "transparent"}
-            size={17}
-            strokeWidth={1.9}
-          />
-          <Text style={[styles.actionText, post.likedByMe && styles.actionTextOn]}>
-            {post.likeCount > 0 ? post.likeCount : "Like"}
-          </Text>
-        </Pressable>
+      <View style={styles.reactionRow}>
+        <ReactionBar
+          reactions={post.reactions}
+          myReaction={post.myReaction}
+          onReact={(type) => onReact(post, type)}
+          disabled={!viewerSignedIn}
+        />
+      </View>
 
-        {preview && !isReply ? (
+      {preview && !isReply ? (
+        <View style={styles.replyRow}>
           <Pressable
             style={(s) => [styles.actionPill, pressFx(s)]}
             onPress={() => onOpen?.(post)}
@@ -166,7 +181,14 @@ export function PostCard({
             <MessageSquare color={colors.muted} size={16} strokeWidth={1.9} />
             <Text style={styles.actionText}>{threadCount > 0 ? threadCount : "Reply"}</Text>
           </Pressable>
-        ) : canReply ? (
+          <Text style={styles.openHint}>
+            {threadCount > 0
+              ? `${threadCount} ${threadCount === 1 ? "comment" : "comments"} ›`
+              : "Comment ›"}
+          </Text>
+        </View>
+      ) : canReply ? (
+        <View style={styles.replyRow}>
           <Pressable
             style={(s) => [styles.actionPill, pressFx(s)]}
             onPress={() => onReply?.(post)}
@@ -179,16 +201,8 @@ export function PostCard({
               {directReplies > 0 ? `${directReplies} · Reply` : "Reply"}
             </Text>
           </Pressable>
-        ) : null}
-
-        {preview && !isReply ? (
-          <Text style={styles.openHint}>
-            {threadCount > 0
-              ? `${threadCount} ${threadCount === 1 ? "comment" : "comments"} ›`
-              : "Comment ›"}
-          </Text>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       {!preview
         ? post.replies.map((r) => (
@@ -197,7 +211,7 @@ export function PostCard({
               post={r}
               isReply
               depth={depth + 1}
-              onLike={onLike}
+              onReact={onReact}
               onReply={onReply}
               onDelete={onDelete}
               onReport={onReport}
@@ -219,7 +233,11 @@ export function PostCard({
     return (
       <Pressable
         onPress={() => onOpen?.(post)}
-        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        style={({ pressed }) => [
+          styles.card,
+          { borderLeftWidth: 3, borderLeftColor: rankColor },
+          pressed && styles.cardPressed,
+        ]}
         accessibilityRole="button"
         accessibilityLabel="Open post thread"
       >
@@ -228,7 +246,7 @@ export function PostCard({
     );
   }
 
-  return <View style={styles.card}>{inner}</View>;
+  return <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: rankColor }]}>{inner}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -249,8 +267,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingLeft: 12,
   },
-  // Deep replies stop stepping right so the thread doesn't run off screen.
   replyCardFlat: { paddingLeft: 6, borderLeftColor: "rgba(124,92,255,0.15)" },
+  recordChip: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  recordChipText: {
+    color: colors.muted,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1.6,
+  },
+  recordChipType: { fontSize: 9, fontWeight: "900", letterSpacing: 1.6 },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   time: { color: colors.muted, fontSize: 12 },
   headerActions: { marginLeft: "auto", paddingLeft: 8 },
@@ -270,6 +295,8 @@ const styles = StyleSheet.create({
   },
   ctxCover: { width: 28, height: 38 },
   ctxText: { color: colors.accentSoft, fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
+  reviewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  reviewLabel: { color: colors.muted, fontSize: 11, fontWeight: "700" },
   body: { color: colors.text, fontSize: 15, lineHeight: 21, marginTop: 10 },
   shield: {
     marginTop: 10,
@@ -298,7 +325,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.6,
     marginTop: 4,
   },
-  actionsRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
+  reactionRow: { marginTop: 12 },
+  replyRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
   actionPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -310,14 +338,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  actionPillOn: { borderColor: "rgba(229,72,77,0.55)", backgroundColor: "rgba(229,72,77,0.08)" },
   actionText: {
     color: colors.muted,
     fontSize: 12.5,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
-  actionTextOn: { color: colors.danger },
   openHint: {
     marginLeft: "auto",
     color: colors.accentSoft,

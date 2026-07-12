@@ -60,9 +60,23 @@ community **series rank** (E→S) shown on the series screen.
 - [x] Backend: post kind/rating, reaction endpoint (`/posts/:id/react`),
       reaction aggregation in serialize + feed/thread, reviews summary
       (`GET /canonical/:id/reviews`), `api/src/ranks.ts`. Verified live.
-- [ ] Client: reaction bar, rank badge, review rating, System Record card,
-      composer type picker, feed type filter, series rank badge
-- [ ] Verify end-to-end + typecheck
+- [x] Client: `ReactionBar`, `RankBadge`, `ReviewRating`, System Record card
+      (`PostCard`), composer type picker + review rating, feed type filter
+      (All/Theories/Reviews), series community-rank badge + "Rate series".
+      `src/ranks.ts` (hunter ranks + reaction/kind presentation).
+- [x] Final app typecheck — clean; client committed.
+- [ ] Device test end-to-end
+
+### Social v2 — Phase 1: Social Feel v2 (in progress)
+Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`. Prominent type tabs,
+plain reactions (drop ⚡ Endorse → ❤️/emotes), richer per-type System Record
+cards + `SeriesEmbed`. Later phases: post functions (polls, sorting,
+quote-repost, mentions/#tags), images (Cloudinary, local-first), full guild
+depth (invites, wall, events, customization, contribution), Arena PvP games.
+
+- [ ] Prominent type tab bar (feed)
+- [ ] Reactions rework (drop Endorse; XP on any reaction received)
+- [ ] Richer System Record cards + `SeriesEmbed`
 
 ## 🗺️ Deferred / next
 

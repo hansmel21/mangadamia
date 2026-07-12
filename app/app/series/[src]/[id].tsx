@@ -15,6 +15,9 @@ import {
 } from "react-native";
 import { pressFx, useSwitchFade } from "../../../src/anim";
 import { api, type ChapterInfo } from "../../../src/api";
+import { PostComposer } from "../../../src/components/PostComposer";
+import { rankColors } from "../../../src/ranks";
+import { getSessionUser } from "../../../src/session";
 import {
   addToLibrary,
   getCanonicalProgress,
@@ -102,6 +105,7 @@ export default function SeriesScreen() {
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [lastRead, setLastRead] = useState<ReturnType<typeof getLastRead>>();
   const [focusTick, setFocusTick] = useState(0);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   // Refresh local state when returning from the reader or switching server
   useFocusEffect(
@@ -116,6 +120,12 @@ export default function SeriesScreen() {
   // Canonical (server-independent) progress: read-marks and the continue
   // point survive switching servers because they're keyed by chapter number.
   const canonicalId = series.data?.canonicalId ?? undefined;
+  const reviews = useQuery({
+    queryKey: ["seriesReviews", canonicalId],
+    queryFn: () => api.seriesReviews(canonicalId as string),
+    enabled: !!canonicalId,
+    staleTime: 30_000,
+  });
   const canonicalRead = useMemo(
     () => (canonicalId ? getCanonicalReadNumbers(canonicalId) : new Set<number>()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -268,6 +278,23 @@ export default function SeriesScreen() {
                 <Text style={styles.tags} numberOfLines={2}>
                   {s.tags.join(" · ")}
                 </Text>
+                {canonicalId && reviews.data ? (
+                  <View style={styles.rankChip}>
+                    {reviews.data.rank ? (
+                      <>
+                        <Text style={[styles.rankLetter, { color: rankColors[reviews.data.rank] }]}>
+                          {reviews.data.rank}
+                        </Text>
+                        <Text style={styles.rankMeta}>
+                          COMMUNITY RANK · {reviews.data.count}{" "}
+                          {reviews.data.count === 1 ? "review" : "reviews"}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.rankMeta}>UNRANKED · be the first to review</Text>
+                    )}
+                  </View>
+                ) : null}
               </View>
             </View>
 
@@ -343,17 +370,29 @@ export default function SeriesScreen() {
             </Pressable>
 
             {canonicalId ? (
-              <Pressable
-                style={(st) => [styles.wallBtn, pressFx(st)]}
-                onPress={() =>
-                  router.push({
-                    pathname: "/wall/[canonicalId]",
-                    params: { canonicalId, title: s.title },
-                  })
-                }
-              >
-                <Text style={styles.wallBtnText}>◆ VIEW SERIES WALL</Text>
-              </Pressable>
+              <View style={styles.socialRow}>
+                <Pressable
+                  style={(st) => [styles.wallBtn, { flex: 1 }, pressFx(st)]}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/wall/[canonicalId]",
+                      params: { canonicalId, title: s.title },
+                    })
+                  }
+                >
+                  <Text style={styles.wallBtnText}>◆ VIEW WALL</Text>
+                </Pressable>
+                {getSessionUser() ? (
+                  <Pressable
+                    style={(st) => [styles.wallBtn, styles.rateBtn, { flex: 1 }, pressFx(st)]}
+                    onPress={() => setReviewOpen(true)}
+                  >
+                    <Text style={[styles.wallBtnText, { color: colors.foil }]}>
+                      {reviews.data?.myReview ? "★ EDIT REVIEW" : "★ RATE SERIES"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
 
             <Text style={styles.sectionTitle}>Source</Text>
@@ -414,6 +453,15 @@ export default function SeriesScreen() {
         }}
       />
       </Animated.View>
+      {canonicalId ? (
+        <PostComposer
+          visible={reviewOpen}
+          onClose={() => setReviewOpen(false)}
+          context={{ canonicalId, title: s.title }}
+          initialKind="review"
+          onPosted={() => void reviews.refetch()}
+        />
+      ) : null}
     </View>
   );
 }
@@ -493,16 +541,19 @@ const styles = StyleSheet.create({
   },
   chapterText: { color: colors.text, fontSize: 14, flex: 1 },
   emptyChapters: { color: colors.muted, paddingHorizontal: 16, paddingVertical: 12, lineHeight: 20 },
+  socialRow: { flexDirection: "row", gap: 10, marginHorizontal: 16, marginTop: 16 },
   wallBtn: {
-    marginHorizontal: 16,
-    marginTop: 16,
     borderWidth: 1.5,
     borderColor: "rgba(124,92,255,0.4)",
     borderRadius: 4,
     paddingVertical: 11,
     alignItems: "center",
   },
+  rateBtn: { borderColor: "rgba(245,184,76,0.5)" },
   wallBtnText: { color: colors.accentSoft, fontWeight: "800", letterSpacing: 1.6, fontSize: 12 },
+  rankChip: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  rankLetter: { fontFamily: fonts.display, fontSize: 22 },
+  rankMeta: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1, flexShrink: 1 },
   serverRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16 },
   serverChip: {
     backgroundColor: colors.card,

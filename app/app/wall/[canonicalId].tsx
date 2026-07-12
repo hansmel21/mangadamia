@@ -5,7 +5,7 @@ import { Plus } from "lucide-react-native";
 import { useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../../src/anim";
-import { api, type PostInfo } from "../../src/api";
+import { api, type PostInfo, type ReactionType } from "../../src/api";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
 import { ReportModal, type ReportTarget } from "../../src/components/ReportModal";
@@ -44,11 +44,11 @@ export default function SeriesWallScreen() {
       return { ...old, pages: old.pages.map(walk) };
     });
   };
-  const like = async (p: PostInfo) => {
+  const react = async (p: PostInfo, type: ReactionType) => {
     if (!user) return;
     try {
-      const res = await api.togglePostLike(p.id);
-      patch(p.id, (x) => ({ ...x, likedByMe: res.liked, likeCount: res.likeCount }));
+      const res = await api.reactToPost(p.id, type);
+      patch(p.id, (x) => ({ ...x, reactions: res.reactions, myReaction: res.myReaction }));
     } catch {
       /* ignore */
     }
@@ -76,7 +76,7 @@ export default function SeriesWallScreen() {
               post={item}
               preview
               onOpen={(p) => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
-              onLike={like}
+              onReact={react}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })

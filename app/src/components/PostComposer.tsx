@@ -2,22 +2,27 @@
 // carries a series/chapter context chip. On success, celebrates badges/levels.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { api, type PostInfo, type UnifiedCard } from "../api";
+import { api, type PostInfo, type PostKind, type UnifiedCard } from "../api";
 import { celebrateBadges } from "../badges";
+import { POST_KINDS } from "../ranks";
 import { showExpGain } from "./ExpToast";
 import { showLevelUp } from "./LevelUp";
 import { showQuestCompletions } from "./QuestToast";
+import { ReviewRating } from "./ReviewRating";
 import { SystemModal } from "./SystemModal";
 import { TermsAcceptance } from "./TermsAcceptance";
 import { colors } from "../theme";
+
+const KIND_ORDER: PostKind[] = ["record", "theory", "review", "spoiler_intel"];
 
 export function PostComposer({
   visible,
   onClose,
   context,
   replyTo,
+  initialKind,
   onPosted,
 }: {
   visible: boolean;
@@ -26,6 +31,8 @@ export function PostComposer({
   context?: { canonicalId: string; title: string; chapterNumber?: number };
   // Or reply to an existing post
   replyTo?: PostInfo;
+  // Open on a specific record type (e.g. Review from the series screen)
+  initialKind?: PostKind;
   onPosted?: (post: PostInfo) => void;
 }) {
   const [body, setBody] = useState("");
@@ -34,7 +41,19 @@ export function PostComposer({
   const [error, setError] = useState("");
   const [seriesQuery, setSeriesQuery] = useState("");
   const [selectedSeries, setSelectedSeries] = useState<UnifiedCard[]>([]);
+  const [kind, setKind] = useState<PostKind>("record");
+  const [rating, setRating] = useState(0);
   const queryClient = useQueryClient();
+
+  // Reset the type/rating each time the composer opens.
+  useEffect(() => {
+    if (visible) {
+      setKind(replyTo ? "record" : (initialKind ?? "record"));
+      setRating(0);
+    }
+  }, [visible, replyTo, initialKind]);
+
+  const isReview = kind === "review" && !replyTo;
   const seriesResults = useQuery({
     queryKey: ["composerSeries", seriesQuery],
     queryFn: () => api.searchAll(seriesQuery.trim(), 1),
@@ -45,6 +64,16 @@ export function PostComposer({
   const submit = async () => {
     const text = body.trim();
     if (!text) return;
+    // A review needs one series (from context or the picker) and a rating.
+    const reviewSeries = context?.canonicalId ?? selectedSeries[0]?.canonicalId;
+    if (isReview && !reviewSeries) {
+      setError("Pick one series to review.");
+      return;
+    }
+    if (isReview && !rating) {
+      setError("Add a 1–5 rating for your review.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -52,13 +81,20 @@ export function PostComposer({
         canonicalId: replyTo ? undefined : context?.canonicalId,
         chapterNumber: replyTo ? undefined : context?.chapterNumber,
         parentId: replyTo?.id,
-        isSpoiler: spoiler,
-        seriesTags:
-          !replyTo && !context
-            ? selectedSeries
-                .filter((series) => !!series.canonicalId)
-                .map((series) => ({ canonicalId: series.canonicalId! }))
-            : undefined,
+        isSpoiler: kind === "spoiler_intel" ? true : spoiler,
+        kind: replyTo ? undefined : kind,
+        rating: isReview ? rating : undefined,
+        seriesTags: replyTo
+          ? undefined
+          : isReview
+            ? context
+              ? undefined
+              : [{ canonicalId: reviewSeries! }]
+            : !context
+              ? selectedSeries
+                  .filter((series) => !!series.canonicalId)
+                  .map((series) => ({ canonicalId: series.canonicalId! }))
+              : undefined,
       });
       showExpGain(created.xpAwarded);
       celebrateBadges(created.newBadges);
@@ -68,6 +104,7 @@ export function PostComposer({
       setSpoiler(false);
       setSelectedSeries([]);
       setSeriesQuery("");
+      setRating(0);
       queryClient.invalidateQueries({ queryKey: ["feed"] });
       onPosted?.(created);
       onClose();
@@ -78,7 +115,7 @@ export function PostComposer({
     }
   };
 
-  const title = replyTo ? "Reply" : "New Post";
+  const title = replyTo ? "Reply" : isReview ? "File a Review" : "File a Record";
   const chip = replyTo
     ? `Replying to @${replyTo.username}`
     : context
@@ -95,13 +132,34 @@ export function PostComposer({
           </Text>
         </View>
       ) : null}
+      {!replyTo ? (
+        <View style={styles.typeRow}>
+          {KIND_ORDER.map((k) => (
+            <Pressable
+              key={k}
+              style={[styles.typeChip, kind === k && styles.typeChipOn]}
+              onPress={() => setKind(k)}
+            >
+              <Text style={[styles.typeChipText, kind === k && { color: POST_KINDS[k].color }]}>
+                {POST_KINDS[k].label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {isReview ? (
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingLabel}>YOUR RATING</Text>
+          <ReviewRating value={rating} onChange={setRating} size={28} />
+        </View>
+      ) : null}
       {!replyTo && !context ? (
         <View style={styles.seriesPicker}>
           <TextInput
             style={styles.seriesInput}
             value={seriesQuery}
             onChangeText={setSeriesQuery}
-            placeholder="Tag up to 5 manga (optional)"
+            placeholder={isReview ? "Search the series you're reviewing" : "Tag up to 5 manga (optional)"}
             placeholderTextColor={colors.muted}
           />
           {selectedSeries.length > 0 ? (
@@ -137,15 +195,24 @@ export function PostComposer({
         autoFocus
         maxLength={1000}
       />
-      <Pressable
-        style={(s) => [styles.spoilerToggle, { opacity: s.pressed ? 0.6 : 1 }]}
-        onPress={() => setSpoiler((v) => !v)}
-      >
-        <View style={[styles.checkbox, spoiler && styles.checkboxOn]}>
-          {spoiler ? <EyeOff color={colors.accentText} size={11} strokeWidth={2.5} /> : null}
+      {kind === "spoiler_intel" ? (
+        <View style={styles.spoilerToggle}>
+          <EyeOff color={colors.danger} size={13} strokeWidth={2.5} />
+          <Text style={[styles.spoilerText, { color: colors.danger }]}>
+            Spoiler Intel is shielded automatically
+          </Text>
         </View>
-        <Text style={styles.spoilerText}>Mark as spoiler</Text>
-      </Pressable>
+      ) : (
+        <Pressable
+          style={(s) => [styles.spoilerToggle, { opacity: s.pressed ? 0.6 : 1 }]}
+          onPress={() => setSpoiler((v) => !v)}
+        >
+          <View style={[styles.checkbox, spoiler && styles.checkboxOn]}>
+            {spoiler ? <EyeOff color={colors.accentText} size={11} strokeWidth={2.5} /> : null}
+          </View>
+          <Text style={styles.spoilerText}>Mark as spoiler</Text>
+        </Pressable>
+      )}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.actions}>
         <Pressable style={(s) => [styles.btnGhost, { opacity: s.pressed ? 0.6 : 1 }]} onPress={onClose}>
@@ -169,6 +236,18 @@ export function PostComposer({
 }
 
 const styles = StyleSheet.create({
+  typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 },
+  typeChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  typeChipOn: { borderColor: "rgba(124,92,255,0.7)", backgroundColor: "rgba(124,92,255,0.12)" },
+  typeChipText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 0.8 },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  ratingLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
   seriesPicker: { marginBottom: 10 },
   seriesInput: { color: colors.text, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
   selectedSeries: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 6 },

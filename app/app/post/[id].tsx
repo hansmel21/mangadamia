@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { api, type PostInfo } from "../../src/api";
+import { api, type PostInfo, type ReactionType } from "../../src/api";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
 import { ReportModal, type ReportTarget } from "../../src/components/ReportModal";
@@ -49,11 +49,11 @@ export default function PostThreadScreen() {
   const patch = (targetId: string, fn: (p: PostInfo) => PostInfo) =>
     queryClient.setQueryData<PostInfo>(queryKey, (old) => (old ? patchPost(old, targetId, fn) : old));
 
-  const like = async (p: PostInfo) => {
+  const react = async (p: PostInfo, type: ReactionType) => {
     if (!user) return;
     try {
-      const res = await api.togglePostLike(p.id);
-      patch(p.id, (x) => ({ ...x, likedByMe: res.liked, likeCount: res.likeCount }));
+      const res = await api.reactToPost(p.id, type);
+      patch(p.id, (x) => ({ ...x, reactions: res.reactions, myReaction: res.myReaction }));
     } catch {
       /* ignore */
     }
@@ -92,7 +92,7 @@ export default function PostThreadScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 110, paddingTop: 4 }}>
           <PostCard
             post={post}
-            onLike={like}
+            onReact={react}
             onReply={startReply}
             onDelete={remove}
             onReport={(p) => setReportTarget({ type: "post", id: p.id, username: p.username })}

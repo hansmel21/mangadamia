@@ -7,7 +7,7 @@ import { Plus } from "lucide-react-native";
 import { useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../../src/anim";
-import { api, type PostInfo } from "../../src/api";
+import { api, type PostInfo, type ReactionType } from "../../src/api";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
 import { ReportModal, type ReportTarget } from "../../src/components/ReportModal";
@@ -24,12 +24,14 @@ export default function FeedScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [feedMode, setFeedMode] = useState<"global" | "following">("global");
-  const queryKey = ["feed", feedMode] as const;
+  const [typeFilter, setTypeFilter] = useState<"all" | "theory" | "review">("all");
+  const queryKey = ["feed", feedMode, typeFilter] as const;
 
   const feed = useInfiniteQuery({
     queryKey,
     initialPageParam: 1,
-    queryFn: ({ pageParam }) => api.feed(pageParam, undefined, feedMode),
+    queryFn: ({ pageParam }) =>
+      api.feed(pageParam, undefined, feedMode, typeFilter === "all" ? undefined : typeFilter),
     getNextPageParam: (last, pages) => (last.length > 0 ? pages.length + 1 : undefined),
   });
 
@@ -54,11 +56,11 @@ export default function FeedScreen() {
     });
   };
 
-  const like = async (p: PostInfo) => {
+  const react = async (p: PostInfo, type: ReactionType) => {
     if (!user) return;
     try {
-      const res = await api.togglePostLike(p.id);
-      patch(p.id, (x) => ({ ...x, likedByMe: res.liked, likeCount: res.likeCount }));
+      const res = await api.reactToPost(p.id, type);
+      patch(p.id, (x) => ({ ...x, reactions: res.reactions, myReaction: res.myReaction }));
     } catch {
       /* ignore */
     }
@@ -92,6 +94,19 @@ export default function FeedScreen() {
           </Pressable>
         ))}
       </View>
+      <View style={styles.filterRow}>
+        {(["all", "theory", "review"] as const).map((f) => (
+          <Pressable
+            key={f}
+            style={[styles.filterChip, typeFilter === f && styles.filterChipOn]}
+            onPress={() => setTypeFilter(f)}
+          >
+            <Text style={[styles.filterChipText, typeFilter === f && styles.filterChipTextOn]}>
+              {f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       {feed.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
       ) : (
@@ -103,7 +118,7 @@ export default function FeedScreen() {
               post={item}
               preview
               onOpen={openThread}
-              onLike={like}
+              onReact={react}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
@@ -158,6 +173,18 @@ const styles = StyleSheet.create({
   feedTabActive: { borderBottomColor: colors.accent },
   feedTabText: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
   feedTabTextActive: { color: colors.accentSoft },
+  filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  filterChipOn: { borderColor: "rgba(124,92,255,0.7)", backgroundColor: "rgba(124,92,255,0.14)" },
+  filterChipText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
+  filterChipTextOn: { color: colors.accentSoft },
   empty: { color: colors.muted, textAlign: "center", marginTop: 60, lineHeight: 22 },
   fab: {
     position: "absolute",
