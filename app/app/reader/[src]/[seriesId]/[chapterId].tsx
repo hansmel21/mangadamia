@@ -403,9 +403,14 @@ export default function ReaderScreen() {
             <Pressable onPress={() => router.back()} hitSlop={12}>
               <Text style={styles.topBarText}>‹ Back</Text>
             </Pressable>
-            <Text style={styles.topBarTitle} numberOfLines={1}>
-              {chapterLabel}
-            </Text>
+            <View style={styles.topBarTitleWrap}>
+              <Text style={styles.topBarTitle} numberOfLines={1}>
+                {series.data?.title ?? ""}
+              </Text>
+              <Text style={styles.topBarChapter} numberOfLines={1}>
+                {chapterLabel.toUpperCase()}
+              </Text>
+            </View>
             <View style={styles.topBarActions}>
               {canonicalId && getSessionUser() ? (
                 <Pressable onPress={() => setPostOpen(true)} hitSlop={12}>
@@ -465,6 +470,9 @@ export default function ReaderScreen() {
               >
                 <Text style={styles.btnText}>‹ Prev</Text>
               </Pressable>
+              <Pressable hitSlop={10} onPress={() => router.back()}>
+                <Text style={styles.saveExit}>SAVE &amp; EXIT ▸</Text>
+              </Pressable>
               <Pressable
                 style={(s) => [styles.navBtn, !next && styles.navBtnDisabled, pressFx(s)]}
                 disabled={!next}
@@ -473,6 +481,9 @@ export default function ReaderScreen() {
                 <Text style={styles.btnText}>Next ›</Text>
               </Pressable>
             </View>
+            <Text style={styles.autoSaveHint}>
+              progress auto-saves · +XP on chapter clear
+            </Text>
           </View>
         </>
       )}
@@ -748,22 +759,40 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(15,17,21,0.92)",
+    backgroundColor: "rgba(10,11,16,0.94)",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.hairline,
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
   topBarText: { color: colors.text, fontSize: 15 },
   topBarActions: { flexDirection: "row", alignItems: "center", gap: 16 },
-  topBarTitle: { color: colors.text, fontWeight: "700", flex: 1, textAlign: "center" },
+  topBarTitleWrap: { flex: 1, alignItems: "center", gap: 1 },
+  topBarTitle: { color: colors.text, fontSize: 13, fontWeight: "800", textAlign: "center" },
+  topBarChapter: {
+    color: colors.accentBright,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
   bottomBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(15,17,21,0.92)",
+    backgroundColor: "rgba(10,11,16,0.94)",
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
     paddingHorizontal: 16,
     paddingTop: 12,
     gap: 10,
+  },
+  saveExit: { color: colors.data, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.2 },
+  autoSaveHint: {
+    color: colors.muted,
+    fontSize: 9,
+    textAlign: "center",
+    marginTop: -2,
   },
   sliderRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   controlLabel: {

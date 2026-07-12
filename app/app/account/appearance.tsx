@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { api } from "../../src/api";
-import { ReaderAvatar } from "../../src/components/ReaderAvatar";
+import { HunterAvatar } from "../../src/components/HunterAvatar";
 import { UserIdentity } from "../../src/components/UserIdentity";
 import { normalizeRarity, rarityColors } from "../../src/rarity";
 import { colors } from "../../src/theme";
@@ -24,7 +24,7 @@ export default function AppearanceScreen() {
           const equipped = me.data.equippedAvatarId === item.id;
           return (
             <Pressable key={item.id} style={[styles.card, equipped && styles.equipped]} onPress={() => equip("avatar", item.id)}>
-              <ReaderAvatar identity={identity} size={58} />
+              <HunterAvatar identity={identity} size={58} showRank={false} />
               <Text style={styles.name}>{item.name}</Text>
               <Text style={[styles.rarity, { color: rarityColors[normalizeRarity(item.rarity)].text }]}>{item.rarity.toUpperCase()}</Text>
             </Pressable>
@@ -42,7 +42,7 @@ export default function AppearanceScreen() {
           const equipped = me.data.equippedFrameId === item.id;
           return (
             <Pressable key={item.id} style={[styles.card, equipped && styles.equipped]} onPress={() => equip("frame", item.id)}>
-              <ReaderAvatar identity={identity} size={58} />
+              <HunterAvatar identity={identity} size={58} showRank={false} />
               <Text style={styles.name}>{item.name}</Text>
               <Text style={[styles.rarity, { color: rarityColors[normalizeRarity(item.rarity)].text }]}>{item.rarity.toUpperCase()}</Text>
             </Pressable>
