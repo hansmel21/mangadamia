@@ -21,6 +21,7 @@ import {
 import { prisma } from "../db/client.js";
 import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../identity.js";
 import { createNotification } from "../notifications.js";
+import { bumpWeeklyXp } from "../arena.js";
 import { bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateUserContent } from "../policy.js";
@@ -789,6 +790,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       });
       const after = levelForXp(updated.xp);
       if (after > before) levelUp = after;
+      await bumpWeeklyXp(prisma, user.id, 2);
       await creditGuild(user.id, 2);
       newBadges = (await evaluateBadges(user.id)).map((b) => ({
         id: b.id,
@@ -961,6 +963,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       });
       const levelAfter = levelForXp(updated.xp);
       const levelUp = levelAfter > levelBefore ? levelAfter : null;
+      await bumpWeeklyXp(prisma, user.id, 10);
       await creditGuild(user.id, 10);
       const newBadges = (await evaluateBadges(user.id)).map((b) => ({
         id: b.id,
@@ -1600,6 +1603,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       data: { xp: { increment: 8 } },
       select: { xp: true },
     });
+    await bumpWeeklyXp(prisma, user.id, 8);
     await creditGuild(user.id, 8);
     const levelAfter = levelForXp(updated.xp);
     const identity = await identityForUser(user.id, user.id);
@@ -1721,6 +1725,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         where: { id: post.userId },
         data: { xp: { increment: delta } },
       });
+      await bumpWeeklyXp(prisma, post.userId, delta);
       if (delta > 0) {
         await creditGuild(post.userId, 5);
         await evaluateBadges(post.userId);
@@ -2172,6 +2177,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         where: { id: comment.userId },
         data: { xp: { increment: existing ? -5 : 5 } },
       });
+      await bumpWeeklyXp(prisma, comment.userId, existing ? -5 : 5);
       if (!existing) {
         await creditGuild(comment.userId, 5);
         await evaluateBadges(comment.userId);

@@ -68,12 +68,26 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ⚠ **War refinements**: rewards for the winner; a rollover job to freeze final scores exactly at week end (today the last live read before rollover stands as final).
 - ⚠ **Raid cosmetic reward** (design shows "Frame: Ember Wreath") — needs per-member reward grants; current bonus is +250 guild XP.
 
-## Arena (§7) — new surface (per ARENA_PLAN.md)
-- ⚠ **Quiz**: `ArenaEvent {type:quiz, seriesId, questions, opensAt, closesAt}`, `api.arenaEnter`, `api.arenaSubmit(score, ms)` → rewards pipeline. Quiz runner screen. Full backend.
-- ⚠ **Weekly EXP board**: podium + own-rank row — needs `GET /leaderboard/weekly?around=me` (weekly XP tracked; endpoint missing).
-- ⚠ **Prediction pool**: a Poll with a deadline + XP payout on resolution — reuse `PollView` vote wiring; needs a resolution job.
-- ⚠ **Draw competition**: image entries + one-vote-per-user. **Blocked by the no-uploads policy** — needs an upload exception or off-app hosting. Voting can reuse poll plumbing.
-- 🎨 Week number + countdown in header (server week number).
+## Arena (§7) — quiz + board + pools DONE (Phase 5, E2E-tested)
+- ✅ **Quiz**: `ArenaEvent`/`ArenaEntry` models, server-side scoring (the answer
+  key never reaches the device until the entry is locked — no mid-quiz ✓/✗ by
+  design, anti-cheat), one entry per reader, countdown auto-submit, XP on entry
+  (10 + 5/correct), +100 XP winner bonus at lazy close-out. Quiz runner screen
+  `arena/[id]` with post-run ✓/✗ review. Admin creator `POST /admin/arena/events`.
+- ✅ **Weekly EXP board**: `User.weeklyXp/weekKey` window bumped at every XP
+  award site (posts, reactions, reads, comments, quests, reversals, arena);
+  `GET /arena/leaderboards/weekly_xp` with top 20 + own pinned rank. Podium UI.
+- ✅ **Prediction pool**: ArenaEvent kind "poll", one stake per reader (re-vote
+  moves it), +5 XP first vote, **automatic majority payout** (+20 XP, no-tie
+  rule) at lazy close — no admin resolution job needed.
+- ✅ Week number + countdown header; past-results list; hub at `arena/index`.
+- ⚠ **Draw competition**: still **blocked by the no-uploads policy**.
+- ⚠ **Winner titles** ("Gate Scholar" for top 10%): needs title-grant plumbing
+  at close-out (current winner reward is XP only).
+- ⚠ **Scheduled close-out job**: current close-out is lazy (first read after
+  endsAt). A cron makes payouts prompt + enables LeaderboardSnapshot history
+  (ARENA_PLAN phase 2).
+- ⚠ **Weekly-quests + series leaderboards** (ARENA_PLAN phase 2).
 
 ## Status (§8) — DONE (Phase 3); two stats backend-gated
 - ✅ STATUS header + bell + settings key; menus moved to new `account/settings.tsx` (edit profile, follow requests, moderation, staff, legal, sign-out, delete).
@@ -116,9 +130,9 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 6. ~~Guild War~~ ✅ shipped (Phase 4: `GET /guilds/:id/war`, `/wars`, `GuildWar` model, lazy matchmaking).
 7. ~~Guild Raid~~ ✅ shipped (Phase 4: `GuildRaidProgress` + completion hook + `GET /guilds/:id/raid`).
 8. ~~Guild Board~~ ✅ shipped (Phase 4: board create/list/pin + leak guards).
-9. Weekly leaderboard: `GET /leaderboard/weekly?around=me`.
-10. Arena: `ArenaEvent` + quiz enter/submit + prediction-pool resolution job.
-11. Profile stats: `dayStreak`, `weeklyRank` on `me`.
+9. ~~Weekly leaderboard~~ ✅ shipped (Phase 5: `GET /arena/leaderboards/weekly_xp` + `User.weeklyXp` window).
+10. ~~Arena~~ ✅ shipped (Phase 5: quiz + pools + lazy close-out; draw comp & titles remain).
+11. Profile stats: `dayStreak` on `me` (⚠); `weeklyRank` is now derivable from the weekly board endpoint (🎨 wire into Status grid).
 12. Quests: `deepLink` field + daily chain-bonus rule.
 13. Series activity rate ("posts/hr") — per-series recent post/comment rate.
 14. Guild member XP multiplier (if "+10% XP" should be real).

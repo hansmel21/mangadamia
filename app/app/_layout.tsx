@@ -74,7 +74,9 @@ export default function RootLayout() {
         <Stack.Screen name="admin/users" options={{ title: "User Administration" }} />
         <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
         <Stack.Screen name="quests" options={{ title: "Quest Window" }} />
-        <Stack.Screen name="arena" options={{ title: "The Arena" }} />
+        {/* Arena screens render their own in-screen System headers. */}
+        <Stack.Screen name="arena/index" options={{ headerShown: false }} />
+        <Stack.Screen name="arena/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="guilds" options={{ title: "Guilds" }} />
         <Stack.Screen name="guild/[id]" options={{ title: "" }} />
         <Stack.Screen name="guild/create" options={{ title: "Found a Guild" }} />

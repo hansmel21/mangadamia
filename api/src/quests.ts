@@ -1,4 +1,5 @@
 import type { Prisma, QuestDefinition } from "@prisma/client";
+import { bumpWeeklyXp } from "./arena.js";
 import { getBadge, levelForXp } from "./badges.js";
 import { prisma } from "./db/client.js";
 
@@ -129,6 +130,7 @@ export async function recordActivity(userId: string, input: ActivityInput): Prom
           },
         });
         await tx.user.update({ where: { id: userId }, data: { xp: { increment: xpTx.delta } } });
+        await bumpWeeklyXp(tx, userId, xpTx.delta);
         rewards.push({ type: "xp", name: `${quest.xpReward} XP`, amount: quest.xpReward });
       }
       if (quest.badgeRewardId) {
@@ -371,6 +373,7 @@ export async function reverseActivityForContent(
               update: {},
             });
             await tx.user.update({ where: { id: userId }, data: { xp: { increment: delta } } });
+            await bumpWeeklyXp(tx, userId, delta);
           }
           const grants = await tx.rewardGrant.findMany({
             where: { userId, sourceType: "quest", sourceId: progress.id, revokedAt: null },
@@ -459,6 +462,7 @@ export async function reverseDirectContentXp(
       data: { userId, delta, sourceType: "content_reversal", sourceId },
     });
     await tx.user.update({ where: { id: userId }, data: { xp: { increment: delta } } });
+    await bumpWeeklyXp(tx, userId, delta);
   });
 }
 
@@ -498,5 +502,6 @@ export async function restoreDirectContentXp(
       data: { userId, delta: amount, sourceType: "content_restore", sourceId },
     });
     await tx.user.update({ where: { id: userId }, data: { xp: { increment: amount } } });
+    await bumpWeeklyXp(tx, userId, amount);
   });
 }

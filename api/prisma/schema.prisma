@@ -41,6 +41,10 @@ model User {
   // Denormalized XP: comment +10, like received +5, chapter read +2.
   // Level is derived: floor(sqrt(xp/100)) + 1.
   xp                   Int                     @default(0)
+  // Weekly XP window for the Arena leaderboard (rolls over lazily on the
+  // Monday-anchored UTC week boundary, same pattern as GuildMember).
+  weeklyXp             Int                     @default(0)
+  weekKey              String                  @default("")
   // Earned badge the user displays as their Title (validated on equip)
   // Legacy only. Badges remain collectible, but are no longer social Titles.
   equippedBadgeId      String?
@@ -96,6 +100,43 @@ model User {
   guildJoinRequests    GuildJoinRequest[]
   guildXpContributions GuildXpTransaction[]
   pollVotes            PollVote[]
+  arenaEntries         ArenaEntry[]
+}
+
+// ── Arena: scheduled weekly games (ARENA_PLAN.md, phase 1) ─────────────────
+// Status is computed on read from startsAt/endsAt (upcoming | live | ended);
+// finalizedAt marks the lazy close-out that pays winner rewards.
+model ArenaEvent {
+  id          String       @id @default(cuid())
+  kind        String // "quiz" | "poll"
+  title       String
+  description String
+  startsAt    DateTime
+  endsAt      DateTime
+  canonicalId String? // optional series focus
+  // quiz: { questions: [{ q, options[<=4], correct }], durationSec }
+  // poll: { options: string[] }
+  config      Json
+  finalizedAt DateTime?
+  createdAt   DateTime     @default(now())
+  entries     ArenaEntry[]
+
+  @@index([endsAt])
+}
+
+model ArenaEntry {
+  id        String     @id @default(cuid())
+  eventId   String
+  userId    String
+  // quiz: { answers: number[], ms: number }; poll: { option: number }
+  payload   Json
+  score     Int?
+  createdAt DateTime   @default(now())
+  event     ArenaEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId]) // one entry per reader per event
+  @@index([eventId, score])
 }
 
 // Titles are independent social identity rewards. They never grant authority;

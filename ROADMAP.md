@@ -125,8 +125,30 @@ not-yet-built features and ⚠ backend endpoints: **`UI-UX/NOT_YET_IMPLEMENTED.m
 - Found in testing: account deletion orphans guilds (pre-existing; leave-route
   succession never runs) — flagged as a separate task.
 
-**Next phases (build order):** Arena (⚠ backend, per ARENA_PLAN) → remaining
-polish (roster restyle, presence, trending). See `NOT_YET_IMPLEMENTED.md`.
+**Phase 5 — Arena (done, E2E-tested live; ARENA_PLAN phase 1 complete):**
+- **Migration** `arena_events_weekly_xp`: `ArenaEvent`/`ArenaEntry` +
+  `User.weeklyXp`/`weekKey` (Monday-anchored weekly window).
+- **Backend** (`api/src/arena.ts`, `routes/arena.ts`):
+  - Quiz: server-side scoring — the answer key never reaches the device until
+    the entry is locked (anti-cheat). One entry per reader; XP = 10 + 5/correct;
+    +100 XP winner bonus at close. Admin creator (`manage_rewards`).
+  - Prediction pools: one stake per reader (re-vote moves it), +5 XP first
+    vote, automatic majority payout (+20 XP) — no resolution job needed.
+  - Lazy close-out (like war matchmaking): the first read after `endsAt`
+    finalizes and pays winners; `finalizedAt` claimed atomically.
+  - **Weekly XP leaderboard**: `bumpWeeklyXp` hooked at every XP site
+    (posts/reactions/reads/comments/quests/reversals/arena);
+    `GET /arena/leaderboards/weekly_xp` = top 20 + own pinned rank.
+- **Client**: Arena hub (`arena/index`) — LIVE quiz hero with pulse chip,
+  pool cards with live percentages, weekly board podium + own-rank row, past
+  results; quiz runner (`arena/[id]`) with countdown auto-submit and ✓/✗
+  review after entry. Seeded a demo quiz + pool for this week.
+- Verified live: entry scoring (3/5 → 25 XP), double-entry rejection, answer-key
+  protection, pool vote + tallies, leaderboard rank.
+
+**Remaining polish:** draw competition (blocked on uploads), winner titles,
+scheduled close-out + snapshots, roster restyle, presence, trending. See
+`NOT_YET_IMPLEMENTED.md`.
 
 ## 🔨 In progress
 

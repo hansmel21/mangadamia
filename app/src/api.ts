@@ -213,6 +213,59 @@ export interface GuildRaidInfo {
   myShare: number | null;
 }
 
+// ── Arena (weekly games + leaderboard) ──────────────────────────────────────
+export type ArenaStatus = "upcoming" | "live" | "ended";
+
+export interface ArenaEventSummary {
+  id: string;
+  kind: "quiz" | "poll";
+  title: string;
+  description: string;
+  startsAt: string;
+  endsAt: string;
+  status: ArenaStatus;
+  entryCount: number;
+  entered: boolean;
+  myScore: number | null;
+}
+
+export interface ArenaEventsResponse {
+  weekNo: number;
+  weekEndsAt: string;
+  events: ArenaEventSummary[];
+}
+
+export interface ArenaQuizDetail extends ArenaEventSummary {
+  kind: "quiz";
+  durationSec: number;
+  questionCount: number;
+  questions: { q: string; options: string[] }[];
+  // Answer key — null until the reader has entered (or the event ended).
+  answers: number[] | null;
+  myAnswers: number[] | null;
+}
+
+export interface ArenaPollDetail extends ArenaEventSummary {
+  kind: "poll";
+  options: string[];
+  votes: number[];
+  totalVotes: number;
+  myVote: number | null;
+}
+
+export interface WeeklyBoardRow {
+  rank: number;
+  xp: number;
+  identity: PublicIdentity | null;
+}
+
+export interface WeeklyBoardResponse {
+  weekNo: number;
+  weekEndsAt: string;
+  rows: WeeklyBoardRow[];
+  me: { rank: number; xp: number } | null;
+}
+
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "mythic";
 
 export interface CosmeticMini {
@@ -795,6 +848,26 @@ export const api = {
       `/posts/${encodeURIComponent(postId)}/pin`,
       "POST",
     ),
+  arenaEvents: () => get<ArenaEventsResponse>("/arena/events"),
+  arenaEvent: (id: string) =>
+    get<ArenaQuizDetail | ArenaPollDetail>(`/arena/events/${encodeURIComponent(id)}`),
+  arenaQuizEntry: (id: string, answers: number[], ms: number) =>
+    request<{
+      ok: boolean;
+      score: number;
+      total: number;
+      answers: number[];
+      xpAwarded: number;
+      levelUp: number | null;
+      completedQuests: QuestCompletion[];
+    }>(`/arena/events/${encodeURIComponent(id)}/entry`, "POST", { answers, ms }),
+  arenaPollVote: (id: string, option: number) =>
+    request<{ ok: boolean; myVote: number; xpAwarded: number }>(
+      `/arena/events/${encodeURIComponent(id)}/entry`,
+      "POST",
+      { option },
+    ),
+  weeklyBoard: () => get<WeeklyBoardResponse>("/arena/leaderboards/weekly_xp"),
 
   notifications: (cursor?: string) =>
     get<NotificationPage>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
