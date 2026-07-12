@@ -167,14 +167,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 2,
   },
-  // Divider + spacing that clearly marks where one comment thread ends and the
-  // next begins.
+  // Each top-level comment thread is its own contrasting card, so it's obvious
+  // where one thread ends and the next begins (Reddit-style).
   commentThread: {
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    marginHorizontal: 12,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 12,
   },
   missing: { alignItems: "center", marginTop: 72, gap: 16, paddingHorizontal: 24 },
   missingText: { color: colors.muted, textAlign: "center", lineHeight: 22 },

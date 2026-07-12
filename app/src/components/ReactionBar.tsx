@@ -1,7 +1,8 @@
 // Reaction bar for System Records. Tapping "React" springs a floating emote
-// tray up over the card (Facebook-style); pick one to react. Reactions already
-// left show as tappable count chips. One reaction per reader: tap your current
-// one to clear it, another to swap.
+// tray up over the card and animates closed into itself (Facebook-style). The
+// reactions a post has are shown as one condensed cluster (up to 3 emojis + a
+// total), so it never sprawls no matter how many people react. One reaction per
+// reader: tap your current one to clear it, another to swap.
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ReactionType } from "../api";
@@ -22,7 +23,9 @@ export function ReactionBar({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [trayMounted, setTrayMounted] = useState(false);
   const anim = useRef(new Animated.Value(0)).current;
-  const present = REACTIONS.filter((r) => (reactions[r.type] ?? 0) > 0);
+
+  const total = Object.values(reactions).reduce((sum, n) => sum + n, 0);
+  const present = REACTIONS.filter((r) => (reactions[r.type] ?? 0) > 0).slice(0, 3);
   const myEmoji = myReaction ? reactionEmoji[myReaction] : null;
 
   useEffect(() => {
@@ -38,10 +41,10 @@ export function ReactionBar({
     } else if (trayMounted) {
       Animated.timing(anim, {
         toValue: 0,
-        duration: 130,
-        easing: Easing.in(Easing.quad),
+        duration: 170,
+        easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
-      }).start(() => setTrayMounted(false));
+      }).start(({ finished }) => finished && setTrayMounted(false));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickerOpen]);
@@ -60,8 +63,8 @@ export function ReactionBar({
             {
               opacity: anim,
               transform: [
-                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
+                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
               ],
             },
           ]}
@@ -99,21 +102,24 @@ export function ReactionBar({
           </Text>
         </Pressable>
 
-        {present.map((r) => (
+        {total > 0 ? (
           <Pressable
-            key={r.type}
-            style={[styles.chip, myReaction === r.type && styles.chipOn]}
-            onPress={() => react(r.type)}
+            style={styles.summary}
+            onPress={() => setPickerOpen(true)}
             hitSlop={6}
             disabled={disabled}
-            accessibilityLabel={r.label}
+            accessibilityLabel={`${total} reactions`}
           >
-            <Text style={styles.chipEmoji}>{r.emoji}</Text>
-            <Text style={[styles.chipCount, myReaction === r.type && styles.chipCountOn]}>
-              {reactions[r.type]}
-            </Text>
+            <View style={styles.summaryEmojis}>
+              {present.map((r, i) => (
+                <View key={r.type} style={[styles.summaryEmojiWrap, i > 0 && { marginLeft: -7 }]}>
+                  <Text style={styles.summaryEmoji}>{r.emoji}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.summaryCount}>{total}</Text>
           </Pressable>
-        ))}
+        ) : null}
       </View>
     </View>
   );
@@ -121,7 +127,7 @@ export function ReactionBar({
 
 const styles = StyleSheet.create({
   wrap: { gap: 8, position: "relative" },
-  row: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
   tray: {
     position: "absolute",
     bottom: "100%",
@@ -160,19 +166,18 @@ const styles = StyleSheet.create({
   reactEmoji: { fontSize: 15 },
   reactLabel: { color: colors.muted, fontSize: 12.5, fontWeight: "800" },
   reactLabelOn: { color: colors.accentSoft },
-  chip: {
-    flexDirection: "row",
+  summary: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 4 },
+  summaryEmojis: { flexDirection: "row" },
+  summaryEmojiWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.bg,
     alignItems: "center",
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 9,
-    borderRadius: 999,
-    backgroundColor: colors.bg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    justifyContent: "center",
   },
-  chipOn: { borderColor: colors.accentSoft, backgroundColor: "rgba(124,92,255,0.12)" },
-  chipEmoji: { fontSize: 14 },
-  chipCount: { color: colors.muted, fontSize: 12, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  chipCountOn: { color: colors.text },
+  summaryEmoji: { fontSize: 12 },
+  summaryCount: { color: colors.muted, fontSize: 12.5, fontWeight: "700", fontVariant: ["tabular-nums"] },
 });

@@ -13,7 +13,6 @@ import { pressFx } from "../anim";
 import type { PostInfo, ReactionType } from "../api";
 import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
-import { RankBadge } from "./RankBadge";
 import { ReactionBar } from "./ReactionBar";
 import { ReviewRating } from "./ReviewRating";
 import { SeriesEmbed } from "./SeriesEmbed";
@@ -99,7 +98,6 @@ export function PostCard({
             onPress={() => post.author?.id && openProfile(post.author.username)}
           />
         ) : null}
-        {!isReply ? <RankBadge level={post.author?.level ?? post.level} size={17} /> : null}
         <Text style={styles.time}>· {timeAgo(post.createdAt)}</Text>
         <View style={styles.headerActions}>
           {post.mine ? (

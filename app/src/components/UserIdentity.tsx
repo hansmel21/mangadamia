@@ -24,11 +24,11 @@ export function UserIdentity({
           <Text style={[styles.name, profile && styles.profileName]} numberOfLines={1}>
             {identity.username}
           </Text>
+          {identity.guild ? (
+            <GuildCrest guild={identity.guild} size={profile ? 18 : 15} />
+          ) : null}
           {identity.level != null ? <Text style={styles.level}>LV {identity.level}</Text> : null}
         </View>
-        {identity.guild ? (
-          <GuildCrest guild={identity.guild} size={profile ? 20 : 16} />
-        ) : null}
         {identity.title ? <TitleFlair title={identity.title} compact={compact} /> : null}
         {identity.staffMarker ? (
           <Text style={styles.staff}>◆ {identity.staffMarker.label.toUpperCase()}</Text>
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   profileWrap: { flexDirection: "column", alignItems: "center", gap: 10 },
   copy: { gap: 3, flexShrink: 1 },
   profileCopy: { alignItems: "center" },
-  nameRow: { flexDirection: "row", alignItems: "baseline", gap: 7, flexShrink: 1 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, flexWrap: "wrap" },
   name: { color: colors.text, fontSize: 14, fontWeight: "800", flexShrink: 1 },
   profileName: { fontFamily: fonts.display, fontSize: 23 },
   level: { color: colors.foil, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },

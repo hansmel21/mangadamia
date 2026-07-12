@@ -75,8 +75,10 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
 - [x] Richer per-type System Record cards (type-colored accent + banner) +
       new `SeriesEmbed`
 - [x] Polish pass: Facebook-style animated reaction tray (springs up over the
-      card); cross-fade transition when switching tabs; Reddit-style separated
-      comment threads in the post detail; hid the "RECORD" banner on plain posts.
+      card, animates closed into itself); condensed reaction cluster (≤3 emojis
+      + total, never sprawls); cross-fade tab transitions; comment threads as
+      distinct contrasting cards (Reddit boxes); guild `[TAG]` inline with the
+      username; removed the confusing rank "E" sigil; hid "RECORD" on plain posts.
 
 ## 🗺️ Deferred / next (phased — see the plan file)
 
