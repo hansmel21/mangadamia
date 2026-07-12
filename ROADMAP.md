@@ -203,9 +203,22 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       feed pages (`clearFeedPages`) and remounts the list, so stale pages don't
       flash.
 
+### Guilds — Phase 4a: invites ✅ (2026-07-12, checkpoint — not yet verified live)
+- [x] **Guild invites** — `GuildInvite` model (migration `guild_invites`);
+      officers invite by exact @username (`POST /guilds/:id/invites` — if the
+      reader already had a pending join request it auto-accepts them instead);
+      invited reader answers via `POST /guilds/:id/invites/respond`
+      (accept respects the member cap, voids their other invites/requests, and
+      works on invite-only guilds); officers can revoke
+      (`DELETE /guilds/:id/invites/:userId`). Hall payload gained
+      `invitePending` + `pendingInvites`. Client: invite banner with
+      ACCEPT / DECLINE on the Hall tab, "INVITE A READER" box + awaiting-answer
+      list on the Roster tab. Notifications: `guild_invite`,
+      `guild_invite_accepted`.
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Next track in progress: **Guilds Phase 4 (full depth)** — invites first._
+_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅; guild wall next._
 
 **Social — Phase 3b: images in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress
@@ -215,8 +228,7 @@ _Next track in progress: **Guilds Phase 4 (full depth)** — invites first._
 - A proper **GIF picker** (Giphy/Tenor search UI) to replace the paste-a-URL
   field shipped in 3a.
 
-**Guilds — Phase 4: full depth** (currently way too basic)
-- **Invites** (net-new `GuildInvite` model + endpoints + UI — can't invite today)
+**Guilds — Phase 4: full depth** (invites ✅ — see Phase 4a above)
 - **Guild wall** (wire `Post.guildId` into `/posts` + Hall Wall tab)
 - **Guild events** (net-new `GuildEvent` models; co-op weekly goals + rewards)
 - **Customization & perks** (edit hall, level unlocks, guild title/decorations)

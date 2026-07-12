@@ -1,9 +1,18 @@
 // Guild Hall (HQ). Two tabs: HALL (emblem, level/XP/power, join/leave) and
-// ROSTER (members + officer management, pending join requests).
+// ROSTER (members + officer management, pending join requests + invitations).
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { api, type GuildDetail, type GuildMemberInfo, type GuildRole } from "../../src/api";
 import { GuildEmblem } from "../../src/components/GuildCrest";
 import { SystemModal } from "../../src/components/SystemModal";
@@ -52,6 +61,23 @@ export default function GuildHallScreen() {
     run(async () => {
       const res = await api.joinGuild(id);
       if (res.status === "requested") Alert.alert("Guild", "Your request was sent to the officers.");
+    });
+
+  const respondInvite = (action: "accept" | "decline") =>
+    run(async () => {
+      const res = await api.respondToGuildInvite(id, action);
+      if (res.status === "joined") Alert.alert("Guild", "Welcome to the guild!");
+    });
+
+  const invite = (username: string) =>
+    run(async () => {
+      const res = await api.inviteToGuild(id, username);
+      Alert.alert(
+        "Guild",
+        res.status === "joined"
+          ? `@${res.username} had already requested to join — they're in!`
+          : `Invitation sent to @${res.username}.`,
+      );
     });
 
   const leave = () => {
@@ -104,15 +130,28 @@ export default function GuildHallScreen() {
           </View>
 
           {tab === "hall" ? (
-            <HallTab guild={guild} busy={busy} onJoin={join} onLeave={leave} />
+            <HallTab
+              guild={guild}
+              busy={busy}
+              onJoin={join}
+              onLeave={leave}
+              onRespondInvite={respondInvite}
+            />
           ) : (
             <RosterTab
               guild={guild}
               meId={user?.id ?? null}
+              busy={busy}
               onManage={setManage}
               onAnswer={(userId, action) =>
                 run(async () => {
                   await api.answerGuildRequest(id, userId, action);
+                })
+              }
+              onInvite={invite}
+              onRevokeInvite={(userId) =>
+                run(async () => {
+                  await api.revokeGuildInvite(id, userId);
                 })
               }
             />
@@ -138,11 +177,13 @@ function HallTab({
   busy,
   onJoin,
   onLeave,
+  onRespondInvite,
 }: {
   guild: GuildDetail;
   busy: boolean;
   onJoin: () => void;
   onLeave: () => void;
+  onRespondInvite: (action: "accept" | "decline") => void;
 }) {
   const span = Math.max(1, guild.xpForNextLevel - guild.xpFloor);
   const pct = Math.min(100, Math.max(0, Math.round(((guild.xp - guild.xpFloor) / span) * 100)));
@@ -191,6 +232,26 @@ function HallTab({
           <View style={styles.noteBox}>
             <Text style={styles.noteText}>You're already in another guild.</Text>
           </View>
+        ) : guild.invitePending ? (
+          <View style={styles.inviteBanner}>
+            <Text style={styles.inviteBannerText}>You've been invited to this guild.</Text>
+            <View style={styles.inviteBannerActions}>
+              <Pressable
+                style={[styles.joinBtn, { flex: 1 }, busy && { opacity: 0.5 }]}
+                disabled={busy}
+                onPress={() => onRespondInvite("accept")}
+              >
+                <Text style={styles.joinText}>ACCEPT INVITATION</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.declineBtn, busy && { opacity: 0.5 }]}
+                disabled={busy}
+                onPress={() => onRespondInvite("decline")}
+              >
+                <Text style={styles.declineText}>DECLINE</Text>
+              </Pressable>
+            </View>
+          </View>
         ) : guild.joinRequestPending ? (
           <View style={styles.noteBox}>
             <Text style={styles.noteText}>Your join request is pending.</Text>
@@ -228,17 +289,77 @@ function Stat({ value, label }: { value: string; label: string }) {
 function RosterTab({
   guild,
   meId,
+  busy,
   onManage,
   onAnswer,
+  onInvite,
+  onRevokeInvite,
 }: {
   guild: GuildDetail;
   meId: string | null;
+  busy: boolean;
   onManage: (m: GuildMemberInfo) => void;
   onAnswer: (userId: string, action: "accept" | "reject") => void;
+  onInvite: (username: string) => void;
+  onRevokeInvite: (userId: string) => void;
 }) {
   const canManage = guild.myRole === "guildmaster" || guild.myRole === "officer";
+  const [inviteName, setInviteName] = useState("");
+  const sendInvite = () => {
+    const name = inviteName.trim().replace(/^@/, "");
+    if (!name) return;
+    setInviteName("");
+    onInvite(name);
+  };
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {canManage ? (
+        <View style={styles.inviteBox}>
+          <Text style={styles.inviteLabel}>INVITE A READER</Text>
+          <View style={styles.inviteInputRow}>
+            <TextInput
+              style={styles.inviteInput}
+              value={inviteName}
+              onChangeText={setInviteName}
+              placeholder="@username"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              onSubmitEditing={sendInvite}
+              returnKeyType="send"
+            />
+            <Pressable
+              style={[styles.inviteSendBtn, (busy || !inviteName.trim()) && { opacity: 0.5 }]}
+              disabled={busy || !inviteName.trim()}
+              onPress={sendInvite}
+            >
+              <Text style={styles.inviteSendText}>SEND</Text>
+            </Pressable>
+          </View>
+          {guild.pendingInvites.length > 0 ? (
+            <View style={{ gap: 10, marginTop: 4 }}>
+              <Text style={styles.invitePendingLabel}>
+                AWAITING ANSWER · {guild.pendingInvites.length}
+              </Text>
+              {guild.pendingInvites.map((i) =>
+                i.identity ? (
+                  <View key={i.identity.id ?? i.invitedAt} style={styles.requestRow}>
+                    <UserIdentity identity={i.identity} compact />
+                    <Pressable
+                      style={styles.rejectBtn}
+                      hitSlop={8}
+                      onPress={() => i.identity?.id && onRevokeInvite(i.identity.id)}
+                    >
+                      <Text style={styles.rejectText}>✕</Text>
+                    </Pressable>
+                  </View>
+                ) : null,
+              )}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       {canManage && guild.pendingRequests.length > 0 ? (
         <View style={styles.requests}>
           <Text style={styles.requestsLabel}>JOIN REQUESTS · {guild.pendingRequests.length}</Text>
@@ -439,6 +560,49 @@ const styles = StyleSheet.create({
   leaveText: { color: colors.danger, fontWeight: "900", fontSize: 12, letterSpacing: 1.4 },
   noteBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 13, alignItems: "center" },
   noteText: { color: colors.muted, fontSize: 13 },
+  inviteBanner: {
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.5)",
+    borderRadius: 12,
+    padding: 13,
+    gap: 12,
+    backgroundColor: "rgba(124,92,255,0.07)",
+  },
+  inviteBannerText: { color: colors.text, fontSize: 13, textAlign: "center" },
+  inviteBannerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  declineBtn: { paddingVertical: 13, paddingHorizontal: 14 },
+  declineText: { color: colors.muted, fontWeight: "900", fontSize: 12, letterSpacing: 1.2 },
+  inviteBox: {
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.35)",
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+    backgroundColor: "rgba(124,92,255,0.05)",
+  },
+  inviteLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
+  inviteInputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  inviteInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    color: colors.text,
+    fontSize: 14,
+    backgroundColor: colors.bg,
+  },
+  inviteSendBtn: {
+    backgroundColor: "rgba(124,92,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.65)",
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  inviteSendText: { color: colors.accentSoft, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
+  invitePendingLabel: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.3 },
   requests: {
     borderWidth: 1,
     borderColor: "rgba(245,184,76,0.4)",

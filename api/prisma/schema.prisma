@@ -98,6 +98,8 @@ model User {
   usernameChanges      UsernameChange[]
   guildMembership      GuildMember?
   guildJoinRequests    GuildJoinRequest[]
+  guildInvites         GuildInvite[]        @relation("GuildInviteRecipient")
+  guildInvitesSent     GuildInvite[]        @relation("GuildInviteSender")
   guildXpContributions GuildXpTransaction[]
   pollVotes            PollVote[]
   arenaEntries         ArenaEntry[]
@@ -726,6 +728,7 @@ model Guild {
   createdAt      DateTime             @default(now())
   members        GuildMember[]
   joinRequests   GuildJoinRequest[]
+  invites        GuildInvite[]
   xpTransactions GuildXpTransaction[]
   posts          Post[]
   warsAsA        GuildWar[]           @relation("WarsAsA")
@@ -792,6 +795,19 @@ model GuildJoinRequest {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([guildId, userId])
+}
+
+model GuildInvite {
+  guildId     String
+  userId      String
+  invitedById String
+  createdAt   DateTime @default(now())
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  user        User     @relation("GuildInviteRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy   User     @relation("GuildInviteSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@id([guildId, userId])
+  @@index([userId, createdAt])
 }
 
 model GuildXpTransaction {

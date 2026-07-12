@@ -168,8 +168,14 @@ export interface GuildDetail {
   myRole: GuildRole | null;
   inAnotherGuild: boolean;
   joinRequestPending: boolean;
+  invitePending: boolean;
   members: GuildMemberInfo[];
   pendingRequests: { identity: PublicIdentity | null; requestedAt: string }[];
+  pendingInvites: {
+    identity: PublicIdentity | null;
+    invitedBy: PublicIdentity | null;
+    invitedAt: string;
+  }[];
 }
 
 // One side of a weekly guild war (crest + live score).
@@ -807,6 +813,23 @@ export const api = {
       `/guilds/${encodeURIComponent(id)}/requests/${encodeURIComponent(userId)}`,
       "POST",
       { action },
+    ),
+  inviteToGuild: (id: string, username: string) =>
+    request<{ status: "invited" | "joined"; username: string }>(
+      `/guilds/${encodeURIComponent(id)}/invites`,
+      "POST",
+      { username },
+    ),
+  respondToGuildInvite: (id: string, action: "accept" | "decline") =>
+    request<{ status: "joined" | "declined" }>(
+      `/guilds/${encodeURIComponent(id)}/invites/respond`,
+      "POST",
+      { action },
+    ),
+  revokeGuildInvite: (id: string, userId: string) =>
+    request<{ ok: boolean }>(
+      `/guilds/${encodeURIComponent(id)}/invites/${encodeURIComponent(userId)}`,
+      "DELETE",
     ),
   kickGuildMember: (id: string, userId: string) =>
     request<{ ok: boolean }>(

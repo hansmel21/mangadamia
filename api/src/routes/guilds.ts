@@ -170,18 +170,32 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     const level = guildLevelForXp(guild.xp);
     const isMember = myMembership?.guildId === guild.id;
     const canManage = isMember && officerRoles.includes(myMembership!.role);
-    const [myRequest, requests] = await Promise.all([
+    const [myRequest, myInvite, requests, invites] = await Promise.all([
       me && !isMember
         ? prisma.guildJoinRequest.findUnique({
+            where: { guildId_userId: { guildId: guild.id, userId: me.id } },
+          })
+        : null,
+      me && !isMember
+        ? prisma.guildInvite.findUnique({
             where: { guildId_userId: { guildId: guild.id, userId: me.id } },
           })
         : null,
       canManage
         ? prisma.guildJoinRequest.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: "asc" } })
         : [],
+      canManage
+        ? prisma.guildInvite.findMany({ where: { guildId: guild.id }, orderBy: { createdAt: "asc" } })
+        : [],
     ]);
-    const requestIdentities = requests.length
-      ? await identitiesForUsers(requests.map((r) => r.userId), me?.id)
+    const extraIds = [
+      ...new Set([
+        ...requests.map((r) => r.userId),
+        ...invites.flatMap((i) => [i.userId, i.invitedById]),
+      ]),
+    ];
+    const requestIdentities = extraIds.length
+      ? await identitiesForUsers(extraIds, me?.id)
       : new Map();
     const rankOrder: Record<string, number> = { guildmaster: 0, officer: 1, member: 2 };
     return {
@@ -205,6 +219,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       myRole: isMember ? myMembership!.role : null,
       inAnotherGuild: !!myMembership && !isMember,
       joinRequestPending: !!myRequest,
+      invitePending: !!myInvite,
       members: guild.members
         .map((m) => ({
           role: m.role,
@@ -221,6 +236,11 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       pendingRequests: requests.map((r) => ({
         identity: requestIdentities.get(r.userId) ?? null,
         requestedAt: r.createdAt,
+      })),
+      pendingInvites: invites.map((i) => ({
+        identity: requestIdentities.get(i.userId) ?? null,
+        invitedBy: requestIdentities.get(i.invitedById) ?? null,
+        invitedAt: i.createdAt,
       })),
     };
   });
@@ -366,6 +386,144 @@ export function registerGuildRoutes(app: FastifyInstance): void {
         dedupeKey: `guild-accept:${guild.id}:${req.params.userId}`,
       });
       return { ok: true, status: "accepted" };
+    },
+  );
+
+  // ── Invite a reader by username (officers) ────────────────────────────
+  app.post<{ Params: { id: string } }>(
+    "/guilds/:id/invites",
+    { config: { rateLimit: { max: 20, timeWindow: "1 hour" } } },
+    async (req) => {
+      const user = await requireActiveUser(req);
+      const { username } = z
+        .object({ username: z.string().trim().min(1).max(30) })
+        .parse(req.body);
+      const membership = await requireMembership(user.id);
+      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
+        throw httpError(403, "You can't manage this guild");
+      }
+      const target = await prisma.user.findFirst({
+        where: { username: { equals: username, mode: "insensitive" } },
+        select: { id: true, username: true, status: true },
+      });
+      if (!target || target.status !== "active") throw httpError(404, "No reader by that name");
+      const [guild, targetMembership] = await Promise.all([
+        prisma.guild.findUniqueOrThrow({
+          where: { id: req.params.id },
+          include: { _count: { select: { members: true } } },
+        }),
+        prisma.guildMember.findUnique({ where: { userId: target.id } }),
+      ]);
+      if (targetMembership) {
+        throw httpError(
+          409,
+          targetMembership.guildId === guild.id
+            ? "They're already a member"
+            : "That reader is already in a guild",
+        );
+      }
+      if (guild._count.members >= guildMemberCap(guildLevelForXp(guild.xp))) {
+        throw httpError(409, "Your guild is full");
+      }
+      // If they already asked to join, the invite is an acceptance.
+      const request = await prisma.guildJoinRequest.findUnique({
+        where: { guildId_userId: { guildId: guild.id, userId: target.id } },
+      });
+      if (request) {
+        await prisma.$transaction([
+          prisma.guildMember.create({
+            data: { userId: target.id, guildId: guild.id, role: "member", weekKey: currentWeekKey() },
+          }),
+          prisma.guildJoinRequest.deleteMany({ where: { userId: target.id } }),
+          prisma.guildInvite.deleteMany({ where: { userId: target.id } }),
+        ]);
+        await createNotification({
+          userId: target.id,
+          actorId: user.id,
+          kind: "guild_accepted",
+          title: "Guild request accepted",
+          safeBody: `You joined ${guild.name}.`,
+          targetUrl: `/guild/${guild.id}`,
+          dedupeKey: `guild-accept:${guild.id}:${target.id}`,
+        });
+        return { status: "joined", username: target.username };
+      }
+      const existing = await prisma.guildInvite.findUnique({
+        where: { guildId_userId: { guildId: guild.id, userId: target.id } },
+      });
+      if (existing) throw httpError(409, "Already invited — waiting on their answer");
+      await prisma.guildInvite.create({
+        data: { guildId: guild.id, userId: target.id, invitedById: user.id },
+      });
+      await createNotification({
+        userId: target.id,
+        actorId: user.id,
+        kind: "guild_invite",
+        title: "Guild invitation",
+        safeBody: `@${user.username} invited you to join ${guild.name}.`,
+        targetUrl: `/guild/${guild.id}`,
+        dedupeKey: `guild-invite:${guild.id}:${target.id}`,
+      });
+      return { status: "invited", username: target.username };
+    },
+  );
+
+  // ── Answer my invitation ──────────────────────────────────────────────
+  app.post<{ Params: { id: string } }>("/guilds/:id/invites/respond", async (req) => {
+    const user = await requireActiveUser(req);
+    const { action } = z.object({ action: z.enum(["accept", "decline"]) }).parse(req.body);
+    const invite = await prisma.guildInvite.findUnique({
+      where: { guildId_userId: { guildId: req.params.id, userId: user.id } },
+    });
+    if (!invite) throw httpError(404, "That invitation is gone");
+    if (action === "decline") {
+      await prisma.guildInvite.delete({
+        where: { guildId_userId: { guildId: req.params.id, userId: user.id } },
+      });
+      return { status: "declined" };
+    }
+    const existing = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+    if (existing) throw httpError(409, "You're already in a guild — leave it first");
+    const guild = await prisma.guild.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { _count: { select: { members: true } } },
+    });
+    if (guild._count.members >= guildMemberCap(guildLevelForXp(guild.xp))) {
+      throw httpError(409, "This guild is full");
+    }
+    await prisma.$transaction([
+      prisma.guildMember.create({
+        data: { userId: user.id, guildId: guild.id, role: "member", weekKey: currentWeekKey() },
+      }),
+      // Joining voids their other pending invites and join requests.
+      prisma.guildInvite.deleteMany({ where: { userId: user.id } }),
+      prisma.guildJoinRequest.deleteMany({ where: { userId: user.id } }),
+    ]);
+    await createNotification({
+      userId: invite.invitedById,
+      actorId: user.id,
+      kind: "guild_invite_accepted",
+      title: "Invitation accepted",
+      safeBody: `@${user.username} joined ${guild.name}.`,
+      targetUrl: `/guild/${guild.id}`,
+      dedupeKey: `guild-invite-accept:${guild.id}:${user.id}`,
+    });
+    return { status: "joined" };
+  });
+
+  // ── Revoke an invitation (officers) ───────────────────────────────────
+  app.delete<{ Params: { id: string; userId: string } }>(
+    "/guilds/:id/invites/:userId",
+    async (req) => {
+      const user = await requireActiveUser(req);
+      const membership = await requireMembership(user.id);
+      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
+        throw httpError(403, "You can't manage this guild");
+      }
+      await prisma.guildInvite.deleteMany({
+        where: { guildId: req.params.id, userId: req.params.userId },
+      });
+      return { ok: true };
     },
   );
 
