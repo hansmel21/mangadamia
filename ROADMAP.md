@@ -229,9 +229,19 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
 - [x] **This Week's Vanguard** — top-3 weekly contributors card on the Hall tab
       (from the HQ sketch in `GUILDS_PLAN.md`).
 
+### Guilds — Phase 4c: edit-guild UI ✅ (2026-07-12, checkpoint — not yet verified live)
+- [x] **Edit Guild screen** (`guild/edit/[id]`) — the UI for the long-existing
+      `PATCH /guilds/:id`: name, tag, emblem + color (curated set, live crest
+      preview), **join policy selector** (open / request / invite-only, so
+      invite-only guilds are now actually configurable client-side), motto,
+      description. Officer-gated client-side; server already enforced it.
+- [x] Entry points: **⚙ EDIT GUILD** button on the Hall tab (officers), and the
+      guild home's **MANAGE** quick key now opens the editor (it previously
+      just opened the Hall).
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board access + contribution board ✅; guild events & customization next._
+_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board + contribution board ✅, edit UI ✅; guild events & perks next._
 
 **Social — Phase 3b: images in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress
@@ -241,11 +251,10 @@ _Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board 
 - A proper **GIF picker** (Giphy/Tenor search UI) to replace the paste-a-URL
   field shipped in 3a.
 
-**Guilds — Phase 4: full depth** (invites ✅ 4a; wall + contribution board ✅ 4b)
+**Guilds — Phase 4: full depth** (invites ✅ 4a; wall + contribution board ✅ 4b; edit UI ✅ 4c)
 - **Guild events** (net-new `GuildEvent` models; co-op weekly goals + rewards
   beyond the fixed weekly raid — varied objectives, reward grants, history)
-- **Customization & perks** (edit-guild UI for the existing `PATCH /guilds/:id`,
-  level unlocks, guild title/decorations)
+- **Perks** (level unlocks, guild title/decorations — cosmetic progression sink)
 
 **Arena — Phase 5 (its own track):** PvP turn-based manga-character battles,
 online vs other players + async — matchmaking, server-authoritative game state,

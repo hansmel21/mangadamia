@@ -233,6 +233,14 @@ function HallTab({
       <WeeklyVanguard members={guild.members} />
 
       <View style={styles.actions}>
+        {guild.myRole === "guildmaster" || guild.myRole === "officer" ? (
+          <Pressable
+            style={styles.editBtn}
+            onPress={() => router.push({ pathname: "/guild/edit/[id]", params: { id: guild.id } })}
+          >
+            <Text style={styles.editText}>⚙ EDIT GUILD</Text>
+          </Pressable>
+        ) : null}
         {guild.myRole ? (
           <Pressable style={[styles.leaveBtn, busy && { opacity: 0.5 }]} disabled={busy} onPress={onLeave}>
             <Text style={styles.leaveText}>LEAVE GUILD</Text>
@@ -607,7 +615,15 @@ const styles = StyleSheet.create({
   statValue: { color: colors.text, fontFamily: fonts.display, fontSize: 18 },
   statLabel: { color: colors.muted, fontSize: 11, marginTop: 2 },
   description: { color: colors.text, fontSize: 14, lineHeight: 20, paddingHorizontal: 4 },
-  actions: { paddingHorizontal: 4, marginTop: 4 },
+  actions: { paddingHorizontal: 4, marginTop: 4, gap: 10 },
+  editBtn: {
+    borderWidth: 1.5,
+    borderColor: "rgba(124,92,255,0.55)",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  editText: { color: colors.accentSoft, fontWeight: "900", fontSize: 12, letterSpacing: 1.4 },
   joinBtn: {
     backgroundColor: "rgba(124,92,255,0.18)",
     borderWidth: 1.5,

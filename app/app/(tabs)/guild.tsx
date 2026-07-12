@@ -175,7 +175,7 @@ export default function GuildTab() {
               <QuickKey
                 icon={<Settings2 color={colors.accentBright} size={18} strokeWidth={2} />}
                 label="MANAGE"
-                onPress={() => openHall(g.id)}
+                onPress={() => router.push({ pathname: "/guild/edit/[id]", params: { id: g.id } })}
               />
             ) : null}
           </View>
