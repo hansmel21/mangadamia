@@ -59,6 +59,65 @@ function httpError(statusCode: number, message: string): Error {
   return Object.assign(new Error(message), { statusCode });
 }
 
+function extractMentions(body: string): string[] {
+  const seen = new Set<string>();
+  for (const match of body.matchAll(/(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_]{3,20})\b/g)) {
+    seen.add(match[2].toLowerCase());
+  }
+  return [...seen];
+}
+
+async function notifyMentions({
+  authorId,
+  authorUsername,
+  body,
+  targetUrl,
+  targetKind,
+  targetId,
+  metadata,
+  postId,
+  commentId,
+}: {
+  authorId: string;
+  authorUsername: string;
+  body: string;
+  targetUrl: string;
+  targetKind: "post" | "comment";
+  targetId: string;
+  metadata: Record<string, unknown>;
+  postId?: string;
+  commentId?: string;
+}): Promise<void> {
+  const names = extractMentions(body);
+  if (names.length === 0) return;
+  const [blockedIds, mentionedUsers] = await Promise.all([
+    hiddenUserIds(authorId),
+    prisma.user.findMany({
+      where: {
+        status: "active",
+        OR: names.map((name) => ({ username: { equals: name, mode: "insensitive" as const } })),
+      },
+      select: { id: true, username: true },
+    }),
+  ]);
+  const hidden = new Set(blockedIds);
+  for (const mentioned of mentionedUsers) {
+    if (mentioned.id === authorId || hidden.has(mentioned.id)) continue;
+    await createNotification({
+      userId: mentioned.id,
+      actorId: authorId,
+      kind: "mention",
+      title: "You were mentioned",
+      safeBody: `@${authorUsername} mentioned you.`,
+      targetUrl,
+      metadata: { ...metadata, mentionedUsername: mentioned.username },
+      dedupeKey: `mention:${targetKind}:${targetId}:${mentioned.id}`,
+      postId,
+      commentId,
+    });
+  }
+}
+
 async function hiddenUserIds(userId: string): Promise<string[]> {
   const rows = await prisma.block.findMany({
     where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
@@ -867,6 +926,16 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           commentId: comment.id,
         });
       }
+      await notifyMentions({
+        authorId: user.id,
+        authorUsername: user.username,
+        body,
+        targetUrl: "/notifications",
+        targetKind: "comment",
+        targetId: comment.id,
+        metadata: { canonicalId, chapterNumber, commentId: comment.id },
+        commentId: comment.id,
+      });
       const levelBefore = levelForXp(user.xp);
       const updated = await prisma.user.update({
         where: { id: user.id },
@@ -1056,6 +1125,18 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       totalVotes: number;
       myVote: string | null;
     } | null;
+    // Present on quote-reposts: the embedded post being quoted.
+    quotedPost: {
+      id: string;
+      author: Awaited<ReturnType<typeof identityForUser>>;
+      username: string;
+      body: string;
+      kind: string;
+      rating: number | null;
+      isSpoiler: boolean;
+      createdAt: Date;
+      series: { canonicalId: string; title: string; coverUrl: string | null } | null;
+    } | null;
   }
 
   const postInclude = (meId?: string) =>
@@ -1071,6 +1152,19 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         select: { id: true, text: true, position: true, _count: { select: { votes: true } } },
       },
       pollVotes: meId ? { where: { userId: meId }, select: { optionId: true } } : false,
+      quotedPost: {
+        select: {
+          id: true,
+          userId: true,
+          body: true,
+          kind: true,
+          rating: true,
+          isSpoiler: true,
+          createdAt: true,
+          moderationStatus: true,
+          canonical: { select: { id: true, title: true, coverUrl: true } },
+        },
+      },
     }) as const;
 
   // Structural shape of a post row loaded with postInclude(); shared by the
@@ -1093,6 +1187,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     likes?: { type: string }[] | false;
     pollOptions?: { id: string; text: string; position: number; _count: { votes: number } }[];
     pollVotes?: { optionId: string }[] | false;
+    quotedPost?: {
+      id: string;
+      userId: string;
+      body: string;
+      kind: string;
+      rating: number | null;
+      isSpoiler: boolean;
+      createdAt: Date;
+      moderationStatus: string;
+      canonical: { id: string; title: string; coverUrl: string | null } | null;
+    } | null;
   }
 
   const serializePost = (
@@ -1134,6 +1239,26 @@ export function registerSocialRoutes(app: FastifyInstance): void {
             myVote: Array.isArray(p.pollVotes) && p.pollVotes[0] ? p.pollVotes[0].optionId : null,
           }
         : null,
+    quotedPost:
+      p.quotedPost && p.quotedPost.moderationStatus === "visible"
+        ? {
+            id: p.quotedPost.id,
+            author: identities.get(p.quotedPost.userId) ?? null,
+            username: identities.get(p.quotedPost.userId)?.username ?? "Removed Reader",
+            body: p.quotedPost.body,
+            kind: p.quotedPost.kind,
+            rating: p.quotedPost.rating,
+            isSpoiler: p.quotedPost.isSpoiler,
+            createdAt: p.quotedPost.createdAt,
+            series: p.quotedPost.canonical
+              ? {
+                  canonicalId: p.quotedPost.canonical.id,
+                  title: p.quotedPost.canonical.title,
+                  coverUrl: p.quotedPost.canonical.coverUrl,
+                }
+              : null,
+          }
+        : null,
   });
 
   // Per-post reaction counts, e.g. Map<postId, { endorse: 42, hype: 8 }>.
@@ -1156,13 +1281,18 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   };
 
   app.get("/posts", async (req) => {
-    const { page, canonicalId, feed, kind, sort } = z
+    const { page, canonicalId, feed, kind, sort, topic } = z
       .object({
         page: z.coerce.number().int().min(1).default(1),
         canonicalId: z.string().optional(),
         feed: z.enum(["global", "following"]).default("global"),
         kind: z.enum(["theory", "review"]).optional(),
         sort: z.enum(["new", "top", "hot"]).default("new"),
+        topic: z
+          .string()
+          .trim()
+          .regex(/^[a-zA-Z0-9_]{2,40}$/)
+          .optional(),
       })
       .parse(req.query);
     const me = await getUser(req);
@@ -1190,6 +1320,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         userId: { notIn: blockedIds },
         ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
         ...(kind ? { kind } : {}),
+        ...(topic ? { body: { contains: `#${topic}`, mode: "insensitive" } } : {}),
         ...(sort === "hot" ? { createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } : {}),
         ...(canonicalId
           ? { OR: [{ canonicalId }, { seriesTags: { some: { canonicalId } } }] }
@@ -1211,7 +1342,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       : [];
     const countByRoot = new Map(counts.map((c) => [c.rootId, c._count]));
     const [identities, reactionMap] = await Promise.all([
-      identitiesForUsers(rows.map((p) => p.userId), me?.id),
+      identitiesForUsers(
+        [...rows.map((p) => p.userId), ...rows.flatMap((p) => (p.quotedPost ? [p.quotedPost.userId] : []))],
+        me?.id,
+      ),
       reactionsForPosts(rootIds),
     ]);
     return rows.map((p) => ({
@@ -1242,7 +1376,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     });
     const all = [rootPost, ...descendants];
     const [identities, reactionMap] = await Promise.all([
-      identitiesForUsers(all.map((p) => p.userId), me?.id),
+      identitiesForUsers(
+        [...all.map((p) => p.userId), ...all.flatMap((p) => (p.quotedPost ? [p.quotedPost.userId] : []))],
+        me?.id,
+      ),
       reactionsForPosts(all.map((p) => p.id)),
     ]);
 
@@ -1280,6 +1417,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       kind,
       rating,
       pollOptions,
+      quotedPostId,
     } = z
       .object({
         body: z.string().trim().min(1).max(1000),
@@ -1290,6 +1428,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         kind: z.enum(["record", "theory", "review", "spoiler_intel", "poll"]).optional(),
         rating: z.coerce.number().int().min(1).max(5).optional(),
         pollOptions: z.array(z.string().trim().min(1).max(80)).min(2).max(6).optional(),
+        quotedPostId: z.string().optional(),
         seriesTags: z
           .array(
             z.object({ canonicalId: z.string().min(1), chapterNumber: z.coerce.number().optional() }),
@@ -1310,6 +1449,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (postKind === "poll") {
       if (!pollOptions || pollOptions.length < 2) throw httpError(400, "A poll needs at least 2 options");
       for (const option of pollOptions) validateUserContent(option);
+    }
+    // Quote-reposts embed another top-level post; only top-level posts can quote.
+    let quoted = null;
+    if (quotedPostId && !parentId) {
+      quoted = await prisma.post.findUnique({ where: { id: quotedPostId } });
+      if (!quoted || quoted.moderationStatus !== "visible" || quoted.parentId) {
+        throw httpError(404, "That post can't be quoted");
+      }
+      if ((await hiddenUserIds(user.id)).includes(quoted.userId)) {
+        throw httpError(403, "You cannot interact with this user");
+      }
     }
     const uniqueTags = [...new Map(requestedTags.map((tag) => [tag.canonicalId, tag])).values()];
     if (uniqueTags.length > 0) {
@@ -1365,9 +1515,23 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           postKind === "poll" && pollOptions
             ? { create: pollOptions.map((text, position) => ({ text, position })) }
             : undefined,
+        quotedPostId: quoted ? quoted.id : null,
       },
       include: postInclude(user.id),
     });
+    if (quoted && quoted.userId !== user.id) {
+      await createNotification({
+        userId: quoted.userId,
+        actorId: user.id,
+        kind: "post_quote",
+        title: "Your record was quoted",
+        safeBody: `@${user.username} quoted your post.`,
+        targetUrl: `/post/${post.id}`,
+        metadata: { postId: post.id, quotedPostId: quoted.id },
+        dedupeKey: `post-quote:${post.id}`,
+        postId: post.id,
+      });
+    }
     if (parent && parent.userId !== user.id) {
       await createNotification({
         userId: parent.userId,
@@ -1381,6 +1545,16 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         postId: post.id,
       });
     }
+    await notifyMentions({
+      authorId: user.id,
+      authorUsername: user.username,
+      body,
+      targetUrl: `/post/${(root ?? post).id}`,
+      targetKind: "post",
+      targetId: post.id,
+      metadata: { postId: post.id, rootId: (root ?? post).id },
+      postId: post.id,
+    });
     const levelBefore = levelForXp(user.xp);
     const updated = await prisma.user.update({
       where: { id: user.id },
@@ -1390,6 +1564,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     await creditGuild(user.id, 8);
     const levelAfter = levelForXp(updated.xp);
     const identity = await identityForUser(user.id, user.id);
+    const quotedAuthor = post.quotedPost
+      ? await identityForUser(post.quotedPost.userId, user.id)
+      : null;
     const activity = await recordActivity(user.id, {
       type: parent ? "post_reply_created" : "post_created",
       eventKey: post.id,
@@ -1432,6 +1609,26 @@ export function registerSocialRoutes(app: FastifyInstance): void {
               options: post.pollOptions.map((o) => ({ id: o.id, text: o.text, votes: o._count.votes })),
               totalVotes: 0,
               myVote: null,
+            }
+          : null,
+      quotedPost:
+        post.quotedPost && post.quotedPost.moderationStatus === "visible"
+          ? {
+              id: post.quotedPost.id,
+              author: quotedAuthor,
+              username: quotedAuthor?.username ?? "Removed Reader",
+              body: post.quotedPost.body,
+              kind: post.quotedPost.kind,
+              rating: post.quotedPost.rating,
+              isSpoiler: post.quotedPost.isSpoiler,
+              createdAt: post.quotedPost.createdAt,
+              series: post.quotedPost.canonical
+                ? {
+                    canonicalId: post.quotedPost.canonical.id,
+                    title: post.quotedPost.canonical.title,
+                    coverUrl: post.quotedPost.canonical.coverUrl,
+                  }
+                : null,
             }
           : null,
       xpAwarded: 8,

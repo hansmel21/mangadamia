@@ -365,6 +365,10 @@ model Post {
   // When set, this is a post on a guild's members-only wall (not the public feed).
   guildId          String?
   guild            Guild?           @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // Quote-repost: this post embeds and comments on another top-level post.
+  quotedPostId     String?
+  quotedPost       Post?            @relation("QuotedPost", fields: [quotedPostId], references: [id], onDelete: SetNull)
+  quotedBy         Post[]           @relation("QuotedPost")
   notifications    Notification[]
   seriesTags       PostSeriesTag[]
   pollOptions      PollOption[]

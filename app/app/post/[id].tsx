@@ -35,11 +35,18 @@ export default function PostThreadScreen() {
   const queryClient = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<PostInfo | null>(null);
+  const [quoteTarget, setQuoteTarget] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const queryKey = ["post", id] as const;
 
   const startReply = (target: PostInfo) => {
+    setQuoteTarget(null);
     setReplyTarget(target);
+    setComposerOpen(true);
+  };
+  const startQuote = (target: PostInfo) => {
+    setReplyTarget(null);
+    setQuoteTarget(target);
     setComposerOpen(true);
   };
 
@@ -105,6 +112,7 @@ export default function PostThreadScreen() {
             onReact={react}
             onVote={vote}
             onReply={startReply}
+            onQuote={startQuote}
             onDelete={remove}
             onReport={(p) => setReportTarget({ type: "post", id: p.id, username: p.username })}
             viewerSignedIn={!!user}
@@ -156,8 +164,10 @@ export default function PostThreadScreen() {
           onClose={() => {
             setComposerOpen(false);
             setReplyTarget(null);
+            setQuoteTarget(null);
           }}
-          replyTo={replyTarget ?? post}
+          replyTo={quoteTarget ? undefined : (replyTarget ?? post)}
+          quote={quoteTarget ?? undefined}
           onPosted={() => {
             queryClient.invalidateQueries({ queryKey });
             queryClient.invalidateQueries({ queryKey: ["feed"] });

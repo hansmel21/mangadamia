@@ -17,6 +17,7 @@ export default function SeriesWallScreen() {
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const queryClient = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
+  const [quoteTarget, setQuoteTarget] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
   const feed = useInfiniteQuery({
@@ -87,6 +88,10 @@ export default function SeriesWallScreen() {
               onOpen={(p) => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
               onReact={react}
               onVote={vote}
+              onQuote={(p) => {
+                setQuoteTarget(p);
+                setComposerOpen(true);
+              }}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
@@ -110,7 +115,10 @@ export default function SeriesWallScreen() {
       {user ? (
         <Pressable
           style={(s) => [styles.fab, pressFx(s)]}
-          onPress={() => setComposerOpen(true)}
+          onPress={() => {
+            setQuoteTarget(null);
+            setComposerOpen(true);
+          }}
         >
           <Plus color={colors.accentText} size={26} strokeWidth={2.4} />
         </Pressable>
@@ -118,8 +126,16 @@ export default function SeriesWallScreen() {
 
       <PostComposer
         visible={composerOpen}
-        onClose={() => setComposerOpen(false)}
-        context={canonicalId ? { canonicalId, title: title ?? "this series" } : undefined}
+        quote={quoteTarget ?? undefined}
+        onClose={() => {
+          setComposerOpen(false);
+          setQuoteTarget(null);
+        }}
+        context={
+          quoteTarget || !canonicalId
+            ? undefined
+            : { canonicalId, title: title ?? "this series" }
+        }
       />
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
     </View>

@@ -3,7 +3,7 @@
 Living status doc. Updated after each milestone so work can resume cleanly.
 Design docs: `GUILDS_PLAN.md`, `ARENA_PLAN.md`.
 
-_Last updated: 2026-07-11._
+_Last updated: 2026-07-12._
 
 ## ✅ Shipped
 
@@ -81,18 +81,19 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       contrasting cards (Reddit boxes); guild `[TAG]` inline with the username;
       removed the confusing rank "E" sigil; hid "RECORD" on plain posts.
 
-### Social v2 — Phase 2: post functions (in progress)
+### Social v2 — Phase 2: post functions ✅ (2026-07-12)
 - [x] **Polls** — `poll` record kind + `PollOption`/`PollVote` models
       (migration `polls`); composer poll builder (2–6 options); one-tap vote
       with live result bars (`PollView`); `POST /posts/:id/vote`. Verified live.
 - [x] Feed sorting — **New** (chronological) / **Top** (most-reacted all-time) /
       **Hot** (most-reacted this week); selector on the feed, cross-fades on switch.
-- [ ] Quote-repost (`Post.quotedPostId`)
-- [ ] Mentions (@user → notification) & #hashtags (tappable topic filter)
+- [x] Quote-repost (`Post.quotedPostId`) — quoted record embed, quote composer
+      mode, quote notification, feed/wall/thread actions.
+- [x] Mentions (@user → notification) & #hashtags (tappable topic filter)
 
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Phase 2 (post functions) is in progress above — Polls done, sorting/quote/mentions next._
+_Phase 2 (post functions) is complete. Next recommended track: Social Phase 3 media, starting with GIFs because hosted provider URLs avoid upload/storage/moderation complexity._
 
 **Social — Phase 3: media in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress

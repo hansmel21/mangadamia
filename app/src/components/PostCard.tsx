@@ -6,14 +6,16 @@
 // Renders the record type, the author's hunter rank, review ratings, the
 // reaction bar, spoiler shields, and reply / delete / report.
 import { router } from "expo-router";
-import { EyeOff, Flag, MessageSquare, Trash2 } from "lucide-react-native";
+import { EyeOff, Flag, MessageSquare, Repeat2, Trash2 } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../anim";
 import type { PostInfo, ReactionType } from "../api";
 import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
+import { LinkedText } from "./LinkedText";
 import { PollView } from "./PollView";
+import { QuotedPost } from "./QuotedPost";
 import { ReactionBar } from "./ReactionBar";
 import { ReviewRating } from "./ReviewRating";
 import { SeriesEmbed } from "./SeriesEmbed";
@@ -38,6 +40,7 @@ export function PostCard({
   onReact,
   onVote,
   onReply,
+  onQuote,
   onDelete,
   onReport,
   viewerSignedIn = false,
@@ -53,6 +56,7 @@ export function PostCard({
   onReact: (p: PostInfo, type: ReactionType) => void;
   onVote?: (p: PostInfo, optionId: string) => void;
   onReply?: (p: PostInfo) => void;
+  onQuote?: (p: PostInfo) => void;
   onDelete: (p: PostInfo) => void;
   onReport: (p: PostInfo) => void;
   viewerSignedIn?: boolean;
@@ -142,9 +146,9 @@ export function PostCard({
           <Text style={styles.shieldReveal}>TAP TO REVEAL</Text>
         </Pressable>
       ) : (
-        <Text style={styles.body} numberOfLines={preview && !isReply ? 8 : undefined}>
+        <LinkedText style={styles.body} numberOfLines={preview && !isReply ? 8 : undefined}>
           {post.body}
-        </Text>
+        </LinkedText>
       )}
 
       {post.kind === "poll" && post.poll ? (
@@ -154,6 +158,8 @@ export function PostCard({
           disabled={!viewerSignedIn}
         />
       ) : null}
+
+      {post.quotedPost ? <QuotedPost quoted={post.quotedPost} /> : null}
 
       <View style={styles.reactionRow}>
         <ReactionBar
@@ -176,6 +182,17 @@ export function PostCard({
             <MessageSquare color={colors.muted} size={16} strokeWidth={1.9} />
             <Text style={styles.actionText}>{threadCount > 0 ? threadCount : "Reply"}</Text>
           </Pressable>
+          {onQuote ? (
+            <Pressable
+              style={(s) => [styles.actionPill, pressFx(s)]}
+              onPress={() => onQuote(post)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Quote"
+            >
+              <Repeat2 color={colors.muted} size={16} strokeWidth={1.9} />
+            </Pressable>
+          ) : null}
           <Text style={styles.openHint}>
             {threadCount > 0
               ? `${threadCount} ${threadCount === 1 ? "comment" : "comments"} ›`
@@ -196,6 +213,18 @@ export function PostCard({
               {directReplies > 0 ? `${directReplies} · Reply` : "Reply"}
             </Text>
           </Pressable>
+          {onQuote ? (
+            <Pressable
+              style={(s) => [styles.actionPill, pressFx(s)]}
+              onPress={() => onQuote(post)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Quote"
+            >
+              <Repeat2 color={colors.muted} size={16} strokeWidth={1.9} />
+              <Text style={styles.actionText}>Quote</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 

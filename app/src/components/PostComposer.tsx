@@ -22,6 +22,7 @@ export function PostComposer({
   onClose,
   context,
   replyTo,
+  quote,
   initialKind,
   onPosted,
 }: {
@@ -31,6 +32,8 @@ export function PostComposer({
   context?: { canonicalId: string; title: string; chapterNumber?: number };
   // Or reply to an existing post
   replyTo?: PostInfo;
+  // Or quote-repost an existing post (a top-level record with your take on top)
+  quote?: PostInfo;
   // Open on a specific record type (e.g. Review from the series screen)
   initialKind?: PostKind;
   onPosted?: (post: PostInfo) => void;
@@ -55,8 +58,9 @@ export function PostComposer({
     }
   }, [visible, replyTo, initialKind]);
 
-  const isReview = kind === "review" && !replyTo;
-  const isPoll = kind === "poll" && !replyTo;
+  const isQuote = !!quote && !replyTo;
+  const isReview = kind === "review" && !replyTo && !isQuote;
+  const isPoll = kind === "poll" && !replyTo && !isQuote;
   const seriesResults = useQuery({
     queryKey: ["composerSeries", seriesQuery],
     queryFn: () => api.searchAll(seriesQuery.trim(), 1),
@@ -86,13 +90,14 @@ export function PostComposer({
     setError("");
     try {
       const created = await api.createPost(text, {
-        canonicalId: replyTo ? undefined : context?.canonicalId,
-        chapterNumber: replyTo ? undefined : context?.chapterNumber,
+        canonicalId: replyTo || isQuote ? undefined : context?.canonicalId,
+        chapterNumber: replyTo || isQuote ? undefined : context?.chapterNumber,
         parentId: replyTo?.id,
         isSpoiler: kind === "spoiler_intel" ? true : spoiler,
-        kind: replyTo ? undefined : kind,
+        kind: replyTo || isQuote ? undefined : kind,
         rating: isReview ? rating : undefined,
         pollOptions: isPoll ? cleanPollOptions : undefined,
+        quotedPostId: isQuote ? quote.id : undefined,
         seriesTags: replyTo
           ? undefined
           : isReview
@@ -127,11 +132,13 @@ export function PostComposer({
 
   const title = replyTo
     ? "Reply"
-    : isReview
-      ? "File a Review"
-      : isPoll
-        ? "Create a Poll"
-        : "File a Record";
+    : isQuote
+      ? "Quote"
+      : isReview
+        ? "File a Review"
+        : isPoll
+          ? "Create a Poll"
+          : "File a Record";
   const chip = replyTo
     ? `Replying to @${replyTo.username}`
     : context
@@ -148,7 +155,15 @@ export function PostComposer({
           </Text>
         </View>
       ) : null}
-      {!replyTo ? (
+      {isQuote ? (
+        <View style={styles.quoteBox}>
+          <Text style={styles.quoteLabel}>QUOTING @{quote.username}</Text>
+          <Text style={styles.quoteBody} numberOfLines={3}>
+            {quote.isSpoiler ? "⚠ Spoiler" : quote.body}
+          </Text>
+        </View>
+      ) : null}
+      {!replyTo && !isQuote ? (
         <View style={styles.typeRow}>
           {KIND_ORDER.map((k) => (
             <Pressable
@@ -201,7 +216,7 @@ export function PostComposer({
           ) : null}
         </View>
       ) : null}
-      {!replyTo && !context ? (
+      {!replyTo && !context && !isQuote ? (
         <View style={styles.seriesPicker}>
           <TextInput
             style={styles.seriesInput}
@@ -235,7 +250,15 @@ export function PostComposer({
       ) : null}
       <TextInput
         style={styles.input}
-        placeholder={replyTo ? "Write a reply…" : isPoll ? "Ask a question…" : "Share a thought…"}
+        placeholder={
+          replyTo
+            ? "Write a reply…"
+            : isQuote
+              ? "Add your take…"
+              : isPoll
+                ? "Ask a question…"
+                : "Share a thought…"
+        }
         placeholderTextColor={colors.muted}
         value={body}
         onChangeText={setBody}
@@ -312,6 +335,17 @@ const styles = StyleSheet.create({
   },
   pollRemove: { color: colors.muted, fontSize: 20, fontWeight: "800", paddingHorizontal: 4 },
   pollAdd: { color: colors.accentSoft, fontSize: 12, fontWeight: "800", paddingVertical: 2 },
+  quoteBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    gap: 4,
+    backgroundColor: colors.card,
+  },
+  quoteLabel: { color: colors.accentSoft, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
+  quoteBody: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   seriesPicker: { marginBottom: 10 },
   seriesInput: { color: colors.text, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
   selectedSeries: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 6 },

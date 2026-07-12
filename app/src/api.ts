@@ -389,6 +389,18 @@ export interface PollInfo {
   myVote: string | null;
 }
 
+export interface QuotedPostInfo {
+  id: string;
+  author: PublicIdentity | null;
+  username: string;
+  body: string;
+  kind: PostKind;
+  rating: number | null;
+  isSpoiler: boolean;
+  createdAt: string;
+  series: { canonicalId: string; title: string; coverUrl?: string | null } | null;
+}
+
 export interface SeriesReviewSummary {
   canonicalId: string;
   count: number;
@@ -426,6 +438,8 @@ export interface PostInfo {
   commentCount?: number;
   // Present on poll posts.
   poll?: PollInfo | null;
+  // Present on quote-reposts: the embedded post being quoted.
+  quotedPost?: QuotedPostInfo | null;
   completedQuests?: QuestCompletion[];
   levelUp?: number | null;
 }
@@ -599,11 +613,12 @@ export const api = {
     feed: "global" | "following" = "global",
     kind?: "theory" | "review",
     sort: "new" | "top" | "hot" = "new",
+    topic?: string,
   ) =>
     get<PostInfo[]>(
       `/posts?page=${page}&feed=${feed}&sort=${sort}${
         canonicalId ? `&canonicalId=${canonicalId}` : ""
-      }${kind ? `&kind=${kind}` : ""}`,
+      }${kind ? `&kind=${kind}` : ""}${topic ? `&topic=${encodeURIComponent(topic)}` : ""}`,
     ),
   post: (id: string) => get<PostInfo>(`/posts/${encodeURIComponent(id)}`),
   seriesReviews: (canonicalId: string) =>
@@ -618,6 +633,7 @@ export const api = {
       kind?: PostKind;
       rating?: number;
       pollOptions?: string[];
+      quotedPostId?: string;
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];
     },
   ) =>

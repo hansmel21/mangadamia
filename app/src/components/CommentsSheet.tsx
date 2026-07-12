@@ -25,6 +25,7 @@ import { showExpGain } from "./ExpToast";
 import { showLevelUp } from "./LevelUp";
 import { TermsAcceptance } from "./TermsAcceptance";
 import { EyeOff, Flag } from "lucide-react-native";
+import { LinkedText } from "./LinkedText";
 import { ReportModal, type ReportTarget } from "./ReportModal";
 import { showQuestCompletions } from "./QuestToast";
 
@@ -198,7 +199,7 @@ export function CommentsSheet({
           <Text style={styles.spoilerText}>SPOILER · TAP TO REVEAL THREAD</Text>
         </Pressable>
       ) : (
-        <Text style={styles.commentBody}>{item.body}</Text>
+        <LinkedText style={styles.commentBody}>{item.body}</LinkedText>
       )}
       <View style={styles.actionsRow}>
         <Pressable

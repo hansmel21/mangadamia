@@ -2,9 +2,9 @@
 // PostCard in preview mode: tap a post to open the full conversation. The +
 // button opens the composer for a new post.
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
-import { Plus } from "lucide-react-native";
-import { useState, useSyncExternalStore } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { Plus, X } from "lucide-react-native";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, Animated, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx, useSwitchFade } from "../../src/anim";
 import { api, type PostInfo, type ReactionType } from "../../src/api";
@@ -19,20 +19,35 @@ function openThread(post: PostInfo) {
 }
 
 export default function FeedScreen() {
+  const { topic: routeTopic } = useLocalSearchParams<{ topic?: string }>();
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const queryClient = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
+  const [quoteTarget, setQuoteTarget] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [feedMode, setFeedMode] = useState<"global" | "following">("global");
   const [typeFilter, setTypeFilter] = useState<"all" | "theory" | "review">("all");
   const [sort, setSort] = useState<"new" | "top" | "hot">("new");
-  const queryKey = ["feed", feedMode, typeFilter, sort] as const;
+  const [topic, setTopic] = useState("");
+  useEffect(() => {
+    if (typeof routeTopic === "string" && /^[a-zA-Z0-9_]{2,40}$/.test(routeTopic)) {
+      setTopic(routeTopic);
+    }
+  }, [routeTopic]);
+  const queryKey = ["feed", feedMode, typeFilter, sort, topic] as const;
 
   const feed = useInfiniteQuery({
     queryKey,
     initialPageParam: 1,
     queryFn: ({ pageParam }) =>
-      api.feed(pageParam, undefined, feedMode, typeFilter === "all" ? undefined : typeFilter, sort),
+      api.feed(
+        pageParam,
+        undefined,
+        feedMode,
+        typeFilter === "all" ? undefined : typeFilter,
+        sort,
+        topic || undefined,
+      ),
     getNextPageParam: (last, pages) => (last.length > 0 ? pages.length + 1 : undefined),
   });
 
@@ -134,6 +149,24 @@ export default function FeedScreen() {
           ))}
         </View>
       </View>
+      {topic ? (
+        <View style={styles.topicRow}>
+          <Text style={styles.topicText}>TOPIC #{topic}</Text>
+          <Pressable
+            style={styles.topicClear}
+            hitSlop={10}
+            onPress={() => {
+              setTopic("");
+              router.setParams({ topic: undefined });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear topic filter"
+          >
+            <X color={colors.muted} size={14} strokeWidth={2.2} />
+            <Text style={styles.topicClearText}>CLEAR</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {feed.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
       ) : (
@@ -148,6 +181,10 @@ export default function FeedScreen() {
               onOpen={openThread}
               onReact={react}
               onVote={vote}
+              onQuote={(p) => {
+                setQuoteTarget(p);
+                setComposerOpen(true);
+              }}
               onDelete={remove}
               onReport={(post) =>
                 setReportTarget({ type: "post", id: post.id, username: post.username })
@@ -164,7 +201,9 @@ export default function FeedScreen() {
           onRefresh={() => feed.refetch()}
           ListEmptyComponent={
             <Text style={styles.empty}>
-              The dungeon is silent.{"\n"}Be the first to post something.
+              {topic
+                ? `No records for #${topic} yet.\nStart the topic.`
+                : "The dungeon is silent.\nBe the first to post something."}
             </Text>
           }
         />
@@ -174,7 +213,10 @@ export default function FeedScreen() {
       {user ? (
         <Pressable
           style={(s) => [styles.fab, pressFx(s)]}
-          onPress={() => setComposerOpen(true)}
+          onPress={() => {
+            setQuoteTarget(null);
+            setComposerOpen(true);
+          }}
         >
           <Plus color={colors.accentText} size={26} strokeWidth={2.4} />
         </Pressable>
@@ -184,7 +226,14 @@ export default function FeedScreen() {
         </View>
       )}
 
-      <PostComposer visible={composerOpen} onClose={() => setComposerOpen(false)} />
+      <PostComposer
+        visible={composerOpen}
+        quote={quoteTarget ?? undefined}
+        onClose={() => {
+          setComposerOpen(false);
+          setQuoteTarget(null);
+        }}
+      />
       <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} />
     </View>
   );
@@ -227,6 +276,22 @@ const styles = StyleSheet.create({
   scopeChipActive: { backgroundColor: "rgba(124,92,255,0.16)" },
   scopeText: { color: colors.muted, fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2 },
   scopeTextActive: { color: colors.accentSoft },
+  topicRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 12,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(76,195,138,0.35)",
+    borderRadius: 10,
+    backgroundColor: "rgba(76,195,138,0.08)",
+  },
+  topicText: { color: colors.fresh, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
+  topicClear: { flexDirection: "row", alignItems: "center", gap: 4 },
+  topicClearText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.1 },
   empty: { color: colors.muted, textAlign: "center", marginTop: 60, lineHeight: 22 },
   fab: {
     position: "absolute",
