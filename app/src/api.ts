@@ -381,7 +381,7 @@ export interface ModerationNotice {
 }
 
 export type PostKind = "record" | "theory" | "review" | "spoiler_intel";
-export type ReactionType = "endorse" | "hype" | "mindblown" | "pain" | "dead";
+export type ReactionType = "like" | "hype" | "mindblown" | "pain" | "dead";
 
 export interface SeriesReviewSummary {
   canonicalId: string;

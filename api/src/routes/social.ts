@@ -1395,8 +1395,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   });
 
   // React to a post. One reaction per reader per post — sending the same type
-  // again clears it, a different type swaps it. Only "endorse" grants the
-  // author EXP (and feeds quests + guild contribution).
+  // again clears it, a different type swaps it. The first reaction a reader
+  // leaves grants the author EXP (and feeds quests + guild contribution);
+  // swapping emotes doesn't.
   app.post<{ Params: { id: string } }>("/posts/:id/react", async (req) => {
     const user = await requireActiveUser(req);
     const { type } = z.object({ type: z.string() }).parse(req.body);
@@ -1413,28 +1414,26 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     else if (action === "remove") await prisma.postLike.delete({ where: { userId_postId: key } });
     else await prisma.postLike.update({ where: { userId_postId: key }, data: { type } });
 
-    // EXP only tracks the "endorse" reaction (mirrors the old like path).
-    const wasEndorse = existing?.type === "endorse";
-    const nowEndorse = action !== "remove" && type === "endorse";
-    const endorseDelta = (nowEndorse ? 5 : 0) - (wasEndorse ? 5 : 0);
+    // EXP tracks whether the reader has *a* reaction, not which emote.
+    const delta = (action === "create" ? 5 : 0) - (action === "remove" ? 5 : 0);
     let activity: Awaited<ReturnType<typeof recordActivity>> = {
       completedQuests: [],
       levelUp: null,
     };
-    if (post.userId !== user.id && endorseDelta !== 0) {
+    if (post.userId !== user.id && delta !== 0) {
       await prisma.user.update({
         where: { id: post.userId },
-        data: { xp: { increment: endorseDelta } },
+        data: { xp: { increment: delta } },
       });
-      if (endorseDelta > 0) {
+      if (delta > 0) {
         await creditGuild(post.userId, 5);
         await evaluateBadges(post.userId);
         await createNotification({
           userId: post.userId,
           actorId: user.id,
-          kind: "post_endorse",
-          title: "Your record was endorsed",
-          safeBody: `@${user.username} endorsed your post.`,
+          kind: "post_reaction",
+          title: "Your record got a reaction",
+          safeBody: `@${user.username} reacted to your post.`,
           targetUrl: `/post/${post.rootId ?? post.id}`,
           metadata: { postId: post.id },
           dedupeKey: `post-like:${post.id}:${user.id}`,
@@ -1451,7 +1450,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         });
       }
     }
-    if (nowEndorse && !wasEndorse) {
+    if (action === "create") {
       activity = await recordActivity(user.id, { type: "like_given", eventKey: `post:${post.id}` });
     }
     const groups = await prisma.postLike.groupBy({

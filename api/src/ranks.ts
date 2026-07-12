@@ -3,8 +3,9 @@
 
 export type Rank = "E" | "D" | "C" | "B" | "A" | "S";
 
-// Reaction types. Only "endorse" grants the author EXP; the rest are free.
-export const REACTION_TYPES = ["endorse", "hype", "mindblown", "pain", "dead"] as const;
+// Reaction types. The first reaction a reader leaves on a post grants the
+// author EXP; switching between emotes doesn't.
+export const REACTION_TYPES = ["like", "hype", "mindblown", "pain", "dead"] as const;
 export type ReactionType = (typeof REACTION_TYPES)[number];
 export function isReactionType(value: string): value is ReactionType {
   return (REACTION_TYPES as readonly string[]).includes(value);

@@ -389,8 +389,9 @@ model PostSeriesTag {
 model PostLike {
   userId    String
   postId    String
-  // Reaction type: endorse (grants EXP) | hype | mindblown | pain | dead
-  type      String   @default("endorse")
+  // Reaction type: like | hype | mindblown | pain | dead. Any reaction (the
+  // first one a reader leaves on a post) grants the author EXP.
+  type      String   @default("like")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())

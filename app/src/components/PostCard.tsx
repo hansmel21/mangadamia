@@ -5,18 +5,18 @@
 //   • thread (post detail): replies render nested beneath the post.
 // Renders the record type, the author's hunter rank, review ratings, the
 // reaction bar, spoiler shields, and reply / delete / report.
-import { Image } from "expo-image";
 import { router } from "expo-router";
 import { EyeOff, Flag, MessageSquare, Trash2 } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../anim";
 import type { PostInfo, ReactionType } from "../api";
-import { hunterRankForLevel, POST_KINDS, rankColors } from "../ranks";
+import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
 import { RankBadge } from "./RankBadge";
 import { ReactionBar } from "./ReactionBar";
 import { ReviewRating } from "./ReviewRating";
+import { SeriesEmbed } from "./SeriesEmbed";
 import { UserIdentity } from "./UserIdentity";
 
 function timeAgo(iso: string): string {
@@ -30,13 +30,6 @@ function timeAgo(iso: string): string {
 
 function openProfile(username: string) {
   router.push({ pathname: "/user/[username]", params: { username } });
-}
-
-function openSeries(series: NonNullable<PostInfo["series"]>) {
-  router.push({
-    pathname: "/series/[src]/[id]",
-    params: { src: "", id: "", title: series.title, canonicalOnly: series.canonicalId },
-  });
 }
 
 export function PostCard({
@@ -76,7 +69,6 @@ export function PostCard({
   const directReplies = post.replies.length;
   const canReply = !preview && !!onReply;
   const kindMeta = POST_KINDS[post.kind] ?? POST_KINDS.record;
-  const rankColor = rankColors[hunterRankForLevel(post.author?.level ?? post.level)];
 
   const seriesChips =
     post.seriesTags.length > 0
@@ -88,14 +80,10 @@ export function PostCard({
   const inner = (
     <>
       {!isReply ? (
-        <View style={styles.recordChip}>
-          <Text style={styles.recordChipText}>◇ SYSTEM RECORD</Text>
-          {post.kind !== "record" ? (
-            <Text style={[styles.recordChipType, { color: kindMeta.color }]}>
-              {" · "}
-              {kindMeta.label}
-            </Text>
-          ) : null}
+        <View style={styles.banner}>
+          <Text style={[styles.bannerText, { color: kindMeta.color }]}>
+            {kindMeta.icon} {kindMeta.label}
+          </Text>
         </View>
       ) : null}
 
@@ -123,19 +111,13 @@ export function PostCard({
       </View>
 
       {seriesChips.map((series) => (
-        <Pressable
+        <SeriesEmbed
           key={series.canonicalId}
-          style={(s) => [styles.ctxChip, pressFx(s)]}
-          onPress={() => openSeries(series)}
-        >
-          {series.coverUrl ? (
-            <Image source={{ uri: series.coverUrl }} style={styles.ctxCover} contentFit="cover" />
-          ) : null}
-          <Text style={styles.ctxText} numberOfLines={1}>
-            {series.title}
-            {series.chapterNumber != null ? ` · Ch. ${series.chapterNumber}` : ""}
-          </Text>
-        </Pressable>
+          canonicalId={series.canonicalId}
+          title={series.title}
+          coverUrl={series.coverUrl}
+          chapterNumber={series.chapterNumber}
+        />
       ))}
 
       {post.kind === "review" && post.rating ? (
@@ -235,7 +217,7 @@ export function PostCard({
         onPress={() => onOpen?.(post)}
         style={({ pressed }) => [
           styles.card,
-          { borderLeftWidth: 3, borderLeftColor: rankColor },
+          { borderLeftWidth: 3, borderLeftColor: kindMeta.color },
           pressed && styles.cardPressed,
         ]}
         accessibilityRole="button"
@@ -246,7 +228,9 @@ export function PostCard({
     );
   }
 
-  return <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: rankColor }]}>{inner}</View>;
+  return (
+    <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: kindMeta.color }]}>{inner}</View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -268,33 +252,11 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   replyCardFlat: { paddingLeft: 6, borderLeftColor: "rgba(124,92,255,0.15)" },
-  recordChip: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  recordChipText: {
-    color: colors.muted,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.6,
-  },
-  recordChipType: { fontSize: 9, fontWeight: "900", letterSpacing: 1.6 },
+  banner: { flexDirection: "row", alignItems: "center", marginBottom: 9 },
+  bannerText: { fontSize: 10.5, fontWeight: "900", letterSpacing: 1.8 },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   time: { color: colors.muted, fontSize: 12 },
   headerActions: { marginLeft: "auto", paddingLeft: 8 },
-  ctxChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: colors.bg,
-    borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.4)",
-    borderRadius: 8,
-    paddingRight: 10,
-    marginTop: 10,
-    alignSelf: "flex-start",
-    maxWidth: "100%",
-    overflow: "hidden",
-  },
-  ctxCover: { width: 28, height: 38 },
-  ctxText: { color: colors.accentSoft, fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
   reviewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   reviewLabel: { color: colors.muted, fontSize: 11, fontWeight: "700" },
   body: { color: colors.text, fontSize: 15, lineHeight: 21, marginTop: 10 },

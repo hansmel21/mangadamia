@@ -76,33 +76,33 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.feedTabs}>
+      <View style={styles.typeTabs}>
+        {(["all", "theory", "review"] as const).map((f) => (
+          <Pressable
+            key={f}
+            style={[styles.typeTab, typeFilter === f && styles.typeTabActive]}
+            onPress={() => setTypeFilter(f)}
+          >
+            <Text style={[styles.typeTabText, typeFilter === f && styles.typeTabTextActive]}>
+              {f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.scopeRow}>
         {(["global", "following"] as const).map((mode) => (
           <Pressable
             key={mode}
             disabled={mode === "following" && !user}
             style={[
-              styles.feedTab,
-              feedMode === mode && styles.feedTabActive,
+              styles.scopeChip,
+              feedMode === mode && styles.scopeChipActive,
               mode === "following" && !user && { opacity: 0.35 },
             ]}
             onPress={() => setFeedMode(mode)}
           >
-            <Text style={[styles.feedTabText, feedMode === mode && styles.feedTabTextActive]}>
+            <Text style={[styles.scopeText, feedMode === mode && styles.scopeTextActive]}>
               {mode.toUpperCase()}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      <View style={styles.filterRow}>
-        {(["all", "theory", "review"] as const).map((f) => (
-          <Pressable
-            key={f}
-            style={[styles.filterChip, typeFilter === f && styles.filterChipOn]}
-            onPress={() => setTypeFilter(f)}
-          >
-            <Text style={[styles.filterChipText, typeFilter === f && styles.filterChipTextOn]}>
-              {f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
             </Text>
           </Pressable>
         ))}
@@ -162,29 +162,33 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  feedTabs: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  feedTab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  feedTabActive: { borderBottomColor: colors.accent },
-  feedTabText: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
-  feedTabTextActive: { color: colors.accentSoft },
-  filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+  typeTabs: {
+    flexDirection: "row",
+    gap: 6,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 5,
+    marginHorizontal: 12,
+    marginTop: 10,
   },
-  filterChipOn: { borderColor: "rgba(124,92,255,0.7)", backgroundColor: "rgba(124,92,255,0.14)" },
-  filterChipText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
-  filterChipTextOn: { color: colors.accentSoft },
+  typeTab: { flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 8 },
+  typeTabActive: {
+    backgroundColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  typeTabText: { color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 1.2 },
+  typeTabTextActive: { color: colors.accentText },
+  scopeRow: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 8, marginBottom: 2 },
+  scopeChip: { paddingHorizontal: 13, paddingVertical: 5, borderRadius: 999 },
+  scopeChipActive: { backgroundColor: "rgba(124,92,255,0.16)" },
+  scopeText: { color: colors.muted, fontSize: 9.5, fontWeight: "800", letterSpacing: 1.2 },
+  scopeTextActive: { color: colors.accentSoft },
   empty: { color: colors.muted, textAlign: "center", marginTop: 60, lineHeight: 22 },
   fab: {
     position: "absolute",

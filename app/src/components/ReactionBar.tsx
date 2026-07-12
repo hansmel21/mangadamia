@@ -1,13 +1,11 @@
-// Reaction bar for System Records. ⚡ Endorse is the primary (grants the author
-// EXP); the ＋ opens the emote picker (🔥 🤯 😭 💀 — free). One reaction per
-// reader per post: tapping your current reaction clears it, another swaps it.
+// Reaction bar for System Records. A single "React" button opens the emote row
+// (❤️ 🔥 🤯 😭 💀); reactions already left show as tappable count chips. One
+// reaction per reader: tap your current one to clear it, another to swap.
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ReactionType } from "../api";
-import { REACTIONS } from "../ranks";
+import { REACTIONS, reactionEmoji } from "../ranks";
 import { colors } from "../theme";
-
-const EMOTES = REACTIONS.filter((r) => r.type !== "endorse");
 
 export function ReactionBar({
   reactions,
@@ -21,8 +19,8 @@ export function ReactionBar({
   disabled?: boolean;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const endorseCount = reactions.endorse ?? 0;
-  const shownEmotes = EMOTES.filter((r) => (reactions[r.type] ?? 0) > 0 || myReaction === r.type);
+  const present = REACTIONS.filter((r) => (reactions[r.type] ?? 0) > 0);
+  const myEmoji = myReaction ? reactionEmoji[myReaction] : null;
 
   const react = (type: ReactionType) => {
     setPickerOpen(false);
@@ -33,53 +31,45 @@ export function ReactionBar({
     <View style={styles.wrap}>
       <View style={styles.row}>
         <Pressable
-          style={[styles.pill, myReaction === "endorse" && styles.endorseOn]}
-          onPress={() => react("endorse")}
+          style={[styles.reactBtn, myReaction && styles.reactBtnOn]}
+          onPress={() => setPickerOpen((v) => !v)}
           hitSlop={6}
+          disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel="Endorse"
+          accessibilityLabel={myReaction ? "Change your reaction" : "React"}
         >
-          <Text style={styles.emoji}>⚡</Text>
-          <Text style={[styles.count, myReaction === "endorse" && styles.countOn]}>
-            {endorseCount > 0 ? endorseCount : "Endorse"}
+          <Text style={styles.reactEmoji}>{myEmoji ?? "🙂"}</Text>
+          <Text style={[styles.reactLabel, myReaction && styles.reactLabelOn]}>
+            {myReaction ? "Reacted" : "React"}
           </Text>
         </Pressable>
 
-        {shownEmotes.map((r) => (
+        {present.map((r) => (
           <Pressable
             key={r.type}
-            style={[styles.pill, myReaction === r.type && styles.pillOn]}
+            style={[styles.chip, myReaction === r.type && styles.chipOn]}
             onPress={() => react(r.type)}
             hitSlop={6}
+            disabled={disabled}
             accessibilityLabel={r.label}
           >
-            <Text style={styles.emoji}>{r.emoji}</Text>
-            {(reactions[r.type] ?? 0) > 0 ? (
-              <Text style={[styles.count, myReaction === r.type && styles.countOn]}>
-                {reactions[r.type]}
-              </Text>
-            ) : null}
+            <Text style={styles.chipEmoji}>{r.emoji}</Text>
+            <Text style={[styles.chipCount, myReaction === r.type && styles.chipCountOn]}>
+              {reactions[r.type]}
+            </Text>
           </Pressable>
         ))}
-
-        <Pressable
-          style={[styles.addPill, pickerOpen && styles.addOn]}
-          onPress={() => setPickerOpen((v) => !v)}
-          hitSlop={8}
-          accessibilityLabel="Add a reaction"
-        >
-          <Text style={styles.addText}>{pickerOpen ? "×" : "＋"}</Text>
-        </Pressable>
       </View>
 
       {pickerOpen ? (
         <View style={styles.picker}>
-          {EMOTES.map((r) => (
+          {REACTIONS.map((r) => (
             <Pressable
               key={r.type}
               style={[styles.pickerBtn, myReaction === r.type && styles.pickerBtnOn]}
               onPress={() => react(r.type)}
               hitSlop={6}
+              accessibilityLabel={r.label}
             >
               <Text style={styles.pickerEmoji}>{r.emoji}</Text>
             </Pressable>
@@ -93,34 +83,36 @@ export function ReactionBar({
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
   row: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  pill: {
+  reactBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
     borderRadius: 999,
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  endorseOn: { borderColor: colors.foil, backgroundColor: "rgba(245,184,76,0.12)" },
-  pillOn: { borderColor: colors.accentSoft, backgroundColor: "rgba(124,92,255,0.12)" },
-  emoji: { fontSize: 15 },
-  count: { color: colors.muted, fontSize: 12.5, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  countOn: { color: colors.text },
-  addPill: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  reactBtnOn: { borderColor: "rgba(124,92,255,0.6)", backgroundColor: "rgba(124,92,255,0.12)" },
+  reactEmoji: { fontSize: 15 },
+  reactLabel: { color: colors.muted, fontSize: 12.5, fontWeight: "800" },
+  reactLabelOn: { color: colors.accentSoft },
+  chip: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    borderRadius: 999,
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  addOn: { borderColor: colors.accentSoft },
-  addText: { color: colors.muted, fontSize: 16, fontWeight: "800", lineHeight: 18 },
+  chipOn: { borderColor: colors.accentSoft, backgroundColor: "rgba(124,92,255,0.12)" },
+  chipEmoji: { fontSize: 14 },
+  chipCount: { color: colors.muted, fontSize: 12, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  chipCountOn: { color: colors.text },
   picker: {
     flexDirection: "row",
     gap: 6,
@@ -131,7 +123,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(124,92,255,0.4)",
   },
-  pickerBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  pickerBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   pickerBtnOn: { backgroundColor: "rgba(124,92,255,0.18)" },
-  pickerEmoji: { fontSize: 20 },
+  pickerEmoji: { fontSize: 22 },
 });

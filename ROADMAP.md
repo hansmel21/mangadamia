@@ -67,23 +67,39 @@ community **series rank** (E→S) shown on the series screen.
 - [x] Final app typecheck — clean; client committed.
 - [ ] Device test end-to-end
 
-### Social v2 — Phase 1: Social Feel v2 (in progress)
-Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`. Prominent type tabs,
-plain reactions (drop ⚡ Endorse → ❤️/emotes), richer per-type System Record
-cards + `SeriesEmbed`. Later phases: post functions (polls, sorting,
-quote-repost, mentions/#tags), images (Cloudinary, local-first), full guild
-depth (invites, wall, events, customization, contribution), Arena PvP games.
+### Social v2 — Phase 1: Social Feel v2 ✅ (2026-07-12)
+Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
+- [x] Prominent type tab bar (bold segmented control) + small scope toggle
+- [x] Reactions rework — dropped ⚡ Endorse → ❤️/🔥/🤯/😭/💀; XP now on any
+      reaction received (migration `20260712054020_reactions_like`)
+- [x] Richer per-type System Record cards (type-colored accent + banner) +
+      new `SeriesEmbed`
 
-- [ ] Prominent type tab bar (feed)
-- [ ] Reactions rework (drop Endorse; XP on any reaction received)
-- [ ] Richer System Record cards + `SeriesEmbed`
+## 🗺️ Deferred / next (phased — see the plan file)
 
-## 🗺️ Deferred / next
+**Social — Phase 2: post functions** (each a sub-phase)
+- Polls (poll record kind + vote + live results)
+- Feed sorting (Hot / Top / New)
+- Quote-repost (`Post.quotedPostId`)
+- Mentions (@user → notification) & #hashtags (tappable topic filter)
 
-- **Guilds** next slice: members-only **guild wall** (`Post.guildId`),
-  edit-guild-after-creation UI, then guild **events** + leaderboard snapshots.
-- **Social** fast-follow: auto-generated **Achievement** System Records
-  (finish series / level up / badge) with an opt-in toggle; reactions on chapter
-  comments.
-- **The Arena** (weekly games, leaderboards, pools) — deferred to far future
-  (`ARENA_PLAN.md`).
+**Social — Phase 3: images in posts** (Cloudinary, built local-first)
+- Client picker + compress (`expo-image-picker`/`-manipulator`)
+- `api/src/storage.ts` storage abstraction: local-disk dev adapter now,
+  Cloudinary adapter for prod; `Post.imageUrls`
+- Moderation gating (Cloudinary AI moderation in prod) for Play compliance
+
+**Guilds — Phase 4: full depth** (currently way too basic)
+- **Invites** (net-new `GuildInvite` model + endpoints + UI — can't invite today)
+- **Guild wall** (wire `Post.guildId` into `/posts` + Hall Wall tab)
+- **Guild events** (net-new `GuildEvent` models; co-op weekly goals + rewards)
+- **Customization & perks** (edit hall, level unlocks, guild title/decorations)
+- **Contribution board** (weekly + all-time member board in the Hall)
+
+**Arena — Phase 5 (its own track):** PvP turn-based manga-character battles,
+online vs other players + async — matchmaking, server-authoritative game state,
+real-time sync, character roster, ranked ladder (`ARENA_PLAN.md`). The rest of
+the Arena (quiz, pools, draw, leaderboards) also lives there.
+
+**Social fast-follow:** auto-generated **Achievement** records; reactions on
+chapter comments.

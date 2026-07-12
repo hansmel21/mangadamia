@@ -26,8 +26,8 @@ export const rankColors: Record<Rank, string> = {
   S: "#FF4D87",
 };
 
-export const REACTIONS: { type: ReactionType; emoji: string; label: string; grantsXp?: boolean }[] = [
-  { type: "endorse", emoji: "⚡", label: "Endorse", grantsXp: true },
+export const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
+  { type: "like", emoji: "❤️", label: "Like" },
   { type: "hype", emoji: "🔥", label: "Hype" },
   { type: "mindblown", emoji: "🤯", label: "Mindblown" },
   { type: "pain", emoji: "😭", label: "Pain" },
@@ -38,9 +38,9 @@ export const reactionEmoji: Record<string, string> = Object.fromEntries(
   REACTIONS.map((r) => [r.type, r.emoji]),
 );
 
-export const POST_KINDS: Record<PostKind, { label: string; color: string }> = {
-  record: { label: "RECORD", color: colors.accentSoft },
-  theory: { label: "THEORY", color: "#4BA3FF" },
-  review: { label: "REVIEW", color: colors.foil },
-  spoiler_intel: { label: "SPOILER INTEL", color: colors.danger },
+export const POST_KINDS: Record<PostKind, { label: string; color: string; icon: string }> = {
+  record: { label: "RECORD", color: colors.accentSoft, icon: "◇" },
+  theory: { label: "THEORY", color: "#4BA3FF", icon: "🧠" },
+  review: { label: "REVIEW", color: colors.foil, icon: "★" },
+  spoiler_intel: { label: "SPOILER INTEL", color: colors.danger, icon: "👁" },
 };

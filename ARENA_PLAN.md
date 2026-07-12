@@ -45,6 +45,14 @@ button on the Dungeons feed.
    outcome (or majority) earns a small reward. No content moderation surface.
 3. **Draw competition** — image submissions + a voting window. Highest
    moderation cost (uploads + judging) — ship last, behind image moderation.
+4. **PvP manga battles** — simple **turn-based** duels using **random manga
+   characters** (roster drawn from the catalog), played **online against another
+   player** (real-time via websockets, or async "play-by-turn" with push
+   notifications). Needs the most new infra: matchmaking/lobby, a
+   **server-authoritative** turn/game-state engine (never trust the client),
+   reconnection handling, and anti-cheat. Ranked ladder + seasonal rewards fold
+   into the Arena leaderboard. Biggest build — its own track, after the simpler
+   games prove the Arena loop.
 
 ## Data model sketch (Prisma)
 
@@ -127,3 +135,7 @@ into `LeaderboardSnapshot` so history is stable and cheap.
 3. **Phase 2:** community pools, weekly-quests leaderboard, snapshots + history.
 4. **Phase 3:** draw competitions (needs image upload + moderation), series
    leaderboards, seasonal Arena cosmetics.
+5. **Phase 4 (its own track):** **PvP manga battles** — matchmaking, a
+   server-authoritative turn-based engine, real-time/async sync, character
+   roster, ranked ladder. The largest build; start once the simpler Arena games
+   are live.
