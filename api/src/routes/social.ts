@@ -22,7 +22,7 @@ import { prisma } from "../db/client.js";
 import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../identity.js";
 import { createNotification } from "../notifications.js";
 import { bumpWeeklyXp } from "../arena.js";
-import { bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
+import { bumpGuildEvent, bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateGifUrl, validateUserContent } from "../policy.js";
 import { questListForUser, recordActivity } from "../quests.js";
@@ -1616,6 +1616,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     });
     await bumpWeeklyXp(prisma, user.id, 8);
     await creditGuild(user.id, 8);
+    void bumpGuildEvent(user.id, parent ? "reply_created" : "post_created");
     const levelAfter = levelForXp(updated.xp);
     const identity = await identityForUser(user.id, user.id);
     const quotedAuthor = post.quotedPost
@@ -1741,6 +1742,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       await bumpWeeklyXp(prisma, post.userId, delta);
       if (delta > 0) {
         await creditGuild(post.userId, 5);
+        void bumpGuildEvent(post.userId, "reaction_received");
         await evaluateBadges(post.userId);
         await createNotification({
           userId: post.userId,
@@ -1883,6 +1885,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           guildId: req.params.id,
         },
       });
+      void bumpGuildEvent(user.id, "post_created");
       const identity = await identityForUser(user.id, user.id);
       return {
         id: post.id,
@@ -2193,6 +2196,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       await bumpWeeklyXp(prisma, comment.userId, existing ? -5 : 5);
       if (!existing) {
         await creditGuild(comment.userId, 5);
+        void bumpGuildEvent(comment.userId, "reaction_received");
         await evaluateBadges(comment.userId);
         await createNotification({
           userId: comment.userId,

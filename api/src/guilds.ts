@@ -2,8 +2,10 @@
 // the XP contribution hook. Guild level is driven by contribution flow — XP
 // members earn while joined, which never decreases — while "power" (sum of
 // member levels) is computed on read as a flashy aggregate rating.
+import type { GuildEvent } from "@prisma/client";
 import { levelForXp } from "./badges.js";
 import { prisma } from "./db/client.js";
+import { createNotification } from "./notifications.js";
 
 // Curated, app-owned emblem shapes, rendered client-side as SVG. No uploads,
 // so no image-moderation surface (consistent with avatars/frames).
@@ -96,6 +98,127 @@ export async function bumpGuildRaid(userId: string): Promise<void> {
         });
       }
     }
+  } catch {
+    // best-effort; ignore
+  }
+}
+
+// ── Weekly guild event: a rotating co-op side quest next to the raid ──────
+// The raid always asks for chapters; the event rotates through social goals
+// so the pair never overlaps. One event per guild per week, created lazily on
+// first read or first tick (same no-cron pattern as wars).
+export const GUILD_EVENT_TYPES = ["post_created", "reply_created", "reaction_received"] as const;
+export type GuildEventType = (typeof GUILD_EVENT_TYPES)[number];
+
+export const EVENT_BONUS_XP = 150;
+
+export function guildEventTitle(eventType: string, target: number): string {
+  switch (eventType) {
+    case "post_created":
+      return `File ${target} records together`;
+    case "reply_created":
+      return `Write ${target} replies together`;
+    case "reaction_received":
+      return `Earn ${target} reactions together`;
+    default:
+      return `Reach ${target} together`;
+  }
+}
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return Math.abs(h);
+}
+
+// Deterministic rotation: advances every week, offset per guild so the whole
+// server isn't on the same objective.
+export function eventTypeForWeek(guildId: string, weekKey: string): GuildEventType {
+  return GUILD_EVENT_TYPES[(weekNumber(weekKey) + hashCode(guildId)) % GUILD_EVENT_TYPES.length];
+}
+
+// Like the raid target: scales with the roster, rounded to read like a quest.
+export function eventTargetForGuild(eventType: GuildEventType, memberCount: number): number {
+  const perMember =
+    eventType === "post_created" ? 3 : eventType === "reply_created" ? 4 : 5;
+  return Math.max(10, Math.ceil((memberCount * perMember) / 5) * 5);
+}
+
+export async function ensureGuildEvent(guildId: string): Promise<GuildEvent> {
+  const weekKey = currentWeekKey();
+  const existing = await prisma.guildEvent.findUnique({
+    where: { guildId_weekKey: { guildId, weekKey } },
+  });
+  if (existing) return existing;
+  const memberCount = await prisma.guildMember.count({ where: { guildId } });
+  const eventType = eventTypeForWeek(guildId, weekKey);
+  try {
+    return await prisma.guildEvent.create({
+      data: {
+        guildId,
+        weekKey,
+        eventType,
+        target: eventTargetForGuild(eventType, memberCount),
+        bonusXp: EVENT_BONUS_XP,
+      },
+    });
+  } catch {
+    // Concurrent creation — the unique (guildId, weekKey) decided the race.
+    return prisma.guildEvent.findUniqueOrThrow({
+      where: { guildId_weekKey: { guildId, weekKey } },
+    });
+  }
+}
+
+// Tick the reader's guild event if this week's objective matches the action.
+// Pays the one-time bonus and notifies the roster when the target is crossed.
+// Best-effort — an event failure must never break the underlying action.
+export async function bumpGuildEvent(userId: string, eventType: GuildEventType): Promise<void> {
+  try {
+    const membership = await prisma.guildMember.findUnique({ where: { userId } });
+    if (!membership) return;
+    const event = await ensureGuildEvent(membership.guildId);
+    if (event.eventType !== eventType || event.completedAt) return;
+    const [updated] = await prisma.$transaction([
+      prisma.guildEvent.update({
+        where: { id: event.id },
+        data: { progress: { increment: 1 } },
+      }),
+      prisma.guildEventContribution.upsert({
+        where: { eventId_userId: { eventId: event.id, userId } },
+        create: { eventId: event.id, userId, value: 1 },
+        update: { value: { increment: 1 } },
+      }),
+    ]);
+    if (updated.progress < updated.target) return;
+    // Claim atomically: only the update that flips completedAt pays out.
+    const claimed = await prisma.guildEvent.updateMany({
+      where: { id: event.id, completedAt: null },
+      data: { completedAt: new Date() },
+    });
+    if (claimed.count === 0) return;
+    const [guild, members] = await Promise.all([
+      prisma.guild.update({
+        where: { id: membership.guildId },
+        data: { xp: { increment: updated.bonusXp } },
+      }),
+      prisma.guildMember.findMany({
+        where: { guildId: membership.guildId },
+        select: { userId: true },
+      }),
+    ]);
+    await Promise.all(
+      members.map((m) =>
+        createNotification({
+          userId: m.userId,
+          kind: "guild_event_complete",
+          title: "Guild event cleared!",
+          safeBody: `${guild.name} finished “${guildEventTitle(event.eventType, event.target)}” — +${updated.bonusXp} Guild XP.`,
+          targetUrl: `/guild/${membership.guildId}`,
+          dedupeKey: `guild-event:${event.id}:${m.userId}`,
+        }),
+      ),
+    );
   } catch {
     // best-effort; ignore
   }

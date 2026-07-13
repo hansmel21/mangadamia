@@ -246,9 +246,25 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       guild home's **MANAGE** quick key now opens the editor (it previously
       just opened the Hall).
 
+### Guilds — Phase 4d: weekly guild events ✅ (2026-07-12, checkpoint — not yet verified live)
+- [x] **Rotating weekly co-op event** next to the fixed raid — `GuildEvent` +
+      `GuildEventContribution` (migration `guild_events`); type rotates
+      deterministically per guild per week (file records / write replies /
+      earn reactions — never duplicates the raid's chapters), target scales
+      with roster size, created lazily on first read/tick (no cron, same
+      pattern as wars). Ticks from the existing XP hook sites (post/reply
+      creation incl. guild board, reactions received). Completion pays
+      +150 Guild XP once (atomic claim) and notifies the whole roster
+      (`guild_event_complete`).
+- [x] Endpoints: `GET /guilds/:id/event` (ensures + returns this week's, with
+      viewer share) and `GET /guilds/:id/events` (finished-week history).
+- [x] Client: GUILD EVENT card on the guild tab under the raid card (accent
+      styling, progress bar, your share, reward state). Verified via API
+      smoke test: event lazily created with roster-scaled target.
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board + contribution board ✅, edit UI ✅; guild events & perks next._
+_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board ✅, edit UI ✅, events ✅; perks last._
 
 **Social — Phase 3b: images in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress
@@ -256,9 +272,7 @@ _Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board 
   (local-disk dev adapter now, Cloudinary adapter for prod); `Post.imageUrls`;
   Cloudinary AI moderation gating in prod for Play compliance.
 
-**Guilds — Phase 4: full depth** (invites ✅ 4a; wall + contribution board ✅ 4b; edit UI ✅ 4c)
-- **Guild events** (net-new `GuildEvent` models; co-op weekly goals + rewards
-  beyond the fixed weekly raid — varied objectives, reward grants, history)
+**Guilds — Phase 4: full depth** (invites ✅ 4a; wall + board ✅ 4b; edit UI ✅ 4c; events ✅ 4d)
 - **Perks** (level unlocks, guild title/decorations — cosmetic progression sink)
 
 **Arena — Phase 5 (its own track):** PvP turn-based manga-character battles,

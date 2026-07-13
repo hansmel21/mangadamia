@@ -729,6 +729,7 @@ model Guild {
   members        GuildMember[]
   joinRequests   GuildJoinRequest[]
   invites        GuildInvite[]
+  events         GuildEvent[]
   xpTransactions GuildXpTransaction[]
   posts          Post[]
   warsAsA        GuildWar[]           @relation("WarsAsA")
@@ -808,6 +809,34 @@ model GuildInvite {
 
   @@id([guildId, userId])
   @@index([userId, createdAt])
+}
+
+// Weekly co-op side quest, one per guild per week. The type rotates so it
+// never duplicates the fixed chapter raid; progress pools from member
+// activity while the week runs. completedAt doubles as the "bonus paid" flag.
+model GuildEvent {
+  id            String                   @id @default(cuid())
+  guildId       String
+  weekKey       String
+  eventType     String // post_created | reply_created | reaction_received
+  target        Int
+  progress      Int                      @default(0)
+  bonusXp       Int
+  completedAt   DateTime?
+  createdAt     DateTime                 @default(now())
+  guild         Guild                    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  contributions GuildEventContribution[]
+
+  @@unique([guildId, weekKey])
+}
+
+model GuildEventContribution {
+  eventId String
+  userId  String
+  value   Int        @default(0)
+  event   GuildEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
 }
 
 model GuildXpTransaction {

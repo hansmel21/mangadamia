@@ -61,6 +61,11 @@ export default function GuildTab() {
     queryFn: () => api.guildRaid(myGuildId as string),
     enabled: !!myGuildId,
   });
+  const event = useQuery({
+    queryKey: ["guildEvent", myGuildId],
+    queryFn: () => api.guildEvent(myGuildId as string),
+    enabled: !!myGuildId,
+  });
   const board = useQuery({
     queryKey: ["guildBoard", myGuildId, 1],
     queryFn: () => api.guildBoard(myGuildId as string, 1),
@@ -119,6 +124,7 @@ export default function GuildTab() {
                 void detail.refetch();
                 void war.refetch();
                 void raid.refetch();
+                void event.refetch();
                 void board.refetch();
               }}
               tintColor={colors.muted}
@@ -214,6 +220,45 @@ export default function GuildTab() {
                 </Text>
                 <Text style={styles.raidReward}>
                   {raid.data.completed ? `+${raid.data.bonusXp} GUILD XP PAID` : `☐ +${raid.data.bonusXp} GUILD XP`}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* weekly event card — the rotating co-op side quest */}
+          {event.data ? (
+            <View style={styles.eventCard}>
+              <View style={styles.raidHead}>
+                <Text style={styles.eventEyebrow}>◇ GUILD EVENT · WEEK {event.data.weekNo}</Text>
+                <Text style={styles.raidResets}>
+                  {event.data.completed ? "CLEARED ✓" : `RESETS ${endsIn(event.data.resetsAt)}`}
+                </Text>
+              </View>
+              <Text style={styles.raidTitle}>{event.data.title}</Text>
+              <View style={styles.raidTrack}>
+                <View
+                  style={[
+                    styles.eventFill,
+                    {
+                      width: `${Math.min(100, (event.data.progress / Math.max(1, event.data.target)) * 100)}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.raidMeta}>
+                <Text style={styles.raidCount}>
+                  {event.data.progress} / {event.data.target}
+                  {event.data.myShare != null ? (
+                    <Text>
+                      {" "}
+                      · your share <Text style={styles.eventShare}>{event.data.myShare}</Text>
+                    </Text>
+                  ) : null}
+                </Text>
+                <Text style={styles.eventReward}>
+                  {event.data.completed
+                    ? `+${event.data.bonusXp} GUILD XP PAID`
+                    : `☐ +${event.data.bonusXp} GUILD XP`}
                 </Text>
               </View>
             </View>
@@ -554,6 +599,18 @@ const styles = StyleSheet.create({
   raidCount: { color: colors.muted, fontSize: 10.5 },
   raidShare: { color: colors.foilSoft, fontWeight: "800" },
   raidReward: { color: colors.foilSoft, fontSize: 10, fontWeight: "800" },
+
+  eventCard: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(124,92,255,0.4)",
+    borderRadius: 4,
+    padding: 14,
+  },
+  eventEyebrow: { color: colors.accentSoft, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.6 },
+  eventFill: { height: "100%", backgroundColor: colors.accent },
+  eventShare: { color: colors.accentSoft, fontWeight: "800" },
+  eventReward: { color: colors.accentSoft, fontSize: 10, fontWeight: "800" },
 
   boardBox: {
     backgroundColor: colors.card,

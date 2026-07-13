@@ -219,6 +219,32 @@ export interface GuildRaidInfo {
   myShare: number | null;
 }
 
+// This week's rotating co-op side quest (posts / replies / reactions).
+export interface GuildEventInfo {
+  weekKey: string;
+  weekNo: number;
+  eventType: string;
+  title: string;
+  target: number;
+  progress: number;
+  completed: boolean;
+  bonusXp: number;
+  resetsAt: string;
+  myShare: number | null;
+}
+
+export interface GuildEventHistoryEntry {
+  id: string;
+  weekKey: string;
+  weekNo: number;
+  eventType: string;
+  title: string;
+  target: number;
+  progress: number;
+  completed: boolean;
+  bonusXp: number;
+}
+
 // ── Arena (weekly games + leaderboard) ──────────────────────────────────────
 export type ArenaStatus = "upcoming" | "live" | "ended";
 
@@ -880,6 +906,9 @@ export const api = {
   guildWars: (id: string) =>
     get<GuildWarHistoryEntry[]>(`/guilds/${encodeURIComponent(id)}/wars`),
   guildRaid: (id: string) => get<GuildRaidInfo>(`/guilds/${encodeURIComponent(id)}/raid`),
+  guildEvent: (id: string) => get<GuildEventInfo>(`/guilds/${encodeURIComponent(id)}/event`),
+  guildEvents: (id: string) =>
+    get<GuildEventHistoryEntry[]>(`/guilds/${encodeURIComponent(id)}/events`),
   guildBoard: (id: string, page = 1) =>
     get<(PostInfo & { pinned: boolean; authorRole: GuildRole | null })[]>(
       `/guilds/${encodeURIComponent(id)}/board?page=${page}`,

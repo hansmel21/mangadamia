@@ -6,6 +6,8 @@ import { getUser, requireAcceptedTerms, requireActiveUser } from "../auth.js";
 import { prisma } from "../db/client.js";
 import {
   currentWeekKey,
+  ensureGuildEvent,
+  guildEventTitle,
   guildLevelForXp,
   guildMemberCap,
   guildPower,
@@ -782,6 +784,59 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       resetsAt: weekEndsAt(weekKey),
       myShare,
     };
+  });
+
+  // ── Guild Event: this week's rotating co-op side quest ────────────────
+  app.get<{ Params: { id: string } }>("/guilds/:id/event", async (req) => {
+    const me = await getUser(req);
+    const guildId = req.params.id;
+    const guild = await prisma.guild.findUnique({ where: { id: guildId } });
+    if (!guild) throw httpError(404, "No such guild");
+    const event = await ensureGuildEvent(guildId);
+    const myMembership = me
+      ? await prisma.guildMember.findUnique({ where: { userId: me.id } })
+      : null;
+    const myShare =
+      me && myMembership?.guildId === guildId
+        ? ((
+            await prisma.guildEventContribution.findUnique({
+              where: { eventId_userId: { eventId: event.id, userId: me.id } },
+            })
+          )?.value ?? 0)
+        : null;
+    return {
+      weekKey: event.weekKey,
+      weekNo: weekNumber(event.weekKey),
+      eventType: event.eventType,
+      title: guildEventTitle(event.eventType, event.target),
+      target: event.target,
+      progress: Math.min(event.progress, event.target),
+      completed: !!event.completedAt,
+      bonusXp: event.bonusXp,
+      resetsAt: weekEndsAt(event.weekKey),
+      myShare,
+    };
+  });
+
+  // ── Event history (finished weeks) ────────────────────────────────────
+  app.get<{ Params: { id: string } }>("/guilds/:id/events", async (req) => {
+    const weekKey = currentWeekKey();
+    const events = await prisma.guildEvent.findMany({
+      where: { guildId: req.params.id, weekKey: { not: weekKey } },
+      orderBy: { weekKey: "desc" },
+      take: 12,
+    });
+    return events.map((e) => ({
+      id: e.id,
+      weekKey: e.weekKey,
+      weekNo: weekNumber(e.weekKey),
+      eventType: e.eventType,
+      title: guildEventTitle(e.eventType, e.target),
+      target: e.target,
+      progress: Math.min(e.progress, e.target),
+      completed: !!e.completedAt,
+      bonusXp: e.bonusXp,
+    }));
   });
 
   // ── My guild shortcut ─────────────────────────────────────────────────
