@@ -489,6 +489,22 @@ export interface PollInfo {
   myVote: string | null;
 }
 
+// One GIF from the picker's search grid (server-side Giphy/Tenor proxy).
+export interface GifResult {
+  id: string;
+  previewUrl: string;
+  url: string;
+  width: number;
+  height: number;
+}
+
+export interface GifSearchPage {
+  configured: boolean;
+  provider: "giphy" | "tenor" | null;
+  results: GifResult[];
+  next: string | null;
+}
+
 export interface QuotedPostInfo {
   id: string;
   author: PublicIdentity | null;
@@ -622,6 +638,10 @@ export const api = {
   browseNew: (page = 1) => get<UnifiedCard[]>(`/browse/new?page=${page}`),
   ranks: () => get<RankedCard[]>("/ranks"),
   recommended: () => get<UnifiedCard[]>("/recommended"),
+  searchGifs: (q: string, cursor?: string) =>
+    get<GifSearchPage>(
+      `/gifs/search?q=${encodeURIComponent(q)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
   searchAll: (q: string, page = 1, status?: "ongoing" | "completed") =>
     get<UnifiedCard[]>(
       `/search?q=${encodeURIComponent(q)}&page=${page}${status ? `&status=${status}` : ""}`,

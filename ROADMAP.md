@@ -202,6 +202,13 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
 - [x] Feed fix bundled in: switching type/scope/sort/topic now drops cached
       feed pages (`clearFeedPages`) and remounts the list, so stale pages don't
       flash.
+- [x] **In-app GIF picker** (Meta-style, replaces the paste-a-URL field) —
+      composer GIF key → full-screen picker: trending on open, debounced
+      search, 2-column infinite grid, tap to attach (preview + ✕ in the
+      composer). Server proxy `GET /gifs/search` (`api/src/routes/gifs.ts`)
+      normalizes **Giphy or Tenor** (set `GIPHY_API_KEY` or `TENOR_API_KEY`
+      in `api/.env` — see `.env.example`), pins rating pg-13/medium for Play,
+      auth-gated + rate-limited. Without a key the picker shows a setup hint.
 
 ### Guilds — Phase 4a: invites ✅ (2026-07-12, checkpoint — not yet verified live)
 - [x] **Guild invites** — `GuildInvite` model (migration `guild_invites`);
@@ -248,8 +255,6 @@ _Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board 
   (`expo-image-picker`/`-manipulator`); `api/src/storage.ts` abstraction
   (local-disk dev adapter now, Cloudinary adapter for prod); `Post.imageUrls`;
   Cloudinary AI moderation gating in prod for Play compliance.
-- A proper **GIF picker** (Giphy/Tenor search UI) to replace the paste-a-URL
-  field shipped in 3a.
 
 **Guilds — Phase 4: full depth** (invites ✅ 4a; wall + contribution board ✅ 4b; edit UI ✅ 4c)
 - **Guild events** (net-new `GuildEvent` models; co-op weekly goals + rewards

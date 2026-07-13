@@ -3,6 +3,7 @@
 // reader's last read position, spoiler shield toggle, char counter, and a
 // gradient PUBLISH RECORD key. On success, celebrates badges/levels.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Image as ExpoImage } from "expo-image";
 import { EyeOff, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -12,6 +13,7 @@ import { getLastReadTag } from "../library";
 import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
 import { showExpGain } from "./ExpToast";
+import { GifPicker } from "./GifPicker";
 import { showLevelUp } from "./LevelUp";
 import { showQuestCompletions } from "./QuestToast";
 import { ReviewRating } from "./ReviewRating";
@@ -60,6 +62,7 @@ export function PostComposer({
   const [rating, setRating] = useState(0);
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [gifUrl, setGifUrl] = useState("");
+  const [gifPickerOpen, setGifPickerOpen] = useState(false);
   // Prefilled from the reader's last read position; ✕ removes it.
   const [autoTag, setAutoTag] = useState<
     { canonicalId: string; title: string; chapterNumber: number } | null
@@ -327,29 +330,36 @@ export function PostComposer({
           maxLength={1000}
         />
 
-        <View style={styles.gifBox}>
-          <Text style={styles.gifLabel}>GIF ATTACHMENT</Text>
-          <View style={styles.gifInputRow}>
-            <TextInput
-              style={styles.gifInput}
-              value={gifUrl}
-              onChangeText={setGifUrl}
-              placeholder="Paste direct Giphy or Tenor GIF URL"
-              placeholderTextColor={colors.muted}
-              autoCapitalize="none"
-              autoCorrect={false}
+        {gifUrl ? (
+          <View style={styles.gifPreviewWrap}>
+            <ExpoImage
+              source={{ uri: gifUrl }}
+              style={styles.gifPreview}
+              contentFit="cover"
+              transition={100}
+              accessibilityLabel="Attached GIF"
             />
-            {gifUrl ? (
-              <Pressable hitSlop={8} onPress={() => setGifUrl("")} accessibilityLabel="Remove GIF">
-                <Text style={styles.gifRemove}>×</Text>
-              </Pressable>
-            ) : null}
+            <Pressable
+              style={styles.gifPreviewRemove}
+              hitSlop={8}
+              onPress={() => setGifUrl("")}
+              accessibilityLabel="Remove GIF"
+            >
+              <X color="#fff" size={14} strokeWidth={2.5} />
+            </Pressable>
           </View>
-          <Text style={styles.gifHint}>Direct hosted GIF/media URLs only.</Text>
-        </View>
+        ) : null}
 
-        {/* Spoiler shield toggle + char counter */}
+        {/* GIF key + spoiler shield toggle + char counter */}
         <View style={styles.metaRow}>
+          <Pressable
+            style={(s) => [styles.gifKey, { opacity: s.pressed ? 0.6 : 1 }]}
+            onPress={() => setGifPickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Add a GIF"
+          >
+            <Text style={styles.gifKeyText}>GIF</Text>
+          </Pressable>
           {kind === "spoiler_intel" ? (
             <View style={styles.shieldPill}>
               <EyeOff color={colors.danger} size={13} strokeWidth={2.5} />
@@ -384,6 +394,11 @@ export function PostComposer({
           <Text style={styles.xpHint}>+XP for your first record today · records feed your daily quests</Text>
         ) : null}
       </TermsAcceptance>
+      <GifPicker
+        visible={gifPickerOpen}
+        onClose={() => setGifPickerOpen(false)}
+        onSelect={(gif) => setGifUrl(gif.url)}
+      />
     </SystemSheet>
   );
 }
@@ -489,22 +504,34 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlignVertical: "top",
   },
-  gifBox: { marginTop: 10, gap: 5 },
-  gifLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
-  gifInputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  gifInput: {
-    flex: 1,
-    color: colors.text,
-    backgroundColor: colors.card,
+  gifPreviewWrap: { marginTop: 10, borderRadius: 3, overflow: "hidden" },
+  gifPreview: {
+    width: "100%",
+    aspectRatio: 16 / 9,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 12,
+    backgroundColor: colors.card,
   },
-  gifRemove: { color: colors.muted, fontSize: 20, fontWeight: "800", paddingHorizontal: 4 },
-  gifHint: { color: colors.muted, fontSize: 10 },
+  gifPreviewRemove: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gifKey: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  gifKeyText: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
   shieldPill: {
     flexDirection: "row",
