@@ -404,10 +404,30 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - [x] E2E: create → upload entry (+10) → vote (+2) → self-vote blocked →
       finalize → winner 110 XP + gate-artisan.
 
+### Backlog polish batch ✅ (2026-07-13, pending device test)
+- [x] **Search**: `/search` payload enriched (avg review rating + rating count
+      + on-app reads) → result rows show the series **rank sigil + ★ rating +
+      reads** under the title; instant as-you-type results shipped earlier.
+- [x] **Guild directory**: `AT WAR` / `RECRUITING` chips (server `atWar` flag
+      from the week's pairings) + gold champion card for #1.
+- [x] **Thread series rows**: **READ ▸** deep link straight into the reader at
+      the stored position (`getResumeForCanonical` in library.ts).
+- [x] **Guild XP multiplier is real**: guild LV 5 perk — `creditGuild` applies
+      +10% (ceil) to every member contribution; on the Hall perk track.
+- [x] **Motion**: `SystemProgress` now grows on mount app-wide; Dungeon center
+      key gets a 150ms glow-in on activation; arena LIVE chip + online dots
+      already pulse. Reader chrome confirmed shipped (stale backlog line).
+- [x] **History CLEAR** — `hidden_from_history` flag on `last_read`: CLEAR LOG
+      hides Expedition Log rows without touching resume positions; reading
+      re-surfaces a series automatically.
+- [x] Doc cleanup: 13 stale/shipped backlog lines marked in
+      `UI-UX/NOT_YET_IMPLEMENTED.md`.
+
 **Pre-Arena plan in progress** (see `.claude/plans/check-roadmap-and-all-mutable-dragonfly.md`):
 1. ✅ Announcements + THE SYSTEM (above)
 2. ✅ Moderation groundwork (above)
 3. ✅ Arena Draw competition (above)
+4. ✅ Backlog polish batch (above)
 3. Arena **Draw competition** (unblocked by image storage)
 4. Backlog polish batch (search autocomplete + enriched rows, guild directory
    chips, thread READ ▸, guild XP multiplier perk, motion sweep, reader parity,
@@ -427,5 +447,5 @@ online vs other players + async — matchmaking, server-authoritative game state
 real-time sync, character roster, ranked ladder (`ARENA_PLAN.md`). The rest of
 the Arena (quiz, pools, draw, leaderboards) also lives there.
 
-**Social fast-follow:** auto-generated **Achievement** records; reactions on
-chapter comments.
+**Social fast-follow:** ~~achievement auto-records~~ (cut by decision); reactions on
+chapter comments ✅ (shipped 2026-07-13).

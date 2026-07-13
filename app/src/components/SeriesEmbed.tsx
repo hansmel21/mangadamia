@@ -1,10 +1,13 @@
 // Richer series embed used inside System Record cards — a tappable cover +
 // title + chapter card, instead of the tiny chip that made posts look like
-// comments.
+// comments. When the reader has a stored position for the series, a READ ▸
+// key deep-links straight into the reader at that spot.
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../anim";
+import { getResumeForCanonical } from "../library";
 import { colors } from "../theme";
 
 export function SeriesEmbed({
@@ -18,6 +21,13 @@ export function SeriesEmbed({
   coverUrl?: string | null;
   chapterNumber?: number | null;
 }) {
+  const resume = useMemo(() => {
+    try {
+      return getResumeForCanonical(canonicalId);
+    } catch {
+      return undefined;
+    }
+  }, [canonicalId]);
   return (
     <Pressable
       style={(s) => [styles.embed, pressFx(s)]}
@@ -44,7 +54,28 @@ export function SeriesEmbed({
           <Text style={styles.chapter}>Chapter {chapterNumber}</Text>
         ) : null}
       </View>
-      <Text style={styles.chevron}>›</Text>
+      {resume ? (
+        <Pressable
+          hitSlop={8}
+          style={(s) => [styles.readKey, pressFx(s)]}
+          onPress={() =>
+            router.push({
+              pathname: "/reader/[src]/[seriesId]/[chapterId]",
+              params: {
+                src: resume.src,
+                seriesId: resume.seriesId,
+                chapterId: resume.chapterId,
+              },
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Resume reading this series"
+        >
+          <Text style={styles.readKeyText}>READ ▸</Text>
+        </Pressable>
+      ) : (
+        <Text style={styles.chevron}>›</Text>
+      )}
     </Pressable>
   );
 }
@@ -69,4 +100,12 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 13.5, fontWeight: "800", lineHeight: 18 },
   chapter: { color: colors.accentSoft, fontSize: 11.5, fontWeight: "700" },
   chevron: { color: colors.muted, fontSize: 22, paddingHorizontal: 4 },
+  readKey: {
+    borderWidth: 1,
+    borderColor: "rgba(84,214,255,0.5)",
+    borderRadius: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  readKeyText: { color: colors.data, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
 });

@@ -57,6 +57,10 @@ export interface UnifiedCard {
   tags?: string[];
   status?: string | null;
   sources: ServerRef[];
+  // Community stats (search results only): average review rating + on-app reads.
+  communityRating?: number | null;
+  ratingCount?: number;
+  readCount?: number;
 }
 
 export interface RankedCard extends UnifiedCard {
@@ -143,6 +147,7 @@ export interface GuildSummary {
   memberCount: number;
   memberCap: number;
   joinPolicy: GuildJoinPolicy;
+  atWar: boolean;
   rank: number | null;
   mine: boolean;
 }

@@ -54,7 +54,14 @@ db.execSync(`
 
 // Column migrations for installs created before these columns existed.
 // ALTER TABLE throws if the column is already there — that's fine.
-for (const col of ["title TEXT", "cover_url TEXT", "page_count INTEGER"]) {
+// hidden_from_history: history CLEAR hides rows from the Expedition Log
+// without touching the stored resume position.
+for (const col of [
+  "title TEXT",
+  "cover_url TEXT",
+  "page_count INTEGER",
+  "hidden_from_history INTEGER DEFAULT 0",
+]) {
   try {
     db.execSync(`ALTER TABLE last_read ADD COLUMN ${col}`);
   } catch {
@@ -389,6 +396,7 @@ export function listHistory(limit = 100): HistoryEntry[] {
      FROM last_read r
      LEFT JOIN library l ON l.src = r.src AND l.series_id = r.series_id
      WHERE COALESCE(r.title, l.title) IS NOT NULL
+       AND COALESCE(r.hidden_from_history, 0) = 0
      ORDER BY r.updated_at DESC
      LIMIT ?`,
     [limit],
@@ -455,4 +463,32 @@ export function getLastRead(
         pageCount: row.page_count ?? undefined,
       }
     : undefined;
+}
+
+/**
+ * Hide every row from the Expedition Log without touching resume positions —
+ * the log's CLEAR key. Reading anything re-surfaces that series (the
+ * progress upsert resets the flag).
+ */
+export function clearHistory(): void {
+  db.execSync(`UPDATE last_read SET hidden_from_history = 1`);
+}
+
+/**
+ * Resume position for a canonical series — powers the READ ▸ deep link on
+ * post series embeds. Only series in the local library carry a canonical id.
+ */
+export function getResumeForCanonical(
+  canonicalId: string,
+): { src: string; seriesId: string; chapterId: string } | undefined {
+  const row = db.getFirstSync<{ src: string; series_id: string; chapter_id: string }>(
+    `SELECT r.src, r.series_id, r.chapter_id
+     FROM last_read r
+     JOIN library l ON l.src = r.src AND l.series_id = r.series_id
+     WHERE l.canonical_id = ?
+     ORDER BY r.updated_at DESC
+     LIMIT 1`,
+    [canonicalId],
+  );
+  return row ? { src: row.src, seriesId: row.series_id, chapterId: row.chapter_id } : undefined;
 }

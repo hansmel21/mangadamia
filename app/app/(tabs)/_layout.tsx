@@ -2,14 +2,22 @@ import { useQuery } from "@tanstack/react-query";
 import { Tabs } from "expo-router";
 import { CircleUserRound, Compass, LibraryBig, Shield, Swords } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { useSyncExternalStore } from "react";
-import { Pressable, StyleSheet, Text, View, type PressableProps } from "react-native";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type PressableProps,
+} from "react-native";
 import { api } from "../../src/api";
 import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors, fonts } from "../../src/theme";
 
 // The center "DUNGEON" command key: a 58px square rotated 45° that lifts above
-// the bar, with an accent border + glow when the feed is active.
+// the bar, with an accent border + a 150ms glow-in when the feed activates.
 function DungeonKey({
   focused,
   onPress,
@@ -17,6 +25,15 @@ function DungeonKey({
   focused: boolean;
   onPress?: PressableProps["onPress"];
 }) {
+  const glow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(glow, {
+      toValue: focused ? 1 : 0,
+      duration: 150,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [focused, glow]);
   return (
     <Pressable
       onPress={onPress}
@@ -24,11 +41,12 @@ function DungeonKey({
       accessibilityRole="button"
       accessibilityLabel="Dungeon"
     >
-      <View
+      <Animated.View
         style={[
           styles.diamond,
           { borderColor: focused ? colors.accent : colors.borderStrong },
           focused && styles.diamondActive,
+          { shadowOpacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] }) },
         ]}
       >
         <Swords
@@ -37,7 +55,7 @@ function DungeonKey({
           strokeWidth={2}
           style={styles.diamondIcon}
         />
-      </View>
+      </Animated.View>
       <Text style={[styles.centerLabel, { color: focused ? colors.accentBright : colors.muted }]}>
         DUNGEON
       </Text>
@@ -175,6 +193,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    // Glow base — animated shadowOpacity fades this in over 150ms on focus.
+    shadowColor: colors.accent,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
   },
   diamondActive: {
     shadowColor: colors.accent,

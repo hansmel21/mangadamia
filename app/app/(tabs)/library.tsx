@@ -8,12 +8,13 @@ import { Image } from "expo-image";
 import { router, useFocusEffect } from "expo-router";
 import { ArrowLeft, History, Play } from "lucide-react-native";
 import { useCallback, useState, useSyncExternalStore } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../src/api";
 import { SeriesGrid, type GridItem } from "../../src/components/SeriesGrid";
 import { ScreenTitle, SystemKey } from "../../src/components/SystemUI";
 import {
+  clearHistory,
   listHistory,
   listLibrary,
   type HistoryEntry,
@@ -215,12 +216,37 @@ function HistoryView() {
     }, []),
   );
 
+  const clear = () => {
+    Alert.alert(
+      "Clear expedition log",
+      "This hides the log entries — reading positions and CONTINUE points are kept.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            clearHistory();
+            setEntries([]);
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <FlatList
       style={styles.historyList}
       data={entries}
       keyExtractor={(e) => `${e.src}:${e.seriesId}`}
       contentContainerStyle={{ paddingBottom: 24 }}
+      ListHeaderComponent={
+        entries.length > 0 ? (
+          <Pressable style={styles.clearKey} onPress={clear} hitSlop={6}>
+            <Text style={styles.clearKeyText}>CLEAR LOG ✕</Text>
+          </Pressable>
+        ) : null
+      }
       ListEmptyComponent={
         <Text style={styles.empty}>Nothing read yet — chapters you open show up here.</Text>
       }
@@ -372,6 +398,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   historyList: { flex: 1, backgroundColor: colors.bg },
+  clearKey: { alignSelf: "flex-end", paddingHorizontal: 16, paddingVertical: 10 },
+  clearKeyText: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
   row: {
     flexDirection: "row",
     alignItems: "center",

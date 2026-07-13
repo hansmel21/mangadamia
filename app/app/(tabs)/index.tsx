@@ -30,6 +30,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { pressFx, useSwitchFade } from "../../src/anim";
 import { api, type RankedCard, type UnifiedCard } from "../../src/api";
+import { rankColors, seriesRankForAverage } from "../../src/ranks";
 import { SeriesGrid } from "../../src/components/SeriesGrid";
 import { ScreenTitle, SystemKey } from "../../src/components/SystemUI";
 import {
@@ -340,6 +341,26 @@ function SearchRow({ card, signedIn }: { card: UnifiedCard; signedIn: boolean })
         <Text style={styles.resultTitle} numberOfLines={2}>
           {card.title}
         </Text>
+        {card.communityRating || card.readCount ? (
+          <View style={styles.resultStatsRow}>
+            {card.communityRating ? (
+              <>
+                <Text
+                  style={[
+                    styles.resultSigil,
+                    { color: rankColors[seriesRankForAverage(card.communityRating)] },
+                  ]}
+                >
+                  {seriesRankForAverage(card.communityRating)}
+                </Text>
+                <Text style={styles.resultStat}>★ {card.communityRating.toFixed(1)}</Text>
+              </>
+            ) : null}
+            {card.readCount ? (
+              <Text style={styles.resultStat}>{formatNum(card.readCount)} reads</Text>
+            ) : null}
+          </View>
+        ) : null}
         {(card.tags?.length || card.status) ? (
           <Text style={styles.resultTags} numberOfLines={1}>
             {[card.status, ...(card.tags?.slice(0, 3) ?? [])].filter(Boolean).join(" · ")}
@@ -1045,6 +1066,9 @@ const styles = StyleSheet.create({
   },
   resultInfo: { flex: 1 },
   resultTitle: { color: colors.text, fontSize: 14.5, fontWeight: "800", lineHeight: 19 },
+  resultStatsRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
+  resultSigil: { fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
+  resultStat: { color: colors.foilSoft, fontSize: 10.5, fontWeight: "800" },
   resultTags: {
     color: colors.accentBright,
     fontSize: 10.5,

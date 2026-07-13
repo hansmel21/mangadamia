@@ -62,6 +62,12 @@ export function guildPerks(level: number): {
     },
     { key: "deco2", level: 2, label: "Hall decorations I (Halo, Wreath)", unlocked: level >= 2 },
     { key: "deco4", level: 4, label: "Hall decorations II (Veil, Gilded)", unlocked: level >= 4 },
+    {
+      key: "boost",
+      level: 5,
+      label: "+10% guild XP on every member contribution",
+      unlocked: level >= 5,
+    },
     { key: "deco6", level: 6, label: "Hall decorations III (Blood Moon)", unlocked: level >= 6 },
     { key: "deco8", level: 8, label: "Hall decorations IV (Eclipse)", unlocked: level >= 8 },
   ];
@@ -400,26 +406,37 @@ export async function finalizePastWars(): Promise<void> {
 // and all-time contribution only ever increase; weekly contribution rolls over
 // on the UTC week boundary. Best-effort — a guild-credit failure must never
 // break the underlying action (posting, reading, etc.).
+// LV 5 perk: contributions land 10% heavier (rounded up).
+export const GUILD_BOOST_LEVEL = 5;
+export const GUILD_BOOST_MULTIPLIER = 1.1;
+
 export async function creditGuild(userId: string, amount: number): Promise<void> {
   if (amount <= 0) return;
   try {
-    const membership = await prisma.guildMember.findUnique({ where: { userId } });
+    const membership = await prisma.guildMember.findUnique({
+      where: { userId },
+      include: { guild: { select: { xp: true } } },
+    });
     if (!membership) return;
+    const boosted =
+      guildLevelForXp(membership.guild.xp) >= GUILD_BOOST_LEVEL
+        ? Math.ceil(amount * GUILD_BOOST_MULTIPLIER)
+        : amount;
     const weekKey = currentWeekKey();
     const sameWeek = membership.weekKey === weekKey;
     await prisma.$transaction([
       prisma.guild.update({
         where: { id: membership.guildId },
-        data: { xp: { increment: amount } },
+        data: { xp: { increment: boosted } },
       }),
       prisma.guildMember.update({
         where: { userId },
         data: sameWeek
-          ? { contributionXp: { increment: amount }, weeklyXp: { increment: amount } }
-          : { contributionXp: { increment: amount }, weeklyXp: amount, weekKey },
+          ? { contributionXp: { increment: boosted }, weeklyXp: { increment: boosted } }
+          : { contributionXp: { increment: boosted }, weeklyXp: boosted, weekKey },
       }),
       prisma.guildXpTransaction.create({
-        data: { guildId: membership.guildId, userId, delta: amount },
+        data: { guildId: membership.guildId, userId, delta: boosted },
       }),
     ]);
   } catch {

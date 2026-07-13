@@ -128,6 +128,45 @@ export function registerRoutes(app: FastifyInstance): void {
     });
   });
 
+  // Community stats stamped onto search results: average review rating (the
+  // series-rank sigil derives from it client-side) and on-app read counts.
+  async function enrichCards<T extends { canonicalId?: string }>(cards: T[]): Promise<T[]> {
+    const ids = [...new Set(cards.map((c) => c.canonicalId).filter((id): id is string => !!id))];
+    if (ids.length === 0) return cards;
+    const [ratings, reads] = await Promise.all([
+      prisma.post.groupBy({
+        by: ["canonicalId"],
+        where: {
+          kind: "review",
+          canonicalId: { in: ids },
+          moderationStatus: "visible",
+          rating: { not: null },
+        },
+        _avg: { rating: true },
+        _count: true,
+      }),
+      prisma.readChapter.groupBy({
+        by: ["canonicalId"],
+        where: { canonicalId: { in: ids } },
+        _count: true,
+      }),
+    ]);
+    const ratingById = new Map(
+      ratings.map((r) => [r.canonicalId, { avg: r._avg.rating ?? 0, count: r._count }]),
+    );
+    const readsById = new Map(reads.map((r) => [r.canonicalId, r._count]));
+    return cards.map((c) => {
+      if (!c.canonicalId) return c;
+      const rating = ratingById.get(c.canonicalId);
+      return {
+        ...c,
+        communityRating: rating?.avg ?? null,
+        ratingCount: rating?.count ?? 0,
+        readCount: readsById.get(c.canonicalId) ?? 0,
+      };
+    });
+  }
+
   app.get("/search", async (req) => {
     const { q, page, status } = searchQuery
       .extend({ status: z.enum(["ongoing", "completed"]).optional() })
@@ -135,7 +174,7 @@ export function registerRoutes(app: FastifyInstance): void {
     return cachedList(`search:all:${q.toLowerCase()}:${status ?? "any"}:${page}`, async () => {
       const cards = await unifiedList("search", page, q, status);
       discoverMissingSources(cards, 4);
-      return cards;
+      return enrichCards(cards);
     });
   });
 

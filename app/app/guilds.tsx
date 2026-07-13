@@ -87,12 +87,21 @@ export default function GuildsScreen() {
 }
 
 function GuildRow({ guild }: { guild: GuildSummary }) {
+  const champion = guild.rank === 1;
+  const recruiting = guild.joinPolicy === "open" && guild.memberCount < guild.memberCap;
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, guild.mine && styles.rowMine, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        guild.mine && styles.rowMine,
+        champion && styles.rowChampion,
+        pressed && styles.rowPressed,
+      ]}
       onPress={() => openGuild(guild.id)}
     >
-      <Text style={styles.rank}>{guild.rank != null ? `#${guild.rank}` : ""}</Text>
+      <Text style={[styles.rank, champion && { color: colors.foil }]}>
+        {guild.rank != null ? `#${guild.rank}` : ""}
+      </Text>
       <GuildEmblem
         emblemKey={guild.emblemKey}
         primaryColor={guild.primaryColor}
@@ -105,6 +114,8 @@ function GuildRow({ guild }: { guild: GuildSummary }) {
             {guild.name}
           </Text>
           <Text style={[styles.rowTag, { color: guild.primaryColor }]}>[{guild.tag}]</Text>
+          {guild.atWar ? <Text style={styles.warChip}>AT WAR</Text> : null}
+          {recruiting ? <Text style={styles.recruitChip}>RECRUITING</Text> : null}
         </View>
         <Text style={styles.rowMeta} numberOfLines={1}>
           {guild.motto || `${guild.memberCount}/${guild.memberCap} members`}
@@ -155,6 +166,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 6,
+  },
+  warChip: {
+    color: colors.danger,
+    fontSize: 7.5,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    borderWidth: 1,
+    borderColor: "rgba(229,72,77,0.55)",
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  recruitChip: {
+    color: colors.fresh,
+    fontSize: 7.5,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    borderWidth: 1,
+    borderColor: "rgba(76,195,138,0.5)",
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  rowChampion: {
+    borderWidth: 1.5,
+    borderColor: "rgba(245,184,76,0.55)",
+    backgroundColor: "rgba(245,184,76,0.05)",
   },
   row: {
     flexDirection: "row",

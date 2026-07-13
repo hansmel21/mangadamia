@@ -138,7 +138,14 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       take: 50,
       include: { _count: { select: { members: true } } },
     });
-    const myMembership = me ? await prisma.guildMember.findUnique({ where: { userId: me.id } }) : null;
+    const [myMembership, weekWars] = await Promise.all([
+      me ? prisma.guildMember.findUnique({ where: { userId: me.id } }) : null,
+      prisma.guildWar.findMany({
+        where: { weekKey: currentWeekKey() },
+        select: { guildAId: true, guildBId: true },
+      }),
+    ]);
+    const atWarIds = new Set(weekWars.flatMap((w) => [w.guildAId, w.guildBId]));
     return guilds.map((g, index) => {
       const level = guildLevelForXp(g.xp);
       return {
@@ -154,6 +161,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
         memberCount: g._count.members,
         memberCap: guildMemberCap(level),
         joinPolicy: g.joinPolicy,
+        atWar: atWarIds.has(g.id),
         rank: sort === "level" ? index + 1 : null,
         mine: myMembership?.guildId === g.id,
       };

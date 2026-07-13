@@ -17,6 +17,17 @@ export function hunterRankForLevel(level: number | null): Rank {
   return "E";
 }
 
+// Community series rank from the average review rating (1–5) — mirrors the
+// server's seriesRankForAverage scale.
+export function seriesRankForAverage(avg: number): Rank {
+  if (avg >= 4.4) return "S";
+  if (avg >= 3.8) return "A";
+  if (avg >= 3.2) return "B";
+  if (avg >= 2.6) return "C";
+  if (avg >= 2.0) return "D";
+  return "E";
+}
+
 export const rankColors: Record<Rank, string> = {
   E: "#8992A3",
   D: "#6FBF8F",

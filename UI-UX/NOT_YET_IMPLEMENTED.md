@@ -32,7 +32,7 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ Rails: square corners, CH.n badge on LATEST covers.
 - ✅ **TOP MATCH instant search** — shipped 2026-07-13 (debounced as-you-type).
 - ✅ **TRENDING IN THE DUNGEONS** — shipped 2026-07-13 (`GET /posts/trending`, Home rail).
-- ⚠ **Rank sigil + ★ rating + reads + posts/hr on result rows** — search payload has no rank/rating/activity metrics.
+- ✅ **Rank sigil + ★ rating + reads on result rows** — shipped 2026-07-13 (search payload enriched; posts/hr dropped as low-value).
 
 ## Dungeon feed (§2) — layout DONE (Phase 2); backend items remain
 - ✅ In-screen DUNGEON ScreenTitle + ARENA key; one-row filter deck (ALL/THEORIES/REVIEWS/FOLLOWING chips + HOT▾ sort cycle); NEW RECORD gradient key.
@@ -40,7 +40,7 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✂ **Online counter** (global) — cut by decision 2026-07-13; presence is per-guild only.
 - ✅ **Raid-thread ticker** — shipped 2026-07-13 (HOT ticker fed by /posts/trending).
 - ✅ **GUILD feed chip** — shipped 2026-07-13 (`feed=guild`, guildmates’ public posts).
-- ⚠ **Guild-war rally card** pinned in-feed when viewer's guild has an active war — needs `GET /guilds/:id/war` (see Guild War below).
+- ✅ **Guild-war rally card** — shipped in Phase 4 (war backend) — stale line.
 
 ## Composer (§3) — DONE (Phase 2)
 - ✅ Bottom sheet (`SystemSheet.tsx`, CRT choreography), 5 kind tiles, auto-tag
@@ -53,7 +53,7 @@ The design's own build order (foundation → nav → feed → status/quests/libr
   the full tree ships to the client), one indent level + `▾ N MORE REPLIES`
   collapse, one-line dashed shield chip for spoiler replies, sticky reply bar
   (viewer avatar + input + gradient send).
-- 🎨 Series row `READ ▸` deep link into the reader (needs stored-progress route
+- ✅ **Series row READ ▸ deep link** — shipped 2026-07-13 (getResumeForCanonical → reader).
   resolution — pair with the Library phase).
 
 ## Guild (§6) — war/raid/board DONE (Phase 4, backend + client, E2E-tested)
@@ -62,9 +62,9 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ **Guild Board**: reuses Post + new `pinned` flag. `GET/POST /guilds/:id/board`, `POST /posts/:id/pin` (officers). Replies inherit `guildId`; leak guards added everywhere (public feed, post detail, react, vote, quote, profile recentPosts — all verified 404/hidden for outsiders). Client: board preview on Guild tab + full board screen (`guild/board/[id]`) with inline composer + officer pin toggles.
 - ✅ **Presence per guild** — shipped 2026-07-13 (User.lastActiveAt, onlineCount + roster dots).
 - ✅ **Roster enrichment** — shipped 2026-07-13 (online dots + idle Nh/Nd from lastActiveAt).
-- 🔀 **Guild XP multiplier** ("+10% XP" recruit copy) — ⚠ if it should be real.
-- 🎨 Directory war-status chips (`AT WAR`/`RECRUITING`) + #1 gold card — restyle; `AT WAR` can now read war state.
-- 🎨 Old Hall screen (`guild/[id].tsx`) roster restyle to weekly-GXP ordering + role chips (data exists).
+- ✅ **Guild XP multiplier** — made real 2026-07-13 (+10% at guild LV 5, on the perk track).
+- ✅ **Directory war-status chips + #1 gold card** — shipped 2026-07-13 (AT WAR / RECRUITING chips, champion styling).
+- ✅ **Hall roster restyle** — shipped in Phase 4b (contribution ordering + role chips) — stale line.
 - ✅ **War refinements** — shipped 2026-07-13 (transaction-log scoring, finalizedAt freeze, +200 GXP winner purse, 5-min close-out tick).
 - ✅ **Raid cosmetic reward** — shipped 2026-07-13 (Ember Wreath frame to contributing members).
 
@@ -81,7 +81,7 @@ The design's own build order (foundation → nav → feed → status/quests/libr
   moves it), +5 XP first vote, **automatic majority payout** (+20 XP, no-tie
   rule) at lazy close — no admin resolution job needed.
 - ✅ Week number + countdown header; past-results list; hub at `arena/index`.
-- ⚠ **Draw competition**: still **blocked by the no-uploads policy**.
+- ✅ **Draw competition** — shipped 2026-07-13 (image storage unblocked it; entries + votes + Gate Artisan).
 - ✅ **Winner titles** — shipped 2026-07-13 (Gate Scholar granted at quiz close-out).
   at close-out (current winner reward is XP only).
 - ✅ **Scheduled close-out** — shipped 2026-07-13 (5-min in-process tick for arena + wars; lazy fallback kept).
@@ -108,16 +108,16 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ ARCHIVE ScreenTitle + HISTORY key + SYNCED/LOCAL state; RESUME EXPEDITION window (cover, ch/page, % bar, play key → reader).
 - ✅ Shelf chips ALL/READING n/CAUGHT UP/DONE (client filter on progress + series detail); grid `+n` unread badges + progress hairlines + dashed ADD SERIES tile.
 - ✅ EXPEDITION LOG history view (rows with % bar + RESUME ▸).
-- 🎨 History CLEAR intentionally omitted: `last_read` doubles as the progress store — clearing would erase reading positions. Needs a separate history table first.
+- ✅ **History CLEAR** — shipped 2026-07-13 (hidden_from_history flag preserves resume positions).
 
 ## Reader (design parity)
-- 🎨 System-styled reader chrome (top bar title/chapter, side tap zones, bottom progress + "SAVE & EXIT ▸", XP-on-clear hint) — mostly restyle of the existing reader.
+- ✅ **Reader chrome** — shipped (commit 833aacb: top bar, SAVE & EXIT ▸, XP hint) — stale line.
 
 ## Motion (all screens)
-- 🎨 Every window/sheet/tray opens with `useCrtOpen` (extracted this pass).
-- 🎨 `usePulseGlow` on online dots + LIVE chips (extracted this pass).
-- 🎨 `useProgressGrow` on progress bars on mount (extracted this pass).
-- 🎨 Center Dungeon key gets a 150ms glow-in on activation.
+- ✅ Motion: SystemSheet/SystemModal use the CRT choreography; SystemProgress now grows on mount app-wide (2026-07-13).
+- ✅ Pulse glow live on arena LIVE chip + guild online dots (2026-07-13).
+- ✅ useProgressGrow baked into SystemProgress (2026-07-13).
+- ✅ Dungeon key 150ms glow-in on activation (2026-07-13).
 
 ---
 

@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
 import {
+  Animated,
   Pressable,
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { useProgressGrow } from "../anim";
 import { colors, fonts, radii } from "../theme";
 
 // Semantic tone → color used across System chrome (titles, keys, corners).
@@ -327,9 +329,11 @@ export function SystemProgress({
   height?: number;
 }) {
   const color = tone === "foil" ? colors.foil : tone === "fresh" ? colors.fresh : colors.accentBright;
+  // Grows to its value on mount and eases between updates (app-wide motion).
+  const grow = useProgressGrow(value);
   return (
     <View style={[styles.track, { height }]}>
-      <View style={[styles.progress, { width: `${Math.max(0, Math.min(100, value))}%`, backgroundColor: color }]} />
+      <Animated.View style={[styles.progress, grow, { backgroundColor: color }]} />
     </View>
   );
 }
