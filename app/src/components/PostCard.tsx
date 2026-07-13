@@ -183,9 +183,16 @@ export function PostCard({
           </Pressable>
         )
       ) : (
-        <LinkedText style={styles.body} numberOfLines={preview && !isReply ? 8 : undefined}>
-          {post.body}
-        </LinkedText>
+        <>
+          {post.title && !isReply ? (
+            <Text style={styles.postTitle} numberOfLines={preview ? 2 : undefined}>
+              {post.title}
+            </Text>
+          ) : null}
+          <LinkedText style={styles.body} numberOfLines={preview && !isReply ? 8 : undefined}>
+            {post.body}
+          </LinkedText>
+        </>
       )}
 
       {!shielded && post.gifUrl ? (
@@ -233,68 +240,67 @@ export function PostCard({
 
       {post.quotedPost ? <QuotedPost quoted={post.quotedPost} /> : null}
 
-      <View style={styles.reactionRow}>
+      {/* One quiet footer row: react · reply · quote · open — no stacking. */}
+      <View style={styles.footerRow}>
         <ReactionBar
           reactions={post.reactions}
           myReaction={post.myReaction}
           onReact={(type) => onReact(post, type)}
           disabled={!viewerSignedIn}
         />
+        {preview && !isReply ? (
+          <>
+            <Pressable
+              style={(s) => [styles.actionPill, pressFx(s)]}
+              onPress={() => onOpen?.(post)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Open thread"
+            >
+              <MessageSquare color={colors.muted} size={14} strokeWidth={1.9} />
+              {threadCount > 0 ? <Text style={styles.actionText}>{threadCount}</Text> : null}
+            </Pressable>
+            {onQuote ? (
+              <Pressable
+                style={(s) => [styles.actionPill, pressFx(s)]}
+                onPress={() => onQuote(post)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Quote"
+              >
+                <Repeat2 color={colors.muted} size={14} strokeWidth={1.9} />
+              </Pressable>
+            ) : null}
+            <Text style={styles.openHint}>OPEN ▸</Text>
+          </>
+        ) : canReply ? (
+          <>
+            <Pressable
+              style={(s) => [styles.actionPill, pressFx(s)]}
+              onPress={() => onReply?.(post)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Reply"
+            >
+              <MessageSquare color={colors.muted} size={14} strokeWidth={1.9} />
+              <Text style={styles.actionText}>
+                {directReplies > 0 ? `${directReplies} · Reply` : "Reply"}
+              </Text>
+            </Pressable>
+            {onQuote ? (
+              <Pressable
+                style={(s) => [styles.actionPill, pressFx(s)]}
+                onPress={() => onQuote(post)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Quote"
+              >
+                <Repeat2 color={colors.muted} size={14} strokeWidth={1.9} />
+              </Pressable>
+            ) : null}
+          </>
+        ) : null}
       </View>
-
-      {preview && !isReply ? (
-        <View style={styles.replyRow}>
-          <Pressable
-            style={(s) => [styles.actionPill, pressFx(s)]}
-            onPress={() => onOpen?.(post)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Open thread"
-          >
-            <MessageSquare color={colors.muted} size={16} strokeWidth={1.9} />
-            <Text style={styles.actionText}>{threadCount > 0 ? threadCount : "Reply"}</Text>
-          </Pressable>
-          {onQuote ? (
-            <Pressable
-              style={(s) => [styles.actionPill, pressFx(s)]}
-              onPress={() => onQuote(post)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Quote"
-            >
-              <Repeat2 color={colors.muted} size={16} strokeWidth={1.9} />
-            </Pressable>
-          ) : null}
-          <Text style={styles.openHint}>OPEN THREAD ▸</Text>
-        </View>
-      ) : canReply ? (
-        <View style={styles.replyRow}>
-          <Pressable
-            style={(s) => [styles.actionPill, pressFx(s)]}
-            onPress={() => onReply?.(post)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Reply"
-          >
-            <MessageSquare color={colors.muted} size={16} strokeWidth={1.9} />
-            <Text style={styles.actionText}>
-              {directReplies > 0 ? `${directReplies} · Reply` : "Reply"}
-            </Text>
-          </Pressable>
-          {onQuote ? (
-            <Pressable
-              style={(s) => [styles.actionPill, pressFx(s)]}
-              onPress={() => onQuote(post)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Quote"
-            >
-              <Repeat2 color={colors.muted} size={16} strokeWidth={1.9} />
-              <Text style={styles.actionText}>Quote</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
 
       {!preview && !hideReplies ? (
         depth >= 1 && post.replies.length > 0 && !deepExpanded ? (
@@ -384,12 +390,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 16,
   },
-  cardPressed: { borderColor: "rgba(124,92,255,0.7)", opacity: 0.96 },
+  cardPressed: { borderColor: "rgba(107,94,204,0.7)", opacity: 0.96 },
   cardOfficial: {
     borderWidth: 1.5,
-    borderColor: "rgba(84,214,255,0.55)",
+    borderColor: "rgba(111,174,201,0.55)",
     shadowColor: colors.data,
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.12,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
     elevation: 5,
@@ -403,9 +409,9 @@ const styles = StyleSheet.create({
   },
   cardRoot: {
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.55)",
+    borderColor: "rgba(107,94,204,0.55)",
     shadowColor: colors.accent,
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.1,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 0 },
     elevation: 6,
@@ -413,10 +419,10 @@ const styles = StyleSheet.create({
   replyBase: { marginTop: 12 },
   replyIndent: {
     borderLeftWidth: 2,
-    borderLeftColor: "rgba(124,92,255,0.3)",
+    borderLeftColor: "rgba(107,94,204,0.3)",
     paddingLeft: 12,
   },
-  replyIndentFlat: { paddingLeft: 6, borderLeftColor: "rgba(124,92,255,0.15)" },
+  replyIndentFlat: { paddingLeft: 6, borderLeftColor: "rgba(107,94,204,0.15)" },
   notch: {
     position: "absolute",
     top: -9,
@@ -440,7 +446,14 @@ const styles = StyleSheet.create({
   headerActions: { marginLeft: "auto", paddingLeft: 8 },
   reviewRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   reviewLabel: { color: colors.muted, fontSize: 11, fontWeight: "700" },
-  body: { color: colors.text, fontSize: 15, lineHeight: 21, marginTop: 10 },
+  postTitle: {
+    color: colors.text,
+    fontSize: 15.5,
+    fontWeight: "800",
+    lineHeight: 20,
+    marginTop: 10,
+  },
+  body: { color: colors.text, fontSize: 13.5, lineHeight: 19.5, marginTop: 10 },
   gif: {
     width: "100%",
     aspectRatio: 16 / 9,
@@ -471,14 +484,14 @@ const styles = StyleSheet.create({
   shield: {
     marginTop: 10,
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.5)",
+    borderColor: "rgba(107,94,204,0.5)",
     borderStyle: "dashed",
     borderRadius: 8,
     paddingVertical: 16,
     paddingHorizontal: 12,
     alignItems: "center",
     gap: 3,
-    backgroundColor: "rgba(124,92,255,0.06)",
+    backgroundColor: "rgba(107,94,204,0.06)",
   },
   shieldTitle: {
     color: colors.accentSoft,
@@ -501,12 +514,12 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.5)",
+    borderColor: "rgba(107,94,204,0.5)",
     borderStyle: "dashed",
     borderRadius: 3,
     paddingVertical: 7,
     paddingHorizontal: 10,
-    backgroundColor: "rgba(124,92,255,0.06)",
+    backgroundColor: "rgba(107,94,204,0.06)",
     alignSelf: "flex-start",
   },
   shieldChipText: {
@@ -530,30 +543,28 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.2,
   },
-  reactionRow: { marginTop: 12 },
-  replyRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  footerRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 11 },
   actionPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: 3,
-    backgroundColor: colors.bg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.hairline,
   },
   actionText: {
     color: colors.muted,
-    fontSize: 12.5,
+    fontSize: 11,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
   openHint: {
     marginLeft: "auto",
     color: colors.data,
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "900",
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
   },
 });

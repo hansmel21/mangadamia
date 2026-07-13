@@ -19,8 +19,8 @@ type Tier = 1 | 2 | 3 | 4;
 const TIER_COLORS: Record<Tier, { bg: string; ring: string; glyph: string }> = {
   1: { bg: "#171a21", ring: "#8a90a0", glyph: "#9aa0b0" },
   2: { bg: "#171a21", ring: "#c9cfdc", glyph: "#dfe3ec" },
-  3: { bg: "#1d1608", ring: "#f5b84c", glyph: "#f5b84c" },
-  4: { bg: "#15112a", ring: "#9d85ff", glyph: "#b7a6ff" },
+  3: { bg: "#1d1608", ring: "#cda45e", glyph: "#cda45e" },
+  4: { bg: "#15112a", ring: "#9d85ff", glyph: "#a79fe3" },
 };
 
 const stroke = (color: string, width = 2.4) => ({
@@ -237,7 +237,7 @@ export function BadgeMedallion({
     glow && mark.tier !== 4
       ? {
           shadowColor: c.ring,
-          shadowOpacity: 0.6,
+          shadowOpacity: 0.13,
           shadowRadius: Math.max(4, size * 0.14),
           shadowOffset: { width: 0, height: 0 },
           elevation: 6,
@@ -252,8 +252,8 @@ export function BadgeMedallion({
           <Circle cx={2} cy={2} r={1} fill="#aab2c5" opacity={0.4} />
         </Pattern>
         <RadialGradient id="ultraGlow" cx="50%" cy="50%">
-          <Stop offset="55%" stopColor="#7c5cff" stopOpacity={0} />
-          <Stop offset="100%" stopColor="#7c5cff" stopOpacity={0.55} />
+          <Stop offset="55%" stopColor="#6b5ecc" stopOpacity={0} />
+          <Stop offset="100%" stopColor="#6b5ecc" stopOpacity={0.55} />
         </RadialGradient>
         <RadialGradient id={`earned-${badgeId}`} cx="50%" cy="50%">
           <Stop offset="60%" stopColor={c.ring} stopOpacity={0} />
@@ -281,7 +281,7 @@ export function BadgeMedallion({
       {mark.tier === 4 && (
         <Path
           d="M62 20 l1.2 2.4 2.4 1.2 -2.4 1.2 -1.2 2.4 -1.2 -2.4 -2.4 -1.2 2.4 -1.2 Z"
-          fill="#b7a6ff"
+          fill="#a79fe3"
         />
       )}
     </Svg>

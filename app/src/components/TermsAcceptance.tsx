@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
   accept: {
     borderWidth: 1.5,
     borderColor: colors.accent,
-    backgroundColor: "rgba(124,92,255,0.18)",
+    backgroundColor: "rgba(107,94,204,0.18)",
     borderRadius: 4,
     paddingVertical: 11,
     alignItems: "center",

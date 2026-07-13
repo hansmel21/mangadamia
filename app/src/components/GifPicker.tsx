@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.4)",
+    borderColor: "rgba(107,94,204,0.4)",
     borderRadius: 3,
     backgroundColor: colors.card,
   },

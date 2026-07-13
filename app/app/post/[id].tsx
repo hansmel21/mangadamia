@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   replyInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.4)",
+    borderColor: "rgba(107,94,204,0.4)",
     borderRadius: 3,
     backgroundColor: colors.card,
     paddingVertical: 9,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.accent,
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 2 },
     elevation: 6,

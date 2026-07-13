@@ -57,6 +57,7 @@ export function PostComposer({
   onPosted?: (post: PostInfo) => void;
 }) {
   const [body, setBody] = useState("");
+  const [postTitle, setPostTitle] = useState("");
   const [spoiler, setSpoiler] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -84,6 +85,7 @@ export function PostComposer({
       setPollOptions(["", ""]);
       setGifUrl("");
       setImages([]);
+      setPostTitle("");
       if (!replyTo && !quote && !context) {
         try {
           setAutoTag(getLastReadTag() ?? null);
@@ -162,6 +164,8 @@ export function PostComposer({
     setError("");
     try {
       const created = await api.createPost(text, {
+        title:
+          !replyTo && !isQuote && postTitle.trim().length >= 3 ? postTitle.trim() : undefined,
         canonicalId: replyTo || isQuote ? undefined : context?.canonicalId,
         chapterNumber: replyTo || isQuote ? undefined : context?.chapterNumber,
         parentId: replyTo?.id,
@@ -200,6 +204,7 @@ export function PostComposer({
       setPollOptions(["", ""]);
       setGifUrl("");
       setImages([]);
+      setPostTitle("");
       queryClient.invalidateQueries({ queryKey: ["feed"] });
       onPosted?.(created);
       onClose();
@@ -350,6 +355,16 @@ export function PostComposer({
           </View>
         ) : null}
 
+        {!replyTo && !isQuote ? (
+          <TextInput
+            style={styles.titleInput}
+            placeholder="Title (optional)"
+            placeholderTextColor={colors.muted}
+            value={postTitle}
+            onChangeText={setPostTitle}
+            maxLength={120}
+          />
+        ) : null}
         <TextInput
           style={styles.input}
           placeholder={
@@ -501,7 +516,7 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.35)",
+    borderColor: "rgba(107,94,204,0.35)",
     borderRadius: 3,
     paddingVertical: 8,
     paddingRight: 10,
@@ -561,7 +576,7 @@ const styles = StyleSheet.create({
   chip: {
     alignSelf: "flex-start",
     borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.5)",
+    borderColor: "rgba(107,94,204,0.5)",
     borderRadius: 3,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -569,18 +584,30 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   chipText: { color: colors.accentSoft, fontSize: 11, fontWeight: "700" },
+  titleInput: {
+    backgroundColor: colors.card,
+    color: colors.text,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: "rgba(107,94,204,0.4)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
   input: {
     backgroundColor: colors.card,
     color: colors.text,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.4)",
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     minHeight: 100,
     maxHeight: 200,
-    fontSize: 14.5,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 20,
     textAlignVertical: "top",
   },
   gifPreviewWrap: { marginTop: 10, borderRadius: 3, overflow: "hidden" },
@@ -641,7 +668,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   gifKeyText: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
   shieldPill: {
     flexDirection: "row",
     alignItems: "center",

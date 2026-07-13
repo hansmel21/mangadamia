@@ -1133,6 +1133,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   interface PostNode {
     id: string;
     parentId: string | null;
+    title: string | null;
     body: string;
     kind: string;
     rating: number | null;
@@ -1218,6 +1219,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   interface SerializablePost {
     id: string;
     parentId: string | null;
+    title: string | null;
     body: string;
     kind: string;
     rating: number | null;
@@ -1260,6 +1262,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
   ): PostNode => ({
     id: p.id,
     parentId: p.parentId,
+    title: p.title,
     body: p.body,
     kind: p.kind,
     rating: p.rating,
@@ -1391,7 +1394,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
             moderationStatus: "visible",
             userId: { notIn: blockedIds },
           },
-          select: { id: true, body: true, kind: true, isSpoiler: true, userId: true },
+          select: { id: true, title: true, body: true, kind: true, isSpoiler: true, userId: true },
         })
       : [];
     const identities = await identitiesForUsers(posts.map((p) => p.userId), me?.id);
@@ -1409,7 +1412,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       if (!p) continue; // reply, guild-board, blocked, or removed
       threads.push({
         id: p.id,
-        body: p.isSpoiler ? "" : p.body.slice(0, 140),
+        body: p.isSpoiler ? "" : (p.title ?? p.body).slice(0, 140),
         kind: p.kind,
         isSpoiler: p.isSpoiler,
         username: identities.get(p.userId)?.username ?? null,
@@ -1609,6 +1612,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     async (req) => {
     const {
       body,
+      title,
       canonicalId,
       chapterNumber,
       parentId,
@@ -1622,6 +1626,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       quotedPostId,
     } = z
       .object({
+        title: z.string().trim().min(3).max(120).optional(),
         body: z.string().trim().min(1).max(1000),
         canonicalId: z.string().optional(),
         chapterNumber: z.coerce.number().optional(),
@@ -1643,6 +1648,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       .parse(req.body);
     const user = await requireAcceptedTerms(req);
     validateUserContent(body);
+    if (title) validateUserContent(title);
     const cleanGifUrl = gifUrl ? validateGifUrl(gifUrl) : null;
     const cleanImageUrls = imageUrls ?? [];
     if (cleanImageUrls.some((u) => !isStoredImageUrl(u))) {
@@ -1712,6 +1718,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       data: {
         userId: user.id,
         body,
+        // Replies never carry a headline.
+        title: parentId ? null : (title ?? null),
         kind: postKind,
         rating: postKind === "review" ? (rating ?? null) : null,
         gifUrl: cleanGifUrl,
@@ -1799,6 +1807,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return {
       id: post.id,
       parentId: post.parentId,
+      title: post.title,
       body: post.body,
       kind: post.kind,
       rating: post.rating,

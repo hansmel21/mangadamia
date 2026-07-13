@@ -1,8 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
 import { Tabs } from "expo-router";
-import { CircleUserRound, Compass, LibraryBig, Shield, Swords } from "lucide-react-native";
+import { Compass, LibraryBig, ScrollText, Shield, Swords } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
@@ -12,8 +11,6 @@ import {
   View,
   type PressableProps,
 } from "react-native";
-import { api } from "../../src/api";
-import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors, fonts } from "../../src/theme";
 
 // The center "DUNGEON" command key: a 58px square rotated 45° that lifts above
@@ -46,7 +43,7 @@ function DungeonKey({
           styles.diamond,
           { borderColor: focused ? colors.accent : colors.borderStrong },
           focused && styles.diamondActive,
-          { shadowOpacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] }) },
+          { shadowOpacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.3] }) },
         ]}
       >
         <Swords
@@ -68,16 +65,6 @@ function SideIcon({ focused, children }: { focused: boolean; children: ReactNode
 }
 
 export default function TabsLayout() {
-  // Unread notifications badge the STATUS key (polled while signed in).
-  const user = useSyncExternalStore(subscribeSession, getSessionUser);
-  const count = useQuery({
-    queryKey: ["notifCount"],
-    queryFn: api.notificationCount,
-    enabled: !!user,
-    refetchInterval: 60_000,
-  });
-  const unread = user ? (count.data?.unread ?? 0) : 0;
-
   return (
     <Tabs
       screenOptions={{
@@ -138,18 +125,18 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="account"
+        name="quests"
         options={{
-          title: "STATUS",
+          title: "QUESTS",
           tabBarIcon: ({ color, focused }) => (
             <SideIcon focused={focused}>
-              <CircleUserRound color={color} size={21} strokeWidth={focused ? 2.2 : 1.8} />
+              <ScrollText color={color} size={21} strokeWidth={focused ? 2.2 : 1.8} />
             </SideIcon>
           ),
-          tabBarBadge: unread > 0 ? unread : undefined,
-          tabBarBadgeStyle: styles.badge,
         }}
       />
+      {/* Status stays routable (hunter chip, top-right) but leaves the bar. */}
+      <Tabs.Screen name="account" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -165,7 +152,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     elevation: 18,
     shadowColor: colors.accent,
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.13,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: -3 },
   },
@@ -182,11 +169,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "flex-end",
-    top: -18,
+    // Sits just proud of the bar — not floating high above it.
+    top: -6,
   },
   diamond: {
-    width: 58,
-    height: 58,
+    width: 52,
+    height: 52,
     transform: [{ rotate: "45deg" }],
     backgroundColor: colors.panel,
     borderWidth: 2,
@@ -200,7 +188,7 @@ const styles = StyleSheet.create({
   },
   diamondActive: {
     shadowColor: colors.accent,
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.13,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 0 },
     elevation: 10,
@@ -210,13 +198,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "900",
     letterSpacing: 1.4,
-    marginTop: 10,
+    marginTop: 6,
     fontFamily: fonts.displayBold,
-  },
-  badge: {
-    backgroundColor: colors.danger,
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "900",
   },
 });

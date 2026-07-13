@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
-  menuRowPressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
+  menuRowPressed: { borderColor: "rgba(107,94,204,0.5)", opacity: 0.95 },
   menuIcon: {
     width: 30,
     height: 30,
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   signOutBtn: {
     marginTop: 36,
     marginHorizontal: 16,
-    borderColor: "rgba(229,72,77,0.5)",
+    borderColor: "rgba(206,81,83,0.5)",
     borderWidth: 1.5,
     borderRadius: 3,
     paddingVertical: 12,
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderRadius: 3,
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.3)",
+    borderColor: "rgba(107,94,204,0.3)",
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,

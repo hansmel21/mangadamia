@@ -166,6 +166,60 @@ export default function FeedScreen() {
     setFeedMode("guild");
     setTypeFilter("all");
   };
+
+  // Scope dropdown (replaces the chip row): what the feed shows.
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const scopeLabel =
+    feedMode === "following"
+      ? "FOLLOWING"
+      : feedMode === "guild"
+        ? "GUILD"
+        : typeFilter === "theory"
+          ? "THEORIES"
+          : typeFilter === "review"
+            ? "REVIEWS"
+            : "ALL RECORDS";
+  const scopeOptions = [
+    {
+      key: "all",
+      label: "ALL RECORDS",
+      active: feedMode === "global" && typeFilter === "all",
+      disabled: false,
+      select: () => selectTypeFilter("all"),
+    },
+    {
+      key: "theory",
+      label: "THEORIES",
+      active: feedMode === "global" && typeFilter === "theory",
+      disabled: false,
+      select: () => selectTypeFilter("theory"),
+    },
+    {
+      key: "review",
+      label: "REVIEWS",
+      active: feedMode === "global" && typeFilter === "review",
+      disabled: false,
+      select: () => selectTypeFilter("review"),
+    },
+    {
+      key: "following",
+      label: "FOLLOWING",
+      active: feedMode === "following",
+      disabled: !user,
+      select: selectFollowing,
+    },
+    ...(myGuildId
+      ? [
+          {
+            key: "guild",
+            label: "GUILD",
+            active: feedMode === "guild",
+            disabled: false,
+            select: selectGuild,
+          },
+        ]
+      : []),
+  ];
   const cycleSort = () => {
     clearFeedPages();
     setSort(SORT_ORDER[(SORT_ORDER.indexOf(sort) + 1) % SORT_ORDER.length]);
@@ -187,35 +241,18 @@ export default function FeedScreen() {
         </Pressable>
       </View>
 
-      {/* filter deck — chips wrap in their own column; the sort key keeps a
-          fixed slot at the row's end so it can never be pushed off-screen */}
+      {/* filter row — one scope dropdown + the sort key. The dropdown keeps
+          the row to two calm controls instead of six competing chips. */}
       <View style={styles.deck}>
-        <View style={styles.deckChips}>
-          {(["all", "theory", "review"] as const).map((f) => (
-            <SystemKey
-              key={f}
-              variant="chip"
-              label={f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
-              active={typeFilter === f && feedMode === "global"}
-              onPress={() => selectTypeFilter(f)}
-            />
-          ))}
-          <SystemKey
-            variant="chip"
-            label="FOLLOWING"
-            active={feedMode === "following"}
-            disabled={!user}
-            onPress={selectFollowing}
-          />
-          {myGuildId ? (
-            <SystemKey
-              variant="chip"
-              label="GUILD"
-              active={feedMode === "guild"}
-              onPress={selectGuild}
-            />
-          ) : null}
-        </View>
+        <Pressable
+          style={({ pressed }) => [styles.scopeKey, pressed && { opacity: 0.75 }]}
+          onPress={() => setScopeOpen((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel="Choose what to show"
+        >
+          <Text style={styles.scopeText}>◆ {scopeLabel}</Text>
+          <Text style={styles.scopeCaret}>{scopeOpen ? "▴" : "▾"}</Text>
+        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.sortKey, pressed && { opacity: 0.7 }]}
           onPress={cycleSort}
@@ -224,6 +261,37 @@ export default function FeedScreen() {
         >
           <Text style={styles.sortText}>{sort.toUpperCase()} ▾</Text>
         </Pressable>
+
+        {scopeOpen ? (
+          <View style={styles.scopeMenu}>
+            {scopeOptions.map((opt) => (
+              <Pressable
+                key={opt.key}
+                style={({ pressed }) => [
+                  styles.scopeOption,
+                  opt.active && styles.scopeOptionActive,
+                  pressed && { backgroundColor: colors.accentGhost },
+                ]}
+                disabled={opt.disabled}
+                onPress={() => {
+                  setScopeOpen(false);
+                  opt.select();
+                }}
+              >
+                <Text
+                  style={[
+                    styles.scopeOptionText,
+                    opt.active && { color: colors.accentSoft },
+                    opt.disabled && { color: colors.border },
+                  ]}
+                >
+                  {opt.active ? "◆ " : ""}
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </View>
 
       {hotThread ? (
@@ -319,6 +387,7 @@ export default function FeedScreen() {
               if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
             }}
             onEndReachedThreshold={0.5}
+            onScrollBeginDrag={() => setScopeOpen(false)}
             refreshing={feed.isRefetching && !feed.isFetchingNextPage}
             onRefresh={() => feed.refetch()}
             ListEmptyComponent={
@@ -380,7 +449,7 @@ function WarRallyCard({
   const h = Math.max(0, Math.floor((ms % 86_400_000) / 3_600_000));
   return (
     <Pressable
-      style={({ pressed }) => [styles.rally, pressed && { borderColor: "rgba(229,72,77,0.8)" }]}
+      style={({ pressed }) => [styles.rally, pressed && { borderColor: "rgba(206,81,83,0.8)" }]}
       onPress={() => router.push("/guild")}
       accessibilityRole="button"
       accessibilityLabel="Guild war"
@@ -425,7 +494,7 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "rgba(229,72,77,0.45)",
+    borderColor: "rgba(206,81,83,0.45)",
     borderRadius: 4,
   },
   rallyNotch: {
@@ -475,12 +544,47 @@ const styles = StyleSheet.create({
   arenaText: { color: colors.foilSoft, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
   deck: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 4,
+    alignItems: "center",
+    gap: 8,
     marginHorizontal: 16,
     marginTop: 10,
+    zIndex: 40,
   },
-  deckChips: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  scopeKey: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: colors.card,
+  },
+  scopeText: { color: colors.accentSoft, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
+  scopeCaret: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  scopeMenu: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 76,
+    marginTop: 4,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.accentLine,
+    borderRadius: 4,
+    paddingVertical: 4,
+    zIndex: 50,
+    elevation: 12,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  scopeOption: { paddingHorizontal: 14, paddingVertical: 10 },
+  scopeOptionActive: { backgroundColor: colors.accentGhost },
+  scopeOptionText: { color: colors.mutedStrong, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
   ticker: {
     flexDirection: "row",
     alignItems: "center",
@@ -490,9 +594,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: "rgba(245,184,76,0.35)",
+    borderColor: "rgba(205,164,94,0.35)",
     borderRadius: 3,
-    backgroundColor: "rgba(245,184,76,0.05)",
+    backgroundColor: "rgba(205,164,94,0.05)",
   },
   tickerLabel: { color: colors.foil, fontSize: 9, fontWeight: "900", letterSpacing: 1.4 },
   tickerBody: { color: colors.mutedStrong, fontSize: 11.5, flex: 1 },
@@ -514,9 +618,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "rgba(76,195,138,0.35)",
+    borderColor: "rgba(86,168,123,0.35)",
     borderRadius: 3,
-    backgroundColor: "rgba(76,195,138,0.08)",
+    backgroundColor: "rgba(86,168,123,0.08)",
   },
   topicText: { color: colors.fresh, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
   topicClear: { flexDirection: "row", alignItems: "center", gap: 4 },

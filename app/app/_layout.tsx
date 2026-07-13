@@ -73,7 +73,6 @@ export default function RootLayout() {
         <Stack.Screen name="admin/moderation" options={{ title: "Moderation" }} />
         <Stack.Screen name="admin/users" options={{ title: "User Administration" }} />
         <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
-        <Stack.Screen name="quests" options={{ title: "Quest Window" }} />
         {/* Arena screens render their own in-screen System headers. */}
         <Stack.Screen name="arena/index" options={{ headerShown: false }} />
         <Stack.Screen name="arena/[id]" options={{ headerShown: false }} />

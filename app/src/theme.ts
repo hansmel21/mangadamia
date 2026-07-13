@@ -2,9 +2,10 @@
 // Manga ink and screen-tone surfaces meet a restrained RPG status window.
 // Reward gold is deliberately reserved for progress, rank, and earned items.
 //
-// Values are locked to the "System Protocol" redesign spec (UI-UX/): a
-// near-black stage (#0a0b10), raised card surface (#10121a), ultraviolet
-// actions (#7c5cff), and a cyan "system data" accent for ▸ deep links.
+// 2026-07 recolor: every accent sits one register below its old neon value —
+// arcane indigo for actions (the System's magic), steel for data links,
+// antique gold for rewards, moss for success, muted crimson for danger.
+// Fewer, calmer hues; paper lifted slightly for contrast against them.
 export const colors = {
   bg: "#0a0b10", // Print Black — the near-black stage
   bg2: "#07080c", // Deepest recess (behind the stage)
@@ -15,25 +16,25 @@ export const colors = {
   hairline: "#1c2029", // Faintest divider between stacked rows
   border: "#262b36", // Quiet frame and panel gutters
   borderStrong: "#3a3f4e", // Visible system frame / outline buttons
-  text: "#ecedf2", // Paper
+  text: "#f2f3f7", // Paper (lifted for contrast)
   muted: "#8a90a0", // Manga screen-tone
   mutedStrong: "#c9cdd8",
-  accent: "#7c5cff", // Ultraviolet — actions and selection
-  accentBright: "#b7a6ff",
-  accentSoft: "#b7a6ff",
-  accentDeep: "#6247d1", // Gradient tail for primary keys
-  accentGhost: "rgba(124,92,255,0.12)",
-  accentLine: "rgba(124,92,255,0.45)",
+  accent: "#6b5ecc", // Arcane indigo — actions and selection
+  accentBright: "#a79fe3",
+  accentSoft: "#a79fe3",
+  accentDeep: "#544aa8", // Gradient tail for primary keys
+  accentGhost: "rgba(107,94,204,0.12)",
+  accentLine: "rgba(107,94,204,0.45)",
   accentText: "#ffffff",
-  data: "#54D6FF", // System data — OPEN THREAD ▸ / ALL ▸ / FULL BOARD ▸
-  foil: "#f5b84c", // Rewards ONLY: XP, levels, badges
-  foilSoft: "#FFE09A",
-  foilGhost: "rgba(245,184,76,0.12)",
-  fresh: "#4cc38a", // Success, synced, online
-  freshGhost: "rgba(76,195,138,0.11)",
-  danger: "#e5484d",
-  dangerGhost: "rgba(229,72,77,0.10)",
-  info: "#4BA3FF", // Theory blue / secondary war side / title flair
+  data: "#6faec9", // System data (steel) — OPEN THREAD ▸ / ALL ▸ / FULL BOARD ▸
+  foil: "#cda45e", // Rewards ONLY: XP, levels, badges (antique gold)
+  foilSoft: "#e8d3a0",
+  foilGhost: "rgba(205,164,94,0.12)",
+  fresh: "#56a87b", // Success, synced, online (moss)
+  freshGhost: "rgba(86,168,123,0.11)",
+  danger: "#ce5153", // Muted crimson — danger keeps its pop without the neon
+  dangerGhost: "rgba(206,81,83,0.10)",
+  info: "#6d8fc4", // Theory slate-blue / secondary war side / title flair
   shadow: "#000000",
 };
 

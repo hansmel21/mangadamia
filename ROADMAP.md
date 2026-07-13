@@ -447,6 +447,29 @@ contribution board · edit UI · weekly events · perks/decorations.**
 1. ✅ Announcements + THE SYSTEM · 2. ✅ Moderation groundwork ·
 3. ✅ Arena Draw competition · 4. ✅ Backlog polish batch · 5. ✅ Web admin console
 
+### UI rework batch 🔍 (2026-07-13 — LOCAL ONLY, awaiting owner review before push)
+- [x] **Recolor** — every accent one register calmer (arcane indigo `#6b5ecc`,
+      steel data `#6faec9`, antique gold `#cda45e`, moss `#56a87b`, muted
+      crimson `#ce5153`, slate info, dusty rose); paper lifted to `#f2f3f7`;
+      all hardcoded old-palette values swept across 41 files; every glow
+      `shadowOpacity` scaled ~40% down.
+- [x] **Nav**: Dungeon key sits just proud of the bar (was floating 18px up,
+      now 6, 52px diamond); reader back control is icon-only; **QUESTS
+      replaces STATUS in the tab bar** (Status stays routable from the
+      hunter chip; `/quests` route unchanged, back arrow removed).
+- [x] **Notifications near-realtime**: count + inbox poll every 15s.
+- [x] **Dungeon**: filter chips → one **scope dropdown** (All records /
+      Theories / Reviews / Following / Guild) + sort key; body font 15→13.5;
+      footer collapsed to one quiet row (compact borderless ReactionBar +
+      reply/quote + OPEN ▸).
+- [x] **Post titles** — `Post.title` (migration `post_titles`, replies never
+      carry one), TITLE input in the composer, bold headline on cards,
+      trending ticker prefers the title. Composer sections separated
+      (hairline above the attach/options row).
+- [x] **Guild tab decluttered**: banner taps into the Hall; quick keys are
+      BOARD · **EVENTS** · INVITE (officers) · MANAGE; war window + raid +
+      weekly event moved to the new nested `guild/events/[id]` screen.
+
 **→ NEXT: Arena PvP** (`ARENA_PLAN.md`) — the final track.
 3. Arena **Draw competition** (unblocked by image storage)
 4. Backlog polish batch (search autocomplete + enriched rows, guild directory

@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   sectionLabel: { color: colors.accentSoft, fontSize: 9, fontWeight: "900", letterSpacing: 1.3, marginTop: 12 },
   roles: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
   roleChoice: { borderWidth: 1, borderColor: colors.border, paddingHorizontal: 7, paddingVertical: 5 },
-  roleChoiceActive: { borderColor: colors.accent, backgroundColor: "rgba(124,92,255,0.14)" },
+  roleChoiceActive: { borderColor: colors.accent, backgroundColor: "rgba(107,94,204,0.14)" },
   roleChoiceText: { color: colors.text, fontSize: 9, textTransform: "uppercase" },
   password: { color: colors.text, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 10, marginTop: 12 },
   save: { backgroundColor: colors.accent, padding: 11, alignItems: "center", marginTop: 8 },

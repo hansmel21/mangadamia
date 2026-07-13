@@ -176,7 +176,7 @@ function ResumeWindow({ entry }: { entry: HistoryEntry }) {
     });
   return (
     <Pressable
-      style={({ pressed }) => [styles.resume, pressed && { borderColor: "rgba(124,92,255,0.8)" }]}
+      style={({ pressed }) => [styles.resume, pressed && { borderColor: "rgba(107,94,204,0.8)" }]}
       onPress={open}
       accessibilityRole="button"
       accessibilityLabel="Resume reading"
@@ -351,11 +351,11 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: colors.card,
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.5)",
+    borderColor: "rgba(107,94,204,0.5)",
     borderRadius: 3,
     padding: 12,
     shadowColor: colors.accent,
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.panelRaised,
   },
-  resumeCoverEmpty: { backgroundColor: "rgba(124,92,255,0.08)" },
+  resumeCoverEmpty: { backgroundColor: "rgba(107,94,204,0.08)" },
   resumeBody: { flex: 1, gap: 2 },
   resumeEyebrow: { color: colors.accentBright, fontSize: 8.5, fontWeight: "900", letterSpacing: 1.6 },
   resumeTitle: { color: colors.text, fontSize: 14, fontWeight: "800", marginTop: 1 },
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.accent,
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 2 },
     elevation: 6,

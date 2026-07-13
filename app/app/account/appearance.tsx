@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   section: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginTop: 24, marginBottom: 10 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   card: { width: "30%", minHeight: 112, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 8 },
-  equipped: { borderColor: colors.foil, backgroundColor: "rgba(245,184,76,0.07)" },
+  equipped: { borderColor: colors.foil, backgroundColor: "rgba(205,164,94,0.07)" },
   name: { color: colors.text, fontSize: 10, fontWeight: "800", marginTop: 7, textAlign: "center" },
   rarity: { fontSize: 8, fontWeight: "900", marginTop: 3 },
   none: { width: 58, height: 58, borderRadius: 29, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },

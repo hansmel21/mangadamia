@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     gap: 6,
   },
-  pressed: { borderColor: "rgba(124,92,255,0.5)", opacity: 0.95 },
+  pressed: { borderColor: "rgba(107,94,204,0.5)", opacity: 0.95 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   kind: { fontSize: 9, fontWeight: "900", letterSpacing: 1 },
   removed: { color: colors.muted, fontSize: 13, fontStyle: "italic" },

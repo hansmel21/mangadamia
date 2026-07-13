@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   statNum: { color: colors.text, fontSize: 18, fontWeight: "900" },
   statLabel: { color: colors.muted, fontSize: 10, marginTop: 2 },
   badgeCase: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  badgePedestal: { width: "30%", alignItems: "center", padding: 9, borderWidth: 1, borderColor: "rgba(245,184,76,0.25)", backgroundColor: "rgba(245,184,76,0.05)" },
+  badgePedestal: { width: "30%", alignItems: "center", padding: 9, borderWidth: 1, borderColor: "rgba(205,164,94,0.25)", backgroundColor: "rgba(205,164,94,0.05)" },
   badgeName: { color: colors.text, textAlign: "center", fontSize: 9.5, marginTop: 6, fontWeight: "700" },
   post: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   series: { color: colors.accentSoft, fontSize: 10, fontWeight: "800", marginBottom: 5 },

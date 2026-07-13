@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   reasonText: { color: colors.text, fontSize: 13.5, fontWeight: "600" },
   block: {
     borderWidth: 1.5,
-    borderColor: "rgba(229,72,77,0.5)",
+    borderColor: "rgba(206,81,83,0.5)",
     borderRadius: 4,
     paddingVertical: 11,
     alignItems: "center",

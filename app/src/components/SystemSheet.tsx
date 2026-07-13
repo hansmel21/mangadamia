@@ -117,11 +117,11 @@ const styles = StyleSheet.create({
   sheet: {
     backgroundColor: "rgba(13,15,20,0.98)",
     borderTopWidth: 1.5,
-    borderTopColor: "rgba(124,92,255,0.65)",
+    borderTopColor: "rgba(107,94,204,0.65)",
     paddingHorizontal: 16,
     paddingTop: 18,
     shadowColor: colors.accent,
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.16,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: -6 },
     elevation: 16,
@@ -153,5 +153,5 @@ const styles = StyleSheet.create({
     letterSpacing: 3.5,
   },
   close: { position: "absolute", right: 0 },
-  rule: { height: 1, backgroundColor: "rgba(124,92,255,0.35)", marginVertical: 13 },
+  rule: { height: 1, backgroundColor: "rgba(107,94,204,0.35)", marginVertical: 13 },
 });

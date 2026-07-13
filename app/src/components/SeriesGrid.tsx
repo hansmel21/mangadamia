@@ -203,10 +203,10 @@ const styles = StyleSheet.create({
   coverPlaceholder: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(124,92,255,0.08)",
+    backgroundColor: "rgba(107,94,204,0.08)",
   },
   coverPlaceholderText: {
-    color: "rgba(124,92,255,0.55)",
+    color: "rgba(107,94,204,0.55)",
     fontSize: 40,
     fontWeight: "900",
   },
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 4,
     shadowColor: colors.accent,
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
     elevation: 5,

@@ -616,6 +616,7 @@ export interface PostInfo {
   body: string;
   kind: PostKind;
   rating: number | null;
+  title?: string | null;
   gifUrl: string | null;
   imageUrls: string[];
   isSpoiler: boolean;
@@ -861,6 +862,7 @@ export const api = {
   createPost: (
     body: string,
     opts?: {
+      title?: string;
       canonicalId?: string;
       chapterNumber?: number;
       parentId?: string;

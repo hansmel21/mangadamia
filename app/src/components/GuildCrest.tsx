@@ -163,22 +163,22 @@ const styles = StyleSheet.create({
 // this maps each key to its banner treatment: an accent color for the border/
 // glow and a sigil flanking the guild name.
 export const GUILD_DECOR: Record<string, { name: string; color: string; icon: string }> = {
-  halo: { name: "Arcane Halo", color: "#7C5CFF", icon: "◈" },
-  verdant: { name: "Verdant Wreath", color: "#4CC38A", icon: "❖" },
-  stormveil: { name: "Storm Veil", color: "#4BA3FF", icon: "⟡" },
-  gilded: { name: "Gilded Frame", color: "#F5B84C", icon: "✦" },
-  bloodmoon: { name: "Blood Moon", color: "#E5484D", icon: "☾" },
-  eclipse: { name: "Eclipse Crown", color: "#B8A8FF", icon: "◐" },
+  halo: { name: "Arcane Halo", color: "#6b5ecc", icon: "◈" },
+  verdant: { name: "Verdant Wreath", color: "#56a87b", icon: "❖" },
+  stormveil: { name: "Storm Veil", color: "#6d8fc4", icon: "⟡" },
+  gilded: { name: "Gilded Frame", color: "#cda45e", icon: "✦" },
+  bloodmoon: { name: "Blood Moon", color: "#ce5153", icon: "☾" },
+  eclipse: { name: "Eclipse Crown", color: "#a79fe3", icon: "◐" },
 };
 
 // Placeholder color menu the create/edit UI can offer.
 export const GUILD_COLORS = [
-  "#7C5CFF",
-  "#4BA3FF",
-  "#4CC38A",
-  "#F5B84C",
-  "#E5484D",
-  "#FF4D87",
-  "#A86BFF",
+  "#6b5ecc",
+  "#6d8fc4",
+  "#56a87b",
+  "#cda45e",
+  "#ce5153",
+  "#c06a87",
+  "#9a7fd1",
   "#8992A3",
 ];

@@ -118,6 +118,6 @@ const styles = StyleSheet.create({
   actionText: { color: colors.accentSoft, fontSize: 11, fontWeight: "800" },
   reasonCodes: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 10 },
   reasonCode: { borderWidth: 1, borderColor: colors.border, paddingHorizontal: 6, paddingVertical: 4 },
-  reasonCodeActive: { borderColor: colors.accent, backgroundColor: "rgba(124,92,255,0.12)" },
+  reasonCodeActive: { borderColor: colors.accent, backgroundColor: "rgba(107,94,204,0.12)" },
   reasonCodeText: { color: colors.muted, fontSize: 9, textTransform: "uppercase" },
 });

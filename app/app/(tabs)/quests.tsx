@@ -3,16 +3,15 @@
 // quests, corner-ticked active cards with a GO ▸ deep link, and rarity-tinted
 // seasonal/epic cards. Detail modal stays on SystemModal.
 import { useQuery } from "@tanstack/react-query";
-import { router, Stack } from "expo-router";
-import { ArrowLeft } from "lucide-react-native";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api, type QuestInfo, type RewardInfo } from "../src/api";
-import { SystemKey, ScreenTitle } from "../src/components/SystemUI";
-import { SystemModal } from "../src/components/SystemModal";
-import { normalizeRarity, rarityColors } from "../src/rarity";
-import { colors } from "../src/theme";
+import { api, type QuestInfo, type RewardInfo } from "../../src/api";
+import { SystemKey, ScreenTitle } from "../../src/components/SystemUI";
+import { SystemModal } from "../../src/components/SystemModal";
+import { normalizeRarity, rarityColors } from "../../src/rarity";
+import { colors } from "../../src/theme";
 
 function resetLabel(quest: QuestInfo): string | null {
   if (!quest.resetsAt) return null;
@@ -113,12 +112,7 @@ export default function QuestsScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={() => router.back()} accessibilityLabel="Back">
-          <ArrowLeft color={colors.text} size={22} strokeWidth={2} />
-        </Pressable>
         <ScreenTitle tone="foil">QUEST LOG</ScreenTitle>
         {countdown ? <Text style={styles.countdown}>RESET {countdown}</Text> : null}
       </View>
@@ -318,7 +312,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   cardPressed: { opacity: 0.92 },
-  cardDone: { borderColor: "rgba(245,184,76,0.5)", backgroundColor: "rgba(245,184,76,0.05)" },
+  cardDone: { borderColor: "rgba(205,164,94,0.5)", backgroundColor: "rgba(205,164,94,0.05)" },
   cardTick: { position: "absolute", width: 9, height: 9, borderColor: colors.accentBright },
   cardTickTL: { top: -1.5, left: -1.5, borderTopWidth: 2, borderLeftWidth: 2 },
   cardTickBR: { bottom: -1.5, right: -1.5, borderBottomWidth: 2, borderRightWidth: 2 },
@@ -342,9 +336,9 @@ const styles = StyleSheet.create({
   },
   goKey: {
     marginLeft: "auto",
-    backgroundColor: "rgba(124,92,255,0.14)",
+    backgroundColor: "rgba(107,94,204,0.14)",
     borderWidth: 1,
-    borderColor: "rgba(124,92,255,0.55)",
+    borderColor: "rgba(107,94,204,0.55)",
     borderRadius: 3,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -371,7 +365,7 @@ const styles = StyleSheet.create({
   modalNoReward: { color: colors.muted, fontSize: 12, marginTop: 10, lineHeight: 17 },
   modalClose: {
     marginTop: 22,
-    borderColor: "rgba(124,92,255,0.55)",
+    borderColor: "rgba(107,94,204,0.55)",
     borderWidth: 1,
     borderRadius: 3,
     paddingVertical: 9,

@@ -30,11 +30,11 @@ export function seriesRankForAverage(avg: number): Rank {
 
 export const rankColors: Record<Rank, string> = {
   E: "#8992A3",
-  D: "#6FBF8F",
-  C: "#4BA3FF",
-  B: "#A86BFF",
-  A: "#F5B84C",
-  S: "#FF4D87",
+  D: "#74a98a",
+  C: "#6d8fc4",
+  B: "#9a7fd1",
+  A: "#cda45e",
+  S: "#c06a87",
 };
 
 export const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
@@ -51,10 +51,10 @@ export const reactionEmoji: Record<string, string> = Object.fromEntries(
 
 export const POST_KINDS: Record<PostKind, { label: string; color: string; icon: string }> = {
   record: { label: "RECORD", color: colors.accentSoft, icon: "◇" },
-  theory: { label: "THEORY", color: "#4BA3FF", icon: "🧠" },
+  theory: { label: "THEORY", color: "#6d8fc4", icon: "🧠" },
   review: { label: "REVIEW", color: colors.foil, icon: "★" },
   spoiler_intel: { label: "SPOILER INTEL", color: colors.danger, icon: "👁" },
-  poll: { label: "POLL", color: "#4CC38A", icon: "📊" },
+  poll: { label: "POLL", color: "#56a87b", icon: "📊" },
   // THE SYSTEM's official notices — never selectable in the composer.
   announcement: { label: "SYSTEM NOTICE", color: colors.data, icon: "⚙" },
 };

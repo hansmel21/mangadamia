@@ -63,15 +63,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 42,
   },
-  optionPressed: { borderColor: "rgba(124,92,255,0.6)" },
+  optionPressed: { borderColor: "rgba(107,94,204,0.6)" },
   fill: {
     position: "absolute",
     top: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "rgba(124,92,255,0.2)",
+    backgroundColor: "rgba(107,94,204,0.2)",
   },
-  fillMine: { backgroundColor: "rgba(76,195,138,0.22)" },
+  fillMine: { backgroundColor: "rgba(86,168,123,0.22)" },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",

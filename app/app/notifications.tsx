@@ -22,6 +22,8 @@ export default function NotificationsScreen() {
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => api.notifications(pageParam),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
+    // Near-realtime inbox: new rows appear without leaving the screen.
+    refetchInterval: 15_000,
   });
   const preferences = useQuery({
     queryKey: ["notificationPreferences"],
@@ -161,7 +163,7 @@ const styles = StyleSheet.create({
   settingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 42 },
   settingLabel: { color: colors.text, fontSize: 13 },
   row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  unread: { backgroundColor: "rgba(124,92,255,0.08)", borderLeftWidth: 3, borderLeftColor: colors.accent },
+  unread: { backgroundColor: "rgba(107,94,204,0.08)", borderLeftWidth: 3, borderLeftColor: colors.accent },
   copy: { flex: 1 },
   title: { color: colors.text, fontSize: 13, fontWeight: "800" },
   body: { color: colors.muted, fontSize: 12, marginTop: 3, lineHeight: 17 },

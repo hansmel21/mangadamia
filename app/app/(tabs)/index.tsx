@@ -189,7 +189,7 @@ function DailyDirective() {
   const xp = daily.rewards.find((r) => r.type === "xp");
   return (
     <Pressable
-      style={({ pressed }) => [styles.directive, pressed && { backgroundColor: "rgba(245,184,76,0.06)" }]}
+      style={({ pressed }) => [styles.directive, pressed && { backgroundColor: "rgba(205,164,94,0.06)" }]}
       onPress={() => router.push("/quests")}
       accessibilityRole="button"
       accessibilityLabel="Daily directive"
@@ -414,7 +414,7 @@ export default function BrowseScreen() {
     queryKey: ["notifCount"],
     queryFn: api.notificationCount,
     enabled: !!user,
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   });
   const me = useQuery({ queryKey: ["me"], queryFn: api.me, enabled: !!user, staleTime: 60_000 });
   const unread = user ? (notif.data?.unread ?? 0) : 0;
@@ -801,9 +801,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
-    borderColor: "rgba(245,184,76,0.5)",
+    borderColor: "rgba(205,164,94,0.5)",
     borderRadius: 3,
-    backgroundColor: "rgba(245,184,76,0.06)",
+    backgroundColor: "rgba(205,164,94,0.06)",
     paddingVertical: 3,
     paddingLeft: 3,
     paddingRight: 8,
@@ -844,7 +844,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 3,
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.45)",
+    borderColor: "rgba(107,94,204,0.45)",
     marginHorizontal: 16,
     marginTop: 8,
     paddingLeft: 13,
@@ -905,7 +905,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 4,
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.5)",
+    borderColor: "rgba(107,94,204,0.5)",
     overflow: "visible",
   },
   heroTick: { position: "absolute", width: 11, height: 11, borderColor: colors.accentBright, zIndex: 2 },
@@ -946,7 +946,7 @@ const styles = StyleSheet.create({
   },
   wallKeyText: { color: colors.accentBright, fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   heroDots: { flexDirection: "row", justifyContent: "center", gap: 5, paddingVertical: 8 },
-  heroDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "rgba(124,92,255,0.25)" },
+  heroDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "rgba(107,94,204,0.25)" },
   heroDotActive: { backgroundColor: colors.accentSoft, width: 14 },
   trendingBox: {
     marginHorizontal: 16,
@@ -971,7 +971,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "rgba(245,184,76,0.4)",
+    borderColor: "rgba(205,164,94,0.4)",
     borderRadius: 3,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1011,9 +1011,9 @@ const styles = StyleSheet.create({
   railPlaceholder: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(124,92,255,0.08)",
+    backgroundColor: "rgba(107,94,204,0.08)",
   },
-  railPlaceholderText: { color: "rgba(124,92,255,0.55)", fontSize: 34, fontWeight: "900" },
+  railPlaceholderText: { color: "rgba(107,94,204,0.55)", fontSize: 34, fontWeight: "900" },
   chBadge: {
     position: "absolute",
     top: 0,
@@ -1089,9 +1089,9 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", paddingHorizontal: 24 },
   errorText: { color: colors.danger, textAlign: "center", marginBottom: 12 },
   retry: {
-    backgroundColor: "rgba(124,92,255,0.18)",
+    backgroundColor: "rgba(107,94,204,0.18)",
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.6)",
+    borderColor: "rgba(107,94,204,0.6)",
     borderRadius: 3,
     paddingHorizontal: 22,
     paddingVertical: 9,

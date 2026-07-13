@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Brightness from "expo-brightness";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import { MessageCircle, Send, Sun } from "lucide-react-native";
+import { ArrowLeft, MessageCircle, Send, Sun } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -400,8 +400,8 @@ export default function ReaderScreen() {
       {overlay && (
         <>
           <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={12}>
-              <Text style={styles.topBarText}>‹ Back</Text>
+            <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Back">
+              <ArrowLeft color={colors.text} size={22} strokeWidth={2} />
             </Pressable>
             <View style={styles.topBarTitleWrap}>
               <Text style={styles.topBarTitle} numberOfLines={1}>
@@ -721,9 +721,9 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center", padding: 24, gap: 10 },
   error: { color: colors.danger, textAlign: "center", marginBottom: 8 },
   btn: {
-    backgroundColor: "rgba(124,92,255,0.18)",
+    backgroundColor: "rgba(107,94,204,0.18)",
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.6)",
+    borderColor: "rgba(107,94,204,0.6)",
     borderRadius: 4,
     paddingHorizontal: 20,
     paddingVertical: 9,
@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
     paddingVertical: 30,
     backgroundColor: "#000",
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(124,92,255,0.4)" },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(107,94,204,0.4)" },
   dividerText: {
     color: colors.accentSoft,
     fontSize: 12,
@@ -812,9 +812,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   navBtn: {
-    backgroundColor: "rgba(124,92,255,0.18)",
+    backgroundColor: "rgba(107,94,204,0.18)",
     borderWidth: 1.5,
-    borderColor: "rgba(124,92,255,0.6)",
+    borderColor: "rgba(107,94,204,0.6)",
     borderRadius: 4,
     paddingHorizontal: 16,
     paddingVertical: 8,

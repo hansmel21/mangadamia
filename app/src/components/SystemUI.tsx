@@ -25,11 +25,11 @@ const toneColor: Record<Tone, string> = {
   info: colors.info,
 };
 const toneBorder: Record<Tone, string> = {
-  accent: "rgba(124,92,255,0.65)",
-  foil: "rgba(245,184,76,0.65)",
-  fresh: "rgba(76,195,138,0.6)",
-  danger: "rgba(229,72,77,0.6)",
-  data: "rgba(84,214,255,0.6)",
+  accent: "rgba(107,94,204,0.65)",
+  foil: "rgba(205,164,94,0.65)",
+  fresh: "rgba(86,168,123,0.6)",
+  danger: "rgba(206,81,83,0.6)",
+  data: "rgba(111,174,201,0.6)",
   info: "rgba(75,163,255,0.6)",
 };
 
@@ -89,9 +89,9 @@ export function SystemPanel({
 }) {
   const borderColor =
     tone === "foil"
-      ? "rgba(245,184,76,0.48)"
+      ? "rgba(205,164,94,0.48)"
       : tone === "fresh"
-        ? "rgba(76,195,138,0.42)"
+        ? "rgba(86,168,123,0.42)"
         : tone === "quiet"
           ? colors.border
           : colors.accentLine;
@@ -244,11 +244,11 @@ export function SystemKey({
   if (variant === "primary") {
     const grad =
       tone === "foil"
-        ? ["#f5b84c", "#d69433"]
+        ? ["#cda45e", "#d69433"]
         : tone === "danger"
-          ? ["#e5484d", "#b23539"]
+          ? ["#ce5153", "#b23539"]
           : tone === "fresh"
-            ? ["#4cc38a", "#2f9668"]
+            ? ["#56a87b", "#2f9668"]
             : [colors.accent, colors.accentDeep];
     return (
       <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [pressed && styles.keyPressed, disabled && styles.keyDisabled, style]}>
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   },
   keyCompact: { minHeight: 36, paddingHorizontal: 12 },
   keyPrimary: {
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   keyChip: { minHeight: 0, paddingHorizontal: 11, paddingVertical: 8, gap: 5 },
   keyChipGlow: {
     shadowColor: colors.accent,
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.13,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
   },
@@ -414,5 +414,5 @@ const styles = StyleSheet.create({
   buttonFlare: { position: "absolute", top: 0, bottom: 0, left: 0, width: 3, backgroundColor: colors.accentBright },
   buttonText: { fontSize: 11, fontWeight: "900", letterSpacing: 1.7, textTransform: "uppercase" },
   track: { width: "100%", borderRadius: 2, backgroundColor: colors.bg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: "hidden" },
-  progress: { height: "100%", borderRadius: 2, shadowColor: colors.accentBright, shadowOpacity: 0.8, shadowRadius: 5, shadowOffset: { width: 0, height: 0 } },
+  progress: { height: "100%", borderRadius: 2, shadowColor: colors.accentBright, shadowOpacity: 0.1, shadowRadius: 5, shadowOffset: { width: 0, height: 0 } },
 });

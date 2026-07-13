@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 2,
     overflow: "hidden",
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.13,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
