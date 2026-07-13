@@ -722,6 +722,8 @@ model Guild {
   secondaryColor String?
   motto          String?
   description    String?
+  // Level-gated cosmetic hall decoration (curated key, see GUILD_DECORATIONS).
+  decorationKey  String?
   joinPolicy     String               @default("open") // open | request | invite
   xp             Int                  @default(0) // contribution flow (never drops)
   guildmasterId  String

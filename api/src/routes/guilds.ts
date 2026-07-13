@@ -6,9 +6,12 @@ import { getUser, requireAcceptedTerms, requireActiveUser } from "../auth.js";
 import { prisma } from "../db/client.js";
 import {
   currentWeekKey,
+  decorationMinLevel,
   ensureGuildEvent,
+  GUILD_DECORATIONS,
   guildEventTitle,
   guildLevelForXp,
+  guildPerks,
   guildMemberCap,
   guildPower,
   guildXpForLevel,
@@ -52,6 +55,7 @@ const editBody = z.object({
   motto: z.string().trim().max(80).nullable().optional(),
   description: z.string().trim().max(500).nullable().optional(),
   joinPolicy: z.enum(["open", "request", "invite"]).optional(),
+  decorationKey: z.string().nullable().optional(),
 });
 
 export function registerGuildRoutes(app: FastifyInstance): void {
@@ -209,9 +213,17 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       secondaryColor: guild.secondaryColor,
       motto: guild.motto,
       description: guild.description,
+      decorationKey: guild.decorationKey,
       joinPolicy: guild.joinPolicy,
       guildmasterId: guild.guildmasterId,
       level,
+      perks: guildPerks(level),
+      decorations: GUILD_DECORATIONS.map((d) => ({
+        key: d.key,
+        name: d.name,
+        minLevel: d.minLevel,
+        unlocked: level >= d.minLevel,
+      })),
       xp: guild.xp,
       xpFloor: guildXpForLevel(level),
       xpForNextLevel: guildXpForLevel(level + 1),
@@ -600,6 +612,17 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     if (patch.motto) validateUserContent(patch.motto);
     if (patch.description) validateUserContent(patch.description);
     if (patch.emblemKey && !isGuildEmblem(patch.emblemKey)) throw httpError(400, "Unknown emblem");
+    if (patch.decorationKey) {
+      const minLevel = decorationMinLevel(patch.decorationKey);
+      if (minLevel === null) throw httpError(400, "Unknown decoration");
+      const current = await prisma.guild.findUniqueOrThrow({
+        where: { id: req.params.id },
+        select: { xp: true },
+      });
+      if (guildLevelForXp(current.xp) < minLevel) {
+        throw httpError(403, `That decoration unlocks at guild LV ${minLevel}`);
+      }
+    }
     if (patch.name || patch.tag) {
       const clash = await prisma.guild.findFirst({
         where: {
@@ -623,6 +646,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
         ...(patch.motto !== undefined ? { motto: patch.motto } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.joinPolicy ? { joinPolicy: patch.joinPolicy } : {}),
+        ...(patch.decorationKey !== undefined ? { decorationKey: patch.decorationKey } : {}),
       },
     });
     return { ok: true, guild: { id: updated.id, name: updated.name, tag: updated.tag } };

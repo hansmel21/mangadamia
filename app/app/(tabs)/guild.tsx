@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, type GuildWarInfo } from "../../src/api";
-import { GuildEmblem } from "../../src/components/GuildCrest";
+import { GUILD_DECOR, GuildEmblem } from "../../src/components/GuildCrest";
 import { HunterAvatar } from "../../src/components/HunterAvatar";
 import { ScreenTitle, SystemKey, SystemPanel, SystemProgress } from "../../src/components/SystemUI";
 import { getSessionUser, subscribeSession } from "../../src/session";
@@ -131,8 +131,21 @@ export default function GuildTab() {
             />
           }
         >
-          {/* banner */}
-          <View style={styles.banner}>
+          {/* banner (hall decoration tints it when one is equipped) */}
+          <View
+            style={[
+              styles.banner,
+              g.decorationKey && GUILD_DECOR[g.decorationKey]
+                ? {
+                    borderWidth: 1.5,
+                    borderColor: GUILD_DECOR[g.decorationKey].color + "77",
+                    borderRadius: 10,
+                    padding: 10,
+                    backgroundColor: GUILD_DECOR[g.decorationKey].color + "0d",
+                  }
+                : null,
+            ]}
+          >
             <GuildEmblem
               emblemKey={g.emblemKey}
               primaryColor={g.primaryColor}
@@ -141,6 +154,11 @@ export default function GuildTab() {
             />
             <View style={styles.bannerBody}>
               <View style={styles.bannerNameLine}>
+                {g.decorationKey && GUILD_DECOR[g.decorationKey] ? (
+                  <Text style={{ color: GUILD_DECOR[g.decorationKey].color, fontSize: 13, fontWeight: "900" }}>
+                    {GUILD_DECOR[g.decorationKey].icon}
+                  </Text>
+                ) : null}
                 <Text style={styles.bannerName} numberOfLines={1}>
                   {g.name}
                 </Text>

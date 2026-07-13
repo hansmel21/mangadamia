@@ -262,9 +262,25 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       styling, progress bar, your share, reward state). Verified via API
       smoke test: event lazily created with roster-scaled target.
 
+### Guilds — Phase 4e: perks & hall decorations ✅ (2026-07-12, checkpoint — not yet verified live)
+- [x] **Perk track** — derived server-side (`guildPerks`), shown in a Hall
+      "Perk Track" window: base features, the growing member cap, and four
+      decoration tiers with lock states (LV 2/4/6/8).
+- [x] **Hall decorations** — curated level-gated catalog (`GUILD_DECORATIONS`:
+      Arcane Halo, Verdant Wreath, Storm Veil, Gilded Frame, Blood Moon,
+      Eclipse Crown). `Guild.decorationKey` (migration `guild_decorations`);
+      PATCH validates the level gate server-side. Edit screen gains a
+      decoration picker (locked cells show 🔒 LV n); equipped decoration tints
+      the guild-tab banner and the Hall header (border, glow, flanking sigils,
+      name plate) via the client `GUILD_DECOR` style map.
+
+**🏰 Guilds Phase 4 (full depth) is COMPLETE: invites · wall/board ·
+contribution board · edit UI · weekly events · perks/decorations.**
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board ✅, edit UI ✅, events ✅; perks last._
+_Guilds Phase 4 done. **Next: full device test pass** over 3a (GIFs + picker)
+and 4a–4e, then Social 3b images or Arena._
 
 **Social — Phase 3b: images in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress
@@ -272,8 +288,6 @@ _Next track in progress: **Guilds Phase 4 (full depth)** — invites ✅, board 
   (local-disk dev adapter now, Cloudinary adapter for prod); `Post.imageUrls`;
   Cloudinary AI moderation gating in prod for Play compliance.
 
-**Guilds — Phase 4: full depth** (invites ✅ 4a; wall + board ✅ 4b; edit UI ✅ 4c; events ✅ 4d)
-- **Perks** (level unlocks, guild title/decorations — cosmetic progression sink)
 
 **Arena — Phase 5 (its own track):** PvP turn-based manga-character battles,
 online vs other players + async — matchmaking, server-authoritative game state,

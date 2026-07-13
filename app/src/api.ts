@@ -156,9 +156,12 @@ export interface GuildDetail {
   secondaryColor: string | null;
   motto: string | null;
   description: string | null;
+  decorationKey: string | null;
   joinPolicy: GuildJoinPolicy;
   guildmasterId: string;
   level: number;
+  perks: { key: string; level: number; label: string; unlocked: boolean }[];
+  decorations: { key: string; name: string; minLevel: number; unlocked: boolean }[];
   xp: number;
   xpFloor: number;
   xpForNextLevel: number;
@@ -899,6 +902,7 @@ export const api = {
       motto: string | null;
       description: string | null;
       joinPolicy: GuildJoinPolicy;
+      decorationKey: string | null;
     }>,
   ) => request<{ ok: boolean }>(`/guilds/${encodeURIComponent(id)}`, "PATCH", body),
   guildWar: (id: string) =>

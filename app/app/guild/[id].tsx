@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { api, type GuildDetail, type GuildMemberInfo, type GuildRole } from "../../src/api";
-import { GuildEmblem } from "../../src/components/GuildCrest";
+import { GUILD_DECOR, GuildEmblem } from "../../src/components/GuildCrest";
 import { SystemModal } from "../../src/components/SystemModal";
 import { SystemWindow } from "../../src/components/SystemWindow";
 import { UserIdentity } from "../../src/components/UserIdentity";
@@ -194,9 +194,26 @@ function HallTab({
 }) {
   const span = Math.max(1, guild.xpForNextLevel - guild.xpFloor);
   const pct = Math.min(100, Math.max(0, Math.round(((guild.xp - guild.xpFloor) / span) * 100)));
+  const decor = guild.decorationKey ? (GUILD_DECOR[guild.decorationKey] ?? null) : null;
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.hallHeader}>
+      <View
+        style={[
+          styles.hallHeader,
+          decor && {
+            borderWidth: 1.5,
+            borderColor: decor.color + "88",
+            borderRadius: 12,
+            paddingVertical: 14,
+            backgroundColor: decor.color + "0d",
+            shadowColor: decor.color,
+            shadowOpacity: 0.35,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 5,
+          },
+        ]}
+      >
         <GuildEmblem
           emblemKey={guild.emblemKey}
           primaryColor={guild.primaryColor}
@@ -204,10 +221,15 @@ function HallTab({
           size={92}
         />
         <View style={styles.hallTitleRow}>
+          {decor ? <Text style={[styles.decorSigil, { color: decor.color }]}>{decor.icon}</Text> : null}
           <Text style={styles.hallName}>{guild.name}</Text>
-          <Text style={[styles.hallTag, { color: guild.primaryColor }]}>[{guild.tag}]</Text>
+          {decor ? <Text style={[styles.decorSigil, { color: decor.color }]}>{decor.icon}</Text> : null}
         </View>
+        <Text style={[styles.hallTag, { color: guild.primaryColor }]}>[{guild.tag}]</Text>
         {guild.motto ? <Text style={styles.motto}>“{guild.motto}”</Text> : null}
+        {decor ? (
+          <Text style={[styles.decorName, { color: decor.color }]}>— {decor.name} —</Text>
+        ) : null}
       </View>
 
       <SystemWindow title="Guild Status" dim style={{ marginHorizontal: 4 }}>
@@ -225,6 +247,24 @@ function HallTab({
           <Stat value={`${guild.memberCount}/${guild.memberCap}`} label="Members" />
           <Stat value={String(guild.xp)} label="Total GXP" />
           <Stat value={String(guild.power)} label="Power" />
+        </View>
+      </SystemWindow>
+
+      <SystemWindow title="Perk Track" dim style={{ marginHorizontal: 4 }}>
+        <View style={{ gap: 9 }}>
+          {guild.perks.map((p) => (
+            <View key={p.key} style={styles.perkRow}>
+              <Text style={[styles.perkLevel, !p.unlocked && { color: colors.muted }]}>
+                LV {p.level}
+              </Text>
+              <Text style={[styles.perkLabel, !p.unlocked && { color: colors.muted }]}>
+                {p.label}
+              </Text>
+              <Text style={[styles.perkState, p.unlocked && { color: colors.fresh }]}>
+                {p.unlocked ? "✓" : "🔒"}
+              </Text>
+            </View>
+          ))}
         </View>
       </SystemWindow>
 
@@ -604,6 +644,12 @@ const styles = StyleSheet.create({
   hallName: { color: colors.text, fontFamily: fonts.display, fontSize: 24 },
   hallTag: { fontSize: 15, fontWeight: "900" },
   motto: { color: colors.muted, fontStyle: "italic", textAlign: "center", fontSize: 13 },
+  decorSigil: { fontSize: 16, fontWeight: "900" },
+  decorName: { fontSize: 9.5, fontWeight: "900", letterSpacing: 2, marginTop: 2 },
+  perkRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  perkLevel: { color: colors.foil, fontSize: 10, fontWeight: "900", width: 36 },
+  perkLabel: { color: colors.text, fontSize: 12.5, flex: 1, lineHeight: 17 },
+  perkState: { color: colors.muted, fontSize: 11, fontWeight: "900" },
   levelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
   levelText: { color: colors.foil, fontFamily: fonts.display, fontSize: 18 },
   powerText: { color: colors.accentSoft, fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },

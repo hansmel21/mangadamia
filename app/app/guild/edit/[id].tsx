@@ -18,6 +18,7 @@ import {
 import { api, type GuildJoinPolicy } from "../../../src/api";
 import {
   GUILD_COLORS,
+  GUILD_DECOR,
   GUILD_EMBLEMS,
   GuildEmblem,
 } from "../../../src/components/GuildCrest";
@@ -42,6 +43,7 @@ export default function EditGuildScreen() {
   const [emblemKey, setEmblemKey] = useState<string>(GUILD_EMBLEMS[0]);
   const [primaryColor, setPrimaryColor] = useState(GUILD_COLORS[0]);
   const [joinPolicy, setJoinPolicy] = useState<GuildJoinPolicy>("open");
+  const [decorationKey, setDecorationKey] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -56,6 +58,7 @@ export default function EditGuildScreen() {
     setEmblemKey(guild.emblemKey);
     setPrimaryColor(guild.primaryColor);
     setJoinPolicy(guild.joinPolicy);
+    setDecorationKey(guild.decorationKey);
     setLoaded(true);
   }, [guild, loaded]);
 
@@ -74,6 +77,7 @@ export default function EditGuildScreen() {
         motto: motto.trim() || null,
         description: description.trim() || null,
         joinPolicy,
+        decorationKey,
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["guild", id] }),
@@ -158,6 +162,40 @@ export default function EditGuildScreen() {
                 onPress={() => setPrimaryColor(c)}
               />
             ))}
+          </View>
+
+          <Text style={styles.label}>HALL DECORATION · UNLOCKS BY GUILD LEVEL</Text>
+          <View style={styles.grid}>
+            <Pressable
+              style={[styles.decorCell, decorationKey === null && styles.decorCellOn]}
+              onPress={() => setDecorationKey(null)}
+            >
+              <Text style={styles.decorNone}>NONE</Text>
+            </Pressable>
+            {guild.decorations.map((d) => {
+              const meta = GUILD_DECOR[d.key];
+              const on = decorationKey === d.key;
+              return (
+                <Pressable
+                  key={d.key}
+                  style={[
+                    styles.decorCell,
+                    on && [styles.decorCellOn, meta && { borderColor: meta.color }],
+                    !d.unlocked && { opacity: 0.4 },
+                  ]}
+                  disabled={!d.unlocked}
+                  onPress={() => setDecorationKey(d.key)}
+                >
+                  <Text style={[styles.decorIcon, meta && { color: meta.color }]}>
+                    {meta?.icon ?? "◆"}
+                  </Text>
+                  <Text style={styles.decorCellName}>{d.name}</Text>
+                  <Text style={styles.decorCellLevel}>
+                    {d.unlocked ? `LV ${d.minLevel} ✓` : `🔒 LV ${d.minLevel}`}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           <Text style={styles.label}>JOIN POLICY</Text>
@@ -257,6 +295,21 @@ const styles = StyleSheet.create({
   emblemCellOn: { borderColor: colors.accent, backgroundColor: "rgba(124,92,255,0.12)" },
   swatch: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: "transparent" },
   swatchOn: { borderColor: colors.text },
+  decorCell: {
+    minWidth: 96,
+    alignItems: "center",
+    gap: 3,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  decorCellOn: { borderColor: colors.accent, backgroundColor: "rgba(124,92,255,0.12)" },
+  decorNone: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1, paddingVertical: 12 },
+  decorIcon: { fontSize: 18, fontWeight: "900" },
+  decorCellName: { color: colors.text, fontSize: 10, fontWeight: "800" },
+  decorCellLevel: { color: colors.muted, fontSize: 8.5, fontWeight: "900", letterSpacing: 0.5 },
   policyRow: {
     borderWidth: 1,
     borderColor: colors.border,

@@ -24,6 +24,49 @@ export function isGuildEmblem(key: string): boolean {
   return (GUILD_EMBLEMS as readonly string[]).includes(key);
 }
 
+// Curated, level-gated hall decorations (cosmetic — a progression sink).
+// Rendered client-side as styled treatments on the hall banner; no uploads.
+export const GUILD_DECORATIONS = [
+  { key: "halo", name: "Arcane Halo", minLevel: 2 },
+  { key: "verdant", name: "Verdant Wreath", minLevel: 2 },
+  { key: "stormveil", name: "Storm Veil", minLevel: 4 },
+  { key: "gilded", name: "Gilded Frame", minLevel: 4 },
+  { key: "bloodmoon", name: "Blood Moon", minLevel: 6 },
+  { key: "eclipse", name: "Eclipse Crown", minLevel: 8 },
+] as const;
+
+export function decorationMinLevel(key: string): number | null {
+  return GUILD_DECORATIONS.find((d) => d.key === key)?.minLevel ?? null;
+}
+
+// The perk track shown in the Hall: what this level already grants and what
+// the next investment unlocks. Purely derived — no storage.
+export function guildPerks(level: number): {
+  key: string;
+  level: number;
+  label: string;
+  unlocked: boolean;
+}[] {
+  return [
+    {
+      key: "base",
+      level: 1,
+      label: "Guild board, weekly raid, war & event",
+      unlocked: true,
+    },
+    {
+      key: "cap",
+      level: 1,
+      label: `Member cap grows every level (now ${guildMemberCap(level)})`,
+      unlocked: true,
+    },
+    { key: "deco2", level: 2, label: "Hall decorations I (Halo, Wreath)", unlocked: level >= 2 },
+    { key: "deco4", level: 4, label: "Hall decorations II (Veil, Gilded)", unlocked: level >= 4 },
+    { key: "deco6", level: 6, label: "Hall decorations III (Blood Moon)", unlocked: level >= 6 },
+    { key: "deco8", level: 8, label: "Hall decorations IV (Eclipse)", unlocked: level >= 8 },
+  ];
+}
+
 // Steeper than the personal curve in badges.ts — a guild is fed by many members.
 export const guildLevelForXp = (xp: number): number =>
   Math.floor(Math.sqrt(Math.max(0, xp) / 400)) + 1;

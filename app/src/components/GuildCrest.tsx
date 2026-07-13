@@ -159,6 +159,18 @@ const styles = StyleSheet.create({
   chipTag: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
 });
 
+// Level-gated hall decorations (cosmetic). Server owns the catalog + gating;
+// this maps each key to its banner treatment: an accent color for the border/
+// glow and a sigil flanking the guild name.
+export const GUILD_DECOR: Record<string, { name: string; color: string; icon: string }> = {
+  halo: { name: "Arcane Halo", color: "#7C5CFF", icon: "◈" },
+  verdant: { name: "Verdant Wreath", color: "#4CC38A", icon: "❖" },
+  stormveil: { name: "Storm Veil", color: "#4BA3FF", icon: "⟡" },
+  gilded: { name: "Gilded Frame", color: "#F5B84C", icon: "✦" },
+  bloodmoon: { name: "Blood Moon", color: "#E5484D", icon: "☾" },
+  eclipse: { name: "Eclipse Crown", color: "#B8A8FF", icon: "◐" },
+};
+
 // Placeholder color menu the create/edit UI can offer.
 export const GUILD_COLORS = [
   "#7C5CFF",
