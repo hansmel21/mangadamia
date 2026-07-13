@@ -11,8 +11,11 @@ export async function deleteUserCompletely(userId: string): Promise<void> {
   ]);
   const postIds = posts.map((item) => item.id);
   const commentIds = comments.map((item) => item.id);
-  let heir: { userId: string; guildId: string } | null = null;
-  await prisma.$transaction(async (tx) => {
+  const heir = await prisma.$transaction(async (tx): Promise<{
+    userId: string;
+    guildId: string;
+  } | null> => {
+    let heirOut: { userId: string; guildId: string } | null = null;
     // Guild succession — the leave route's rules, applied here too, so a
     // deleted guildmaster can't orphan a guild (the cascade would otherwise
     // silently drop their membership without transferring leadership).
@@ -35,7 +38,7 @@ export async function deleteUserCompletely(userId: string): Promise<void> {
           where: { id: membership.guildId },
           data: { guildmasterId: next.userId },
         });
-        heir = { userId: next.userId, guildId: membership.guildId };
+        heirOut = { userId: next.userId, guildId: membership.guildId };
       }
     }
     await tx.notification.deleteMany({ where: { actorId: userId } });
@@ -59,6 +62,7 @@ export async function deleteUserCompletely(userId: string): Promise<void> {
       },
     });
     await tx.user.delete({ where: { id: userId } });
+    return heirOut;
   });
   if (heir) {
     await createNotification({
