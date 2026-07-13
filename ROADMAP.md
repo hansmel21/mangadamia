@@ -374,10 +374,24 @@ contribution board · edit UI · weekly events · perks/decorations.**
 
 ## 🗺️ Deferred / next (phased — see the plan file)
 
+### Moderation groundwork ✅ (2026-07-13, E2E-tested)
+- [x] **`api/src/moderation.ts`** — the entire enforcement pipeline
+      (snapshots, notices, notifications, XP reversal, audit) extracted into
+      `applyModerationAction()`; the reports route is now a thin wrapper
+      (round-trip verified identical). New `restoreContent()` undoes a
+      mistaken removal without an appeal (audited, XP re-granted once, keyed
+      by the audit row id).
+- [x] **`GET /admin/content`** — browse/search ALL posts + comments (not just
+      reported): text/author/status/kind/date/reported filters, 25/page, with
+      author identity + report counts. **`POST /admin/content/:type/:id/action`**
+      — direct actions without a report (per-action capability map, no
+      dismiss, restore included). **`GET /admin/overview`** — dashboard
+      counts. E2E: unreported post found → direct remove (404 public) →
+      restore (200) → audit shows both with `report=none`.
+
 **Pre-Arena plan in progress** (see `.claude/plans/check-roadmap-and-all-mutable-dragonfly.md`):
 1. ✅ Announcements + THE SYSTEM (above)
-2. Moderation groundwork: `applyModerationAction` refactor, `GET /admin/content`
-   (browse ALL posts/comments), direct + restore actions, `GET /admin/overview`
+2. ✅ Moderation groundwork (above)
 3. Arena **Draw competition** (unblocked by image storage)
 4. Backlog polish batch (search autocomplete + enriched rows, guild directory
    chips, thread READ ▸, guild XP multiplier perk, motion sweep, reader parity,

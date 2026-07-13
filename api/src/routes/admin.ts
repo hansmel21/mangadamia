@@ -1,116 +1,22 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import {
-  ROLES,
-  capabilitiesFor,
-  requireCapability,
-  verifyPassword,
-  type Capability,
-} from "../auth.js";
+import { ROLES, capabilitiesFor, requireCapability, verifyPassword } from "../auth.js";
 import { createAnnouncement } from "../announcements.js";
 import { prisma } from "../db/client.js";
 import { createNotification } from "../notifications.js";
 import { identitiesForUsers } from "../identity.js";
-import { evaluateBadges, revokeIneligibleBadges } from "../badges.js";
+import { evaluateBadges } from "../badges.js";
 import {
-  restoreActivityForContent,
-  restoreDirectContentXp,
-  reverseActivityForContent,
-  reverseDirectContentXp,
-} from "../quests.js";
-
-const actions = [
-  "dismiss",
-  "correct_spoiler",
-  "remove_content",
-  "warn",
-  "suspend_7d",
-  "suspend_30d",
-  "ban",
-] as const;
-
-const actionBody = z.object({
-  action: z.enum(actions),
-  reasonCode: z.enum([
-    "spam",
-    "harassment",
-    "hate",
-    "sexual_content",
-    "child_safety",
-    "copyright",
-    "spoiler",
-    "impersonation",
-    "fraud",
-    "other",
-  ]),
-  reason: z.string().trim().min(3).max(1000),
-  spoilerState: z.boolean().optional(),
-});
-
-const actionCapability: Record<(typeof actions)[number], Capability> = {
-  dismiss: "view_reports",
-  correct_spoiler: "correct_spoilers",
-  remove_content: "remove_content",
-  warn: "warn_users",
-  suspend_7d: "suspend_users",
-  suspend_30d: "suspend_users",
-  ban: "ban_users",
-};
-
-function jsonSnapshot(value: unknown) {
-  return value == null ? undefined : JSON.parse(JSON.stringify(value));
-}
-
-async function targetSnapshot(targetType: string, targetId: string) {
-  if (targetType === "post") {
-    return prisma.post.findUnique({
-      where: { id: targetId },
-      select: {
-        id: true,
-        body: true,
-        isSpoiler: true,
-        userId: true,
-        moderationStatus: true,
-        moderationReason: true,
-        createdAt: true,
-      },
-    });
-  }
-  if (targetType === "comment") {
-    return prisma.comment.findUnique({
-      where: { id: targetId },
-      select: {
-        id: true,
-        body: true,
-        isSpoiler: true,
-        userId: true,
-        moderationStatus: true,
-        moderationReason: true,
-        createdAt: true,
-      },
-    });
-  }
-  return prisma.user.findUnique({
-    where: { id: targetId },
-    select: { id: true, username: true, role: true, status: true, suspendedUntil: true, createdAt: true },
-  });
-}
-
-async function targetUserId(targetType: string, targetId: string): Promise<string | null> {
-  if (targetType === "user") return targetId;
-  if (targetType === "post") {
-    return (await prisma.post.findUnique({ where: { id: targetId }, select: { userId: true } }))
-      ?.userId ?? null;
-  }
-  return (
-    (await prisma.comment.findUnique({ where: { id: targetId }, select: { userId: true } }))
-      ?.userId ?? null
-  );
-}
-
-async function requireAction(req: FastifyRequest, action: (typeof actions)[number]) {
-  return requireCapability(req, actionCapability[action]);
-}
+  actionBody,
+  applyModerationAction,
+  jsonSnapshot,
+  requireAction,
+  restoreContent,
+  targetSnapshot,
+  targetUserId,
+  type ModAction,
+} from "../moderation.js";
+import { restoreActivityForContent, restoreDirectContentXp } from "../quests.js";
 
 export function registerAdminRoutes(app: FastifyInstance): void {
   app.get("/admin/reports", async (req) => {
@@ -162,116 +68,228 @@ export function registerAdminRoutes(app: FastifyInstance): void {
     if (input.action === "correct_spoiler" && report.targetType === "user") {
       throw Object.assign(new Error("A user profile has no spoiler flag"), { statusCode: 400 });
     }
+    await applyModerationAction({
+      moderator,
+      targetType: report.targetType,
+      targetId: report.targetId,
+      input,
+      reportId: report.id,
+      requestId: req.id,
+    });
+    return { ok: true };
+  });
 
-    const userId = await targetUserId(report.targetType, report.targetId);
-    const before = await targetSnapshot(report.targetType, report.targetId);
-    let contentXp = 0;
-    if (input.action === "remove_content" && report.targetType === "post") {
-      contentXp = 8 + 5 * (await prisma.postLike.count({ where: { postId: report.targetId } }));
-    } else if (input.action === "remove_content" && report.targetType === "comment") {
-      contentXp = 10 + 5 * (await prisma.commentLike.count({ where: { commentId: report.targetId } }));
+  // ── Content audit: browse EVERYTHING, not just reported items ─────────
+  app.get("/admin/content", async (req) => {
+    await requireCapability(req, "view_reports");
+    const q = z
+      .object({
+        type: z.enum(["post", "comment"]).default("post"),
+        q: z.string().trim().max(200).optional(),
+        username: z.string().trim().max(30).optional(),
+        status: z.enum(["visible", "removed", "all"]).default("all"),
+        kind: z.string().trim().max(30).optional(),
+        reported: z.coerce.boolean().optional(),
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+      })
+      .parse(req.query);
+    const author = q.username
+      ? await prisma.user.findFirst({
+          where: { username: { equals: q.username, mode: "insensitive" } },
+          select: { id: true },
+        })
+      : null;
+    if (q.username && !author) return { total: 0, page: q.page, items: [] };
+    const where = {
+      ...(q.q ? { body: { contains: q.q, mode: "insensitive" as const } } : {}),
+      ...(author ? { userId: author.id } : {}),
+      ...(q.status !== "all" ? { moderationStatus: q.status } : {}),
+      ...(q.from || q.to
+        ? { createdAt: { ...(q.from ? { gte: q.from } : {}), ...(q.to ? { lt: q.to } : {}) } }
+        : {}),
+    };
+    if (q.type === "post") {
+      const postWhere = { ...where, ...(q.kind ? { kind: q.kind } : {}) };
+      const [total, rows] = await Promise.all([
+        prisma.post.count({ where: postWhere }),
+        prisma.post.findMany({
+          where: postWhere,
+          orderBy: { createdAt: "desc" },
+          skip: (q.page - 1) * 25,
+          take: 25,
+          include: { _count: { select: { likes: true, replies: true } } },
+        }),
+      ]);
+      const ids = rows.map((r) => r.id);
+      const [reports, identities] = await Promise.all([
+        ids.length
+          ? prisma.report.groupBy({
+              by: ["targetId"],
+              where: { targetType: "post", targetId: { in: ids } },
+              _count: true,
+            })
+          : [],
+        identitiesForUsers(rows.map((r) => r.userId)),
+      ]);
+      const reportsById = new Map(reports.map((r) => [r.targetId, r._count]));
+      let items = rows.map((r) => ({
+        id: r.id,
+        type: "post" as const,
+        body: r.body,
+        kind: r.kind,
+        isSpoiler: r.isSpoiler,
+        isOfficial: r.isOfficial,
+        guildId: r.guildId,
+        gifUrl: r.gifUrl,
+        imageUrls: r.imageUrls,
+        moderationStatus: r.moderationStatus,
+        moderationReason: r.moderationReason,
+        createdAt: r.createdAt,
+        author: identities.get(r.userId) ?? null,
+        reactionCount: r._count.likes,
+        replyCount: r._count.replies,
+        reportCount: reportsById.get(r.id) ?? 0,
+      }));
+      if (q.reported) items = items.filter((i) => i.reportCount > 0);
+      return { total, page: q.page, items };
     }
-    const now = new Date();
-    const action = await prisma.$transaction(async (tx) => {
-      if (input.action === "correct_spoiler") {
-        const spoilerState = input.spoilerState ?? true;
-        if (report.targetType === "post") {
-          await tx.post.updateMany({ where: { id: report.targetId }, data: { isSpoiler: spoilerState } });
-        } else {
-          await tx.comment.updateMany({ where: { id: report.targetId }, data: { isSpoiler: spoilerState } });
-        }
-      }
-      if (input.action === "remove_content") {
-        if (report.targetType === "post") {
-          await tx.post.updateMany({
-            where: { id: report.targetId },
-            data: { moderationStatus: "removed", moderationReason: input.reason, moderatedAt: now },
-          });
-        } else if (report.targetType === "comment") {
-          await tx.comment.updateMany({
-            where: { id: report.targetId },
-            data: { moderationStatus: "removed", moderationReason: input.reason, moderatedAt: now },
-          });
-        } else {
-          throw Object.assign(new Error("A user report cannot use remove_content"), {
+    const [total, rows] = await Promise.all([
+      prisma.comment.count({ where }),
+      prisma.comment.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (q.page - 1) * 25,
+        take: 25,
+        include: { _count: { select: { likes: true } } },
+      }),
+    ]);
+    const ids = rows.map((r) => r.id);
+    const [reports, identities] = await Promise.all([
+      ids.length
+        ? prisma.report.groupBy({
+            by: ["targetId"],
+            where: { targetType: "comment", targetId: { in: ids } },
+            _count: true,
+          })
+        : [],
+      identitiesForUsers(rows.map((r) => r.userId)),
+    ]);
+    const reportsById = new Map(reports.map((r) => [r.targetId, r._count]));
+    let items = rows.map((r) => ({
+      id: r.id,
+      type: "comment" as const,
+      body: r.body,
+      isSpoiler: r.isSpoiler,
+      canonicalId: r.canonicalId,
+      chapterNumber: r.chapterNumber,
+      moderationStatus: r.moderationStatus,
+      moderationReason: r.moderationReason,
+      createdAt: r.createdAt,
+      author: identities.get(r.userId) ?? null,
+      reactionCount: r._count.likes,
+      reportCount: reportsById.get(r.id) ?? 0,
+    }));
+    if (q.reported) items = items.filter((i) => i.reportCount > 0);
+    return { total, page: q.page, items };
+  });
+
+  // ── Direct moderation action — no report required ─────────────────────
+  app.post<{ Params: { targetType: string; targetId: string } }>(
+    "/admin/content/:targetType/:targetId/action",
+    async (req) => {
+      const targetType = z.enum(["post", "comment", "user"]).parse(req.params.targetType);
+      // Everything but dismiss (meaningless without a report), plus restore.
+      const directBody = actionBody.extend({
+        action: z.enum([
+          "correct_spoiler",
+          "remove_content",
+          "warn",
+          "suspend_7d",
+          "suspend_30d",
+          "ban",
+          "restore_content",
+        ]),
+      });
+      const input = directBody.parse(req.body);
+      if (input.action === "restore_content") {
+        if (targetType === "user") {
+          throw Object.assign(new Error("Restore applies to posts and comments"), {
             statusCode: 400,
           });
         }
-      }
-      if ((input.action === "suspend_7d" || input.action === "suspend_30d") && userId) {
-        const days = input.action === "suspend_30d" ? 30 : 7;
-        await tx.user.update({
-          where: { id: userId },
-          data: { status: "suspended", suspendedUntil: new Date(Date.now() + days * 86_400_000) },
-        });
-        // Sessions remain valid so suspended readers can read and appeal; all
-        // community mutations already pass through requireActiveUser.
-      }
-      if (input.action === "ban" && userId) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { status: "banned", suspendedUntil: null },
-        });
-        await tx.session.deleteMany({ where: { userId } });
-      }
-      const created = await tx.moderationAction.create({
-        data: {
-          moderatorId: moderator.id,
-          moderatorSnapshot: moderator.username,
-          reportId: report.id,
-          targetType: report.targetType,
-          targetId: report.targetId,
-          action: input.action,
-          reasonCode: input.reasonCode,
+        const moderator = await requireCapability(req, "remove_content");
+        const exists = await targetSnapshot(targetType, req.params.targetId);
+        if (!exists) throw Object.assign(new Error("No such content"), { statusCode: 404 });
+        await restoreContent({
+          moderator,
+          targetType,
+          targetId: req.params.targetId,
           reason: input.reason,
-          beforeSnapshot: jsonSnapshot(before),
           requestId: req.id,
-        },
-      });
-      if (userId && ["warn", "remove_content", "suspend_7d", "suspend_30d", "ban"].includes(input.action)) {
-        const kind = input.action === "warn" ? "warning" : input.action;
-        await tx.moderationNotice.create({
-          data: {
-            userId,
-            moderationActionId: created.id,
-            kind,
-            message: input.reason,
-            requiresAcknowledgement: true,
-          },
         });
-        await tx.notification.create({
-          data: {
-            userId,
-            kind: `moderation_${kind}`,
-            title: input.action === "warn" ? "Account warning" : "Moderation update",
-            safeBody: "A moderation decision is available in your account inbox.",
-            targetUrl: "/appeals",
-            priority: "high",
-            dedupeKey: `moderation:${created.id}`,
-          },
-        });
+        return { ok: true };
       }
-      await tx.report.update({
-        where: { id: report.id },
-        data: {
-          status: input.action === "dismiss" ? "dismissed" : "resolved",
-          resolution: `${input.action}:${input.reasonCode}:${input.reason}`,
-          reviewedAt: now,
-        },
+      const action = input.action as Exclude<ModAction, "dismiss">;
+      const moderator = await requireAction(req, action);
+      if (action === "correct_spoiler" && targetType === "user") {
+        throw Object.assign(new Error("A user profile has no spoiler flag"), { statusCode: 400 });
+      }
+      const exists = await targetSnapshot(targetType, req.params.targetId);
+      if (!exists) throw Object.assign(new Error("No such content"), { statusCode: 404 });
+      await applyModerationAction({
+        moderator,
+        targetType,
+        targetId: req.params.targetId,
+        input: { ...input, action },
+        requestId: req.id,
       });
-      return created;
-    });
-    const after = await targetSnapshot(report.targetType, report.targetId);
-    await prisma.moderationAction.update({
-      where: { id: action.id },
-      data: { afterSnapshot: jsonSnapshot(after) },
-    });
-    if (input.action === "remove_content" && userId) {
-      await reverseActivityForContent(userId, report.targetId, input.reason);
-      await reverseDirectContentXp(userId, action.id, contentXp);
-      await revokeIneligibleBadges(userId);
-    }
-    return { ok: true };
+      return { ok: true };
+    },
+  );
+
+  // ── Dashboard counts ───────────────────────────────────────────────────
+  app.get("/admin/overview", async (req) => {
+    await requireCapability(req, "view_reports");
+    const dayAgo = new Date(Date.now() - 86_400_000);
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    const [
+      pendingReports,
+      pendingAppeals,
+      totalUsers,
+      activeToday,
+      suspended,
+      banned,
+      posts24h,
+      comments24h,
+      removed7d,
+      liveArenaEvents,
+    ] = await Promise.all([
+      prisma.report.count({ where: { status: "pending" } }),
+      prisma.appeal.count({ where: { status: "pending" } }),
+      prisma.user.count(),
+      prisma.user.count({ where: { lastActiveAt: { gte: dayAgo } } }),
+      prisma.user.count({ where: { status: "suspended" } }),
+      prisma.user.count({ where: { status: "banned" } }),
+      prisma.post.count({ where: { createdAt: { gte: dayAgo } } }),
+      prisma.comment.count({ where: { createdAt: { gte: dayAgo } } }),
+      prisma.moderationAction.count({
+        where: { action: "remove_content", createdAt: { gte: weekAgo } },
+      }),
+      prisma.arenaEvent.count({
+        where: { startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
+      }),
+    ]);
+    return {
+      pendingReports,
+      pendingAppeals,
+      users: { total: totalUsers, activeToday, suspended, banned },
+      posts24h,
+      comments24h,
+      removed7d,
+      liveArenaEvents,
+    };
   });
 
   app.get("/admin/appeals", async (req) => {
