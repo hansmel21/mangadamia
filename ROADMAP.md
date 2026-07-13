@@ -194,7 +194,7 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       mode, quote notification, feed/wall/thread actions.
 - [x] Mentions (@user → notification) & #hashtags (tappable topic filter)
 
-### Social v2 — Phase 3a: GIFs ✅ (2026-07-12, checkpoint — not yet verified live)
+### Social v2 — Phase 3a: GIFs ✅ (2026-07-12 — GIF posting + picker pending device test; GIPHY key configured)
 - [x] **GIFs on posts/replies** — `Post.gifUrl` (migration `post_gifs`);
       `validateGifUrl()` allowlists https Giphy/Tenor media URLs; composer GIF
       URL field; `PostCard` renders the GIF via `expo-image` (spoiler-shield
@@ -210,7 +210,7 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       in `api/.env` — see `.env.example`), pins rating pg-13/medium for Play,
       auth-gated + rate-limited. Without a key the picker shows a setup hint.
 
-### Guilds — Phase 4a: invites ✅ (2026-07-12, checkpoint — not yet verified live)
+### Guilds — Phase 4a: invites ✅ (2026-07-12, verified live 2026-07-12)
 - [x] **Guild invites** — `GuildInvite` model (migration `guild_invites`);
       officers invite by exact @username (`POST /guilds/:id/invites` — if the
       reader already had a pending join request it auto-accepts them instead);
@@ -223,7 +223,7 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       list on the Roster tab. Notifications: `guild_invite`,
       `guild_invite_accepted`.
 
-### Guilds — Phase 4b: hall board access + contribution board ✅ (2026-07-12, checkpoint — not yet verified live)
+### Guilds — Phase 4b: hall board access + contribution board ✅ (2026-07-12, verified live 2026-07-12)
 - [x] Audit: the **guild wall/board already shipped** in the Phase-4 war/raid/board
       commit (`GET/POST /guilds/:id/board`, officer pinning, members-only
       threads, feed exclusion, `guild/board/[id]` screen) — the old "Guild wall"
@@ -236,7 +236,7 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
 - [x] **This Week's Vanguard** — top-3 weekly contributors card on the Hall tab
       (from the HQ sketch in `GUILDS_PLAN.md`).
 
-### Guilds — Phase 4c: edit-guild UI ✅ (2026-07-12, checkpoint — not yet verified live)
+### Guilds — Phase 4c: edit-guild UI ✅ (2026-07-12, verified live 2026-07-12)
 - [x] **Edit Guild screen** (`guild/edit/[id]`) — the UI for the long-existing
       `PATCH /guilds/:id`: name, tag, emblem + color (curated set, live crest
       preview), **join policy selector** (open / request / invite-only, so
@@ -246,7 +246,7 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       guild home's **MANAGE** quick key now opens the editor (it previously
       just opened the Hall).
 
-### Guilds — Phase 4d: weekly guild events ✅ (2026-07-12, checkpoint — not yet verified live)
+### Guilds — Phase 4d: weekly guild events ✅ (2026-07-12, verified live 2026-07-12)
 - [x] **Rotating weekly co-op event** next to the fixed raid — `GuildEvent` +
       `GuildEventContribution` (migration `guild_events`); type rotates
       deterministically per guild per week (file records / write replies /
@@ -262,7 +262,7 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
       styling, progress bar, your share, reward state). Verified via API
       smoke test: event lazily created with roster-scaled target.
 
-### Guilds — Phase 4e: perks & hall decorations ✅ (2026-07-12, checkpoint — not yet verified live)
+### Guilds — Phase 4e: perks & hall decorations ✅ (2026-07-12, verified live 2026-07-12)
 - [x] **Perk track** — derived server-side (`guildPerks`), shown in a Hall
       "Perk Track" window: base features, the growing member cap, and four
       decoration tiers with lock states (LV 2/4/6/8).
@@ -279,8 +279,9 @@ contribution board · edit UI · weekly events · perks/decorations.**
 
 ## 🗺️ Deferred / next (phased — see the plan file)
 
-_Guilds Phase 4 done. **Next: full device test pass** over 3a (GIFs + picker)
-and 4a–4e, then Social 3b images or Arena._
+_Guilds Phase 4 done and **device-verified** (2026-07-12). GIPHY_API_KEY is
+configured in api/.env — **last check: GIF posting + picker on device**, then
+Social 3b images or Arena._
 
 **Social — Phase 3b: images in posts, comments & replies**
 - **Images** (Cloudinary, built local-first): client picker + compress
