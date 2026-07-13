@@ -211,11 +211,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     ]);
     const earnedAt = new Map(owned.map((b) => [b.badgeId, b.earnedAt]));
     const level = levelForXp(fresh.xp);
+    // Weekly rank on the arena EXP board (1 = top). A stale weekKey means no
+    // XP earned this week yet, so the effective score is 0.
+    const weekKey = currentWeekKey();
+    const myWeeklyXp = fresh.weekKey === weekKey ? fresh.weeklyXp : 0;
+    const weeklyRank =
+      (await prisma.user.count({ where: { weekKey, weeklyXp: { gt: myWeeklyXp } } })) + 1;
     return {
       user: publicUser(user),
       identity,
       bio: fresh.bio,
-      stats,
+      stats: { ...stats, streakDays: fresh.streakDays, weeklyRank },
       xp: fresh.xp,
       level,
       equippedBadgeId: fresh.equippedBadgeId,

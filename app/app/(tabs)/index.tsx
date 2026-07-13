@@ -377,6 +377,17 @@ export default function BrowseScreen() {
   const searching = query.length > 0 || input.length > 0;
   const hasResults = query.length > 0;
 
+  // TOP MATCH instant search: results load as you type (debounced). Hitting
+  // return still records the search in RECENT SCANS via submit().
+  useEffect(() => {
+    const trimmed = input.trim();
+    const t = setTimeout(() => {
+      if (trimmed.length >= 2) setQuery(trimmed);
+      else if (trimmed.length === 0) setQuery("");
+    }, 400);
+    return () => clearTimeout(t);
+  }, [input]);
+
   // Header chips: unread bell count + hunter LV/XP (share app-wide caches).
   const notif = useQuery({
     queryKey: ["notifCount"],

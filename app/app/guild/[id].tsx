@@ -6,6 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { usePulseGlow } from "../../src/anim";
 import { api, type GuildDetail, type GuildMemberInfo, type GuildRole } from "../../src/api";
 import { GUILD_DECOR, GuildEmblem } from "../../src/components/GuildCrest";
 import { SystemModal } from "../../src/components/SystemModal";
@@ -26,6 +28,21 @@ const roleLabel: Record<GuildRole, string> = {
   officer: "OFFICER",
   member: "MEMBER",
 };
+
+// "idle 3d" for members who haven't been seen in a while (nothing under 1h).
+function idleLabel(lastActiveAt: string | null): string | null {
+  if (!lastActiveAt) return null;
+  const hours = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 3_600_000);
+  if (hours < 1) return null;
+  if (hours < 24) return `idle ${hours}h`;
+  return `idle ${Math.floor(hours / 24)}d`;
+}
+
+// Breathing green presence dot for the roster.
+function MemberPulseDot() {
+  const pulse = usePulseGlow();
+  return <Animated.View style={[styles.memberOnlineDot, pulse]} />;
+}
 
 export default function GuildHallScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -511,13 +528,14 @@ function RosterTab({
             ) : null}
             <View style={{ flex: 1 }}>
               <View style={styles.memberNameRow}>
-                {m.online ? <View style={styles.memberOnlineDot} /> : null}
+                {m.online ? <MemberPulseDot /> : null}
                 {m.identity ? <UserIdentity identity={m.identity} compact /> : null}
               </View>
               <Text style={styles.contribution}>
                 {order === "weekly"
                   ? `${m.weeklyXp} GXP this week · ${m.contributionXp} total`
                   : `${m.contributionXp} GXP total · ${m.weeklyXp} this week`}
+                {!m.online && idleLabel(m.lastActiveAt) ? ` · ${idleLabel(m.lastActiveAt)}` : ""}
               </Text>
             </View>
             <View style={styles.memberRight}>

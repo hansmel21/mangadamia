@@ -139,6 +139,68 @@ export async function bumpGuildRaid(userId: string): Promise<void> {
           where: { id: membership.guildId },
           data: { xp: { increment: RAID_BONUS_XP } },
         });
+        await grantRaidFrames(membership.guildId, weekKey);
+      }
+    }
+  } catch {
+    // best-effort; ignore
+  }
+}
+
+// Raid clear cosmetic: every member who contributed at least one chapter this
+// week earns the Ember Wreath frame (idempotent — upserts keyed per member).
+const RAID_FRAME_ID = "frame-ember";
+async function grantRaidFrames(guildId: string, weekKey: string): Promise<void> {
+  try {
+    const members = await prisma.guildMember.findMany({
+      where: { guildId },
+      select: { userId: true },
+    });
+    const contributions = await prisma.activityEvent.groupBy({
+      by: ["userId"],
+      where: {
+        userId: { in: members.map((m) => m.userId) },
+        type: "chapter_completed",
+        reversedAt: null,
+        createdAt: { gte: new Date(`${weekKey}T00:00:00Z`), lt: weekEndsAt(weekKey) },
+      },
+      _count: true,
+    });
+    for (const c of contributions) {
+      const fresh = await prisma.userCosmetic.upsert({
+        where: { userId_cosmeticId: { userId: c.userId, cosmeticId: RAID_FRAME_ID } },
+        create: { userId: c.userId, cosmeticId: RAID_FRAME_ID, source: "guild_raid" },
+        update: {},
+      });
+      await prisma.rewardGrant.upsert({
+        where: {
+          userId_rewardType_rewardId_sourceType_sourceId: {
+            userId: c.userId,
+            rewardType: "cosmetic",
+            rewardId: RAID_FRAME_ID,
+            sourceType: "guild_raid",
+            sourceId: `${guildId}:${weekKey}`,
+          },
+        },
+        create: {
+          userId: c.userId,
+          rewardType: "cosmetic",
+          rewardId: RAID_FRAME_ID,
+          sourceType: "guild_raid",
+          sourceId: `${guildId}:${weekKey}`,
+        },
+        update: {},
+      });
+      // Only announce a first-time unlock.
+      if (Date.now() - fresh.unlockedAt.getTime() < 60_000) {
+        await createNotification({
+          userId: c.userId,
+          kind: "reward_granted",
+          title: "Raid cleared — frame unlocked!",
+          safeBody: "The Ember Wreath frame is yours. Equip it from your Status screen.",
+          targetUrl: "/account/appearance",
+          dedupeKey: `raid-frame:${c.userId}`,
+        });
       }
     }
   } catch {
@@ -267,15 +329,71 @@ export async function bumpGuildEvent(userId: string, eventType: GuildEventType):
   }
 }
 
-// Live war score for one side: the sum of members' weekly contribution in the
-// given week. Members whose weekKey is stale contribute 0 (their weeklyXp is
-// from an older week and rolls over on their next credit).
+// War score for one side: the sum of the guild's contribution transactions
+// inside the week's window. Exact for any week — live or already over — so
+// finalization freezes true totals even if nobody read the war before the
+// rollover (the old weeklyXp sum evaporated as members' windows rolled).
 export async function warScoreForGuild(guildId: string, weekKey: string): Promise<number> {
-  const agg = await prisma.guildMember.aggregate({
-    where: { guildId, weekKey },
-    _sum: { weeklyXp: true },
+  const agg = await prisma.guildXpTransaction.aggregate({
+    where: {
+      guildId,
+      createdAt: { gte: new Date(`${weekKey}T00:00:00Z`), lt: weekEndsAt(weekKey) },
+    },
+    _sum: { delta: true },
   });
-  return agg._sum.weeklyXp ?? 0;
+  return agg._sum.delta ?? 0;
+}
+
+// Winner's purse for a weekly guild war, paid once at finalization.
+export const WAR_WINNER_BONUS_XP = 200;
+
+// Freeze finished wars: recompute both sides' final scores from the
+// transaction log, pay the winner's bonus, and notify both rosters. Runs
+// lazily from the war routes and from the server's periodic close-out tick.
+export async function finalizePastWars(): Promise<void> {
+  try {
+    const weekKey = currentWeekKey();
+    const wars = await prisma.guildWar.findMany({
+      where: { finalizedAt: null, weekKey: { not: weekKey } },
+      take: 20,
+    });
+    for (const war of wars) {
+      // Claim atomically so concurrent finalizers can't double-pay.
+      const claimed = await prisma.guildWar.updateMany({
+        where: { id: war.id, finalizedAt: null },
+        data: { finalizedAt: new Date() },
+      });
+      if (claimed.count === 0) continue;
+      const [scoreA, scoreB] = await Promise.all([
+        warScoreForGuild(war.guildAId, war.weekKey),
+        warScoreForGuild(war.guildBId, war.weekKey),
+      ]);
+      await prisma.guildWar.update({ where: { id: war.id }, data: { scoreA, scoreB } });
+      if (scoreA === scoreB) continue; // draw — no purse
+      const winnerId = scoreA > scoreB ? war.guildAId : war.guildBId;
+      const [winner, members] = await Promise.all([
+        prisma.guild.update({
+          where: { id: winnerId },
+          data: { xp: { increment: WAR_WINNER_BONUS_XP } },
+        }),
+        prisma.guildMember.findMany({ where: { guildId: winnerId }, select: { userId: true } }),
+      ]);
+      await Promise.all(
+        members.map((m) =>
+          createNotification({
+            userId: m.userId,
+            kind: "guild_war_won",
+            title: "Guild war won!",
+            safeBody: `${winner.name} took week ${weekNumber(war.weekKey)}'s war — +${WAR_WINNER_BONUS_XP} Guild XP.`,
+            targetUrl: `/guild/${winnerId}`,
+            dedupeKey: `guild-war-won:${war.id}:${m.userId}`,
+          }),
+        ),
+      );
+    }
+  } catch {
+    // best-effort; the next tick retries anything unfinalized
+  }
 }
 
 // Credit a member's guild for XP they just earned. Contribution flow: guild.xp

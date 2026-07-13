@@ -325,6 +325,32 @@ contribution board · edit UI · weekly events · perks/decorations.**
       the members-only board stays separate); chip on the Dungeon filter deck
       for guild members.
 
+### Progression pack (3+4): streaks, ranks, chain bonus, war/raid/arena rewards, polish ✅ (2026-07-13, pending device test)
+- [x] **Day streak** — `User.streakDays/streakDayKey` maintained by the same
+      throttled auth-layer touch as presence (same UTC day keeps, yesterday
+      +1, gap resets). **Weekly rank** computed on `/me` from the arena weekly
+      board. Status grid: DAYS → **DAY STREAK 🔥** (gold at 7+), TOTAL XP →
+      **WEEKLY RANK #n**; both also in the full status readout.
+- [x] **Quest chain bonus** — clearing every active daily pays **+100 XP**
+      once per UTC day (xpTransaction `quest_chain:dayKey` idempotence guard),
+      with a notification and a synthetic "Daily Directive Chain" completion
+      toast. **Per-quest `deepLink`** column (seeded for the launch set);
+      client uses it, keyword heuristic stays as fallback.
+- [x] **War finalization + winner purse** — war scores now computed from the
+      `GuildXpTransaction` log per week window (exact even after member
+      weekly windows roll), `GuildWar.finalizedAt` freezes finished wars,
+      winner guild gets **+200 GXP** + roster notification. Runs from the new
+      **5-minute scheduled close-out tick** in server.ts (also finalizes ended
+      arena events) with lazy on-read fallback.
+- [x] **Raid clear cosmetic** — every member who contributed ≥1 chapter that
+      week earns the **Ember Wreath** frame (seeded `frame-ember`, idempotent
+      grants + unlock notification).
+- [x] **Arena winner title** — quiz close-out now also grants **Gate Scholar**
+      (seeded `gate-scholar`) + victory notification.
+- [x] Polish: **instant search-as-you-type** on Home (debounced, submit still
+      records RECENT SCANS), roster **idle Nh/Nd** labels for offline members,
+      **breathing pulse** on the online dots (guild banner + roster).
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
 _Guilds Phase 4 done and **device-verified** (2026-07-12). GIPHY_API_KEY is

@@ -30,7 +30,7 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ Framed hero window (4 brackets, TOP-n notch, CONTINUE CH.n from stored progress / OPEN + WALL keys).
 - ✅ Daily-directive strip (top uncompleted daily quest, progress + XP → Quest Log).
 - ✅ Rails: square corners, CH.n badge on LATEST covers.
-- 🎨 **TOP MATCH instant search** (debounced-as-you-type) — current search is submit-based.
+- ✅ **TOP MATCH instant search** — shipped 2026-07-13 (debounced as-you-type).
 - ✅ **TRENDING IN THE DUNGEONS** — shipped 2026-07-13 (`GET /posts/trending`, Home rail).
 - ⚠ **Rank sigil + ★ rating + reads + posts/hr on result rows** — search payload has no rank/rating/activity metrics.
 
@@ -61,12 +61,12 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ **Guild Raid**: `GuildRaidProgress` model; first-completion-per-week chapter events tick it (same distinct-event window as quests — not farmable); +250 guild XP paid once on target. `GET /guilds/:id/raid` (target scales with roster, `myShare`). Client: gold raid card on the Guild tab.
 - ✅ **Guild Board**: reuses Post + new `pinned` flag. `GET/POST /guilds/:id/board`, `POST /posts/:id/pin` (officers). Replies inherit `guildId`; leak guards added everywhere (public feed, post detail, react, vote, quote, profile recentPosts — all verified 404/hidden for outsiders). Client: board preview on Guild tab + full board screen (`guild/board/[id]`) with inline composer + officer pin toggles.
 - ✅ **Presence per guild** — shipped 2026-07-13 (User.lastActiveAt, onlineCount + roster dots).
-- 🔀 **Roster enrichment**: applicant LV/rank/chapters in request payload (⚠ include stats), member `idle Nd` from `lastActiveAt` (⚠ expose), online dot (⚠ presence).
+- ✅ **Roster enrichment** — shipped 2026-07-13 (online dots + idle Nh/Nd from lastActiveAt).
 - 🔀 **Guild XP multiplier** ("+10% XP" recruit copy) — ⚠ if it should be real.
 - 🎨 Directory war-status chips (`AT WAR`/`RECRUITING`) + #1 gold card — restyle; `AT WAR` can now read war state.
 - 🎨 Old Hall screen (`guild/[id].tsx`) roster restyle to weekly-GXP ordering + role chips (data exists).
-- ⚠ **War refinements**: rewards for the winner; a rollover job to freeze final scores exactly at week end (today the last live read before rollover stands as final).
-- ⚠ **Raid cosmetic reward** (design shows "Frame: Ember Wreath") — needs per-member reward grants; current bonus is +250 guild XP.
+- ✅ **War refinements** — shipped 2026-07-13 (transaction-log scoring, finalizedAt freeze, +200 GXP winner purse, 5-min close-out tick).
+- ✅ **Raid cosmetic reward** — shipped 2026-07-13 (Ember Wreath frame to contributing members).
 
 ## Arena (§7) — quiz + board + pools DONE (Phase 5, E2E-tested)
 - ✅ **Quiz**: `ArenaEvent`/`ArenaEntry` models, server-side scoring (the answer
@@ -82,9 +82,9 @@ The design's own build order (foundation → nav → feed → status/quests/libr
   rule) at lazy close — no admin resolution job needed.
 - ✅ Week number + countdown header; past-results list; hub at `arena/index`.
 - ⚠ **Draw competition**: still **blocked by the no-uploads policy**.
-- ⚠ **Winner titles** ("Gate Scholar" for top 10%): needs title-grant plumbing
+- ✅ **Winner titles** — shipped 2026-07-13 (Gate Scholar granted at quiz close-out).
   at close-out (current winner reward is XP only).
-- ⚠ **Scheduled close-out job**: current close-out is lazy (first read after
+- ✅ **Scheduled close-out** — shipped 2026-07-13 (5-min in-process tick for arena + wars; lazy fallback kept).
   endsAt). A cron makes payouts prompt + enables LeaderboardSnapshot history
   (ARENA_PLAN phase 2).
 - ⚠ **Weekly-quests + series leaderboards** (ARENA_PLAN phase 2).
@@ -95,14 +95,14 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ HUNTER RECORD 6-stat grid (CHAPTERS / RECORDS / REACTIONS / BADGES / DAYS / TOTAL XP) → full status modal.
 - ✅ EQUIPPED slots (TITLE / FRAME / AVATAR) → titles modal / appearance screen.
 - ✅ Badges rail (locked 35%) with ALL ▸ expanding to the grid; TODAY'S QUESTS strip (✓/strikethrough, ALL QUESTS ▸).
-- ⚠ **dayStreak** stat — needs a server-side daily streak counter (grid shows DAYS/TOTAL XP meanwhile).
-- ⚠ **weeklyRank** stat — needs the weekly leaderboard endpoint.
+- ✅ **dayStreak** — shipped 2026-07-13 (User.streakDays via auth touch; Status grid).
+- ✅ **weeklyRank** — shipped 2026-07-13 (computed on /me; Status grid).
 
 ## Quest Log (§9) — DONE (Phase 3); chain bonus + precise links backend-gated
 - ✅ QUEST LOG ScreenTitle + live HH:MM:SS reset countdown; cadence chips (ALL/DAILY n/n/WEEKLY/SEASON/MILESTONE), client-filtered.
 - ✅ Done = gold CLAIMED strikethrough; active = corner-ticked card with `GO TO DUNGEON ▸`/`GO READ ▸` (client keyword heuristic); epic/seasonal rarity tint.
-- ⚠ **Chain bonus** ("clear all dailies → +100 XP") — new server rule / synthetic quest.
-- ⚠ **Per-quest `deepLink` field** for precise routes (heuristic covers common quests meanwhile).
+- ✅ **Chain bonus** — shipped 2026-07-13 (+100 XP once/day when all dailies clear).
+- ✅ **Per-quest `deepLink`** — shipped 2026-07-13 (column + seeds; heuristic fallback).
 
 ## Library / Archive (§10) — DONE (Phase 3)
 - ✅ ARCHIVE ScreenTitle + HISTORY key + SYNCED/LOCAL state; RESUME EXPEDITION window (cover, ch/page, % bar, play key → reader).

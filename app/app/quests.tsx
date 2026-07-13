@@ -41,10 +41,16 @@ const rewardKindLabel: Record<RewardInfo["type"], string> = {
 
 type CadenceFilter = "all" | "daily" | "weekly" | "seasonal" | "permanent";
 
-// Until the server ships a per-quest deepLink, route by what the quest asks:
-// social objectives point at the Dungeon, reading objectives at Home.
+// Server-provided deepLink wins; the keyword heuristic stays as the fallback
+// for quests without one.
 function questRoute(q: QuestInfo): { label: string; path: string } | null {
   if (q.completedAt) return null;
+  if (q.deepLink) {
+    return {
+      label: q.deepLink === "/feed" ? "GO TO DUNGEON ▸" : "GO READ ▸",
+      path: q.deepLink,
+    };
+  }
   const text = `${q.name} ${q.description}`.toLowerCase();
   if (/comment|post|record|react|reply|like|endorse/.test(text)) {
     return { label: "GO TO DUNGEON ▸", path: "/feed" };

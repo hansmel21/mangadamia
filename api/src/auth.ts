@@ -108,13 +108,24 @@ export async function createSession(userId: string): Promise<string> {
   return token;
 }
 
-// Presence: bump lastActiveAt on authenticated traffic, at most once per
-// 5 minutes per user. Fire-and-forget — presence must never break a request.
+// Presence + day streak: bump lastActiveAt on authenticated traffic, at most
+// once per 5 minutes per user, and maintain the consecutive-days streak in
+// the same write (same UTC day = keep, yesterday = +1, gap = reset to 1).
+// Fire-and-forget — presence must never break a request.
 const ACTIVITY_BUMP_MS = 5 * 60 * 1000;
 function touchActivity(user: User): void {
   if (Date.now() - user.lastActiveAt.getTime() < ACTIVITY_BUMP_MS) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const streak =
+    user.streakDayKey === today
+      ? {}
+      : {
+          streakDayKey: today,
+          streakDays: user.streakDayKey === yesterday ? user.streakDays + 1 : 1,
+        };
   void prisma.user
-    .update({ where: { id: user.id }, data: { lastActiveAt: new Date() } })
+    .update({ where: { id: user.id }, data: { lastActiveAt: new Date(), ...streak } })
     .catch(() => {});
 }
 

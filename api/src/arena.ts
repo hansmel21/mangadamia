@@ -4,6 +4,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./db/client.js";
 import { creditGuild, currentWeekKey } from "./guilds.js";
+import { createNotification } from "./notifications.js";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -103,6 +104,39 @@ export async function finalizeArenaEvent(eventId: string): Promise<void> {
       })[0];
       if (winner && (winner.score ?? 0) > 0) {
         await awardArenaXp(winner.userId, QUIZ_WINNER_XP);
+        // Winner's title (Gate Scholar) — idempotent, kept if already owned.
+        await prisma.userTitle.upsert({
+          where: { userId_titleId: { userId: winner.userId, titleId: "gate-scholar" } },
+          create: { userId: winner.userId, titleId: "gate-scholar", source: "arena" },
+          update: {},
+        });
+        await prisma.rewardGrant.upsert({
+          where: {
+            userId_rewardType_rewardId_sourceType_sourceId: {
+              userId: winner.userId,
+              rewardType: "title",
+              rewardId: "gate-scholar",
+              sourceType: "arena",
+              sourceId: event.id,
+            },
+          },
+          create: {
+            userId: winner.userId,
+            rewardType: "title",
+            rewardId: "gate-scholar",
+            sourceType: "arena",
+            sourceId: event.id,
+          },
+          update: {},
+        });
+        await createNotification({
+          userId: winner.userId,
+          kind: "reward_granted",
+          title: "Arena victory!",
+          safeBody: `You won "${event.title}" — +${QUIZ_WINNER_XP} XP and the Gate Scholar title.`,
+          targetUrl: "/arena",
+          dedupeKey: `arena-win:${event.id}`,
+        });
       }
     } else if (event.kind === "poll") {
       const tally = new Map<number, number>();

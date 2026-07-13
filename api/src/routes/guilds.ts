@@ -8,6 +8,7 @@ import {
   currentWeekKey,
   decorationMinLevel,
   ensureGuildEvent,
+  finalizePastWars,
   GUILD_DECORATIONS,
   guildEventTitle,
   guildLevelForXp,
@@ -181,6 +182,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     const onlineIds = new Set(
       memberUsers.filter((u) => u.lastActiveAt.getTime() >= onlineCutoff).map((u) => u.id),
     );
+    const lastActiveById = new Map(memberUsers.map((u) => [u.id, u.lastActiveAt]));
     const level = guildLevelForXp(guild.xp);
     const isMember = myMembership?.guildId === guild.id;
     const canManage = isMember && officerRoles.includes(myMembership!.role);
@@ -250,6 +252,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
           weeklyXp: m.weeklyXp,
           joinedAt: m.joinedAt,
           online: onlineIds.has(m.userId),
+          lastActiveAt: lastActiveById.get(m.userId) ?? null,
           identity: identities.get(m.userId) ?? null,
         }))
         .sort(
@@ -749,6 +752,8 @@ export function registerGuildRoutes(app: FastifyInstance): void {
 
   // ── War history ───────────────────────────────────────────────────────
   app.get<{ Params: { id: string } }>("/guilds/:id/wars", async (req) => {
+    // Lazy fallback: freeze + pay any wars the scheduled tick hasn't yet.
+    await finalizePastWars();
     const guildId = req.params.id;
     const weekKey = currentWeekKey();
     const wars = await prisma.guildWar.findMany({

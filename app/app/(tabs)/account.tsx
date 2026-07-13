@@ -201,8 +201,12 @@ function Profile() {
                 <RecordStat value={String(me.data.stats.comments)} label="RECORDS" />
                 <RecordStat value={String(me.data.stats.likesReceived)} label="REACTIONS" />
                 <RecordStat value={`${earned}/${badges.length}`} label="BADGES" foil />
-                <RecordStat value={String(me.data.stats.accountDays)} label="DAYS" />
-                <RecordStat value={String(me.data.xp)} label="TOTAL XP" />
+                <RecordStat
+                  value={`${me.data.stats.streakDays}🔥`}
+                  label="DAY STREAK"
+                  foil={me.data.stats.streakDays >= 7}
+                />
+                <RecordStat value={`#${me.data.stats.weeklyRank}`} label="WEEKLY RANK" />
               </View>
             </View>
           </Pressable>
@@ -408,6 +412,8 @@ function StatsModal({
     ["Likes received", `${me.stats.likesReceived}`],
     ["Chapters read", `${me.stats.chaptersRead}`],
     ["Badges", `${earned} / ${me.badges.length}`, true],
+    ["Day streak", `${me.stats.streakDays} day${me.stats.streakDays === 1 ? "" : "s"} 🔥`, me.stats.streakDays >= 7],
+    ["Weekly rank", `#${me.stats.weeklyRank}`],
     ["Member for", `${me.stats.accountDays} day${me.stats.accountDays === 1 ? "" : "s"}`],
   ];
   return (

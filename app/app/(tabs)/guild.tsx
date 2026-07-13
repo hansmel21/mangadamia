@@ -8,6 +8,7 @@ import { MessageSquare, Settings2, Users } from "lucide-react-native";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePulseGlow } from "../../src/anim";
 import { api, type GuildWarInfo } from "../../src/api";
 import { GUILD_DECOR, GuildEmblem } from "../../src/components/GuildCrest";
 import { HunterAvatar } from "../../src/components/HunterAvatar";
@@ -175,7 +177,7 @@ export default function GuildTab() {
                 </View>
                 {g.onlineCount > 0 ? (
                   <View style={styles.onlineRow}>
-                    <View style={styles.onlineDot} />
+                    <PulseDot />
                     <Text style={styles.onlineNowText}>{g.onlineCount} ONLINE</Text>
                   </View>
                 ) : null}
@@ -450,6 +452,12 @@ function WarWindow({
 
 function openHall(id: string) {
   router.push({ pathname: "/guild/[id]", params: { id } });
+}
+
+// Breathing green presence dot.
+function PulseDot() {
+  const pulse = usePulseGlow();
+  return <Animated.View style={[styles.onlineDot, pulse]} />;
 }
 
 function Centered({ children }: { children: ReactNode }) {

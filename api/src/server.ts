@@ -4,6 +4,9 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { registerRoutes } from "./routes/index.js";
+import { finalizeArenaEvent } from "./arena.js";
+import { prisma } from "./db/client.js";
+import { finalizePastWars } from "./guilds.js";
 import { dispatchPendingPushes } from "./notifications.js";
 
 if (process.env.NODE_ENV === "production") {
@@ -55,6 +58,25 @@ registerRoutes(app);
 // remain the source of truth if the provider or network is unavailable.
 void dispatchPendingPushes();
 setInterval(() => void dispatchPendingPushes(), 30_000).unref();
+
+// Scheduled close-outs: ended arena events pay their winners and finished
+// guild wars freeze + pay promptly instead of waiting for the next read.
+// The lazy on-read paths remain as the fallback if the process was down.
+async function runScheduledCloseouts(): Promise<void> {
+  try {
+    const ended = await prisma.arenaEvent.findMany({
+      where: { finalizedAt: null, endsAt: { lt: new Date() } },
+      select: { id: true },
+      take: 20,
+    });
+    for (const event of ended) await finalizeArenaEvent(event.id);
+  } catch {
+    // best-effort; retried next tick
+  }
+  await finalizePastWars();
+}
+void runScheduledCloseouts();
+setInterval(() => void runScheduledCloseouts(), 5 * 60_000).unref();
 
 const port = Number(process.env.PORT ?? 3000);
 await app.listen({ port, host: "0.0.0.0" });

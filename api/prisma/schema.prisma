@@ -36,6 +36,10 @@ model User {
   // Bumped (throttled, ≤1 write/5min) on any authenticated request — feeds
   // the per-guild "n ONLINE" presence.
   lastActiveAt         DateTime                @default(now())
+  // Consecutive-days-active streak (UTC days), maintained by the same
+  // auth-layer touch: same day = no-op, yesterday = +1, gap = reset to 1.
+  streakDays           Int                     @default(0)
+  streakDayKey         String?
   role                 String                  @default("user") // user | moderator | admin
   status               String                  @default("active") // active | suspended | banned
   suspendedUntil       DateTime?
@@ -592,6 +596,8 @@ model QuestDefinition {
   titleRewardId    String?
   cosmeticRewardId String?
   canonicalId      String?
+  // Route the quest card's GO ▸ key opens (e.g. "/library", "/feed").
+  deepLink         String?
   distinctEvents   Boolean             @default(false)
   startsAt         DateTime?
   endsAt           DateTime?
@@ -761,6 +767,9 @@ model GuildWar {
   guildBId  String
   scoreA    Int      @default(0)
   scoreB    Int      @default(0)
+  // Set once the week is over: final scores frozen from the transaction log
+  // and the winner's bonus paid (see finalizePastWars).
+  finalizedAt DateTime?
   createdAt DateTime @default(now())
   guildA    Guild    @relation("WarsAsA", fields: [guildAId], references: [id], onDelete: Cascade)
   guildB    Guild    @relation("WarsAsB", fields: [guildBId], references: [id], onDelete: Cascade)

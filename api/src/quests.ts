@@ -254,6 +254,61 @@ export async function recordActivity(userId: string, input: ActivityInput): Prom
       completedQuests.push({ id: quest.id, name: quest.name, rewards });
     }
 
+    // Chain bonus: clearing EVERY active daily quest pays +100 XP, once per
+    // UTC day (the xpTransaction unique key is the idempotence guard).
+    if (completedQuests.length > 0) {
+      const dayKey = startOfUtcDay(now).toISOString().slice(0, 10);
+      const dailies = await tx.questDefinition.findMany({
+        where: {
+          cadence: "daily",
+          isActive: true,
+          OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+          AND: [{ OR: [{ endsAt: null }, { endsAt: { gt: now } }] }],
+        },
+        select: { id: true },
+      });
+      if (dailies.length > 0) {
+        const done = await tx.userQuestProgress.count({
+          where: {
+            userId,
+            periodKey: dayKey,
+            questId: { in: dailies.map((q) => q.id) },
+            completedAt: { not: null },
+          },
+        });
+        const alreadyPaid = await tx.xpTransaction.findUnique({
+          where: {
+            userId_sourceType_sourceId: { userId, sourceType: "quest_chain", sourceId: dayKey },
+          },
+        });
+        if (done === dailies.length && !alreadyPaid) {
+          const CHAIN_BONUS = 100;
+          await tx.xpTransaction.create({
+            data: { userId, delta: CHAIN_BONUS, sourceType: "quest_chain", sourceId: dayKey },
+          });
+          await tx.user.update({ where: { id: userId }, data: { xp: { increment: CHAIN_BONUS } } });
+          await bumpWeeklyXp(tx, userId, CHAIN_BONUS);
+          await tx.notification.upsert({
+            where: { userId_dedupeKey: { userId, dedupeKey: `quest-chain:${dayKey}` } },
+            create: {
+              userId,
+              kind: "quest_complete",
+              title: "Daily directives cleared!",
+              safeBody: `Every daily quest done — chain bonus +${CHAIN_BONUS} XP.`,
+              targetUrl: "/quests",
+              dedupeKey: `quest-chain:${dayKey}`,
+            },
+            update: {},
+          });
+          completedQuests.push({
+            id: "daily-chain",
+            name: "Daily Directive Chain",
+            rewards: [{ type: "xp", name: `${CHAIN_BONUS} XP`, amount: CHAIN_BONUS }],
+          });
+        }
+      }
+    }
+
     const after = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { xp: true } });
     const beforeLevel = levelForXp(before.xp);
     const afterLevel = levelForXp(after.xp);
@@ -287,6 +342,7 @@ export async function questListForUser(userId: string) {
       progress: Math.min(quest.target, progress?.progress ?? 0),
       target: quest.target,
       completedAt: progress?.completedAt ?? null,
+      deepLink: quest.deepLink,
       resetsAt: quest.cadence === "daily" || quest.cadence === "weekly" ? period.end : quest.endsAt,
       rewards: [
         ...(quest.xpReward > 0

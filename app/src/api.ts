@@ -153,6 +153,7 @@ export interface GuildMemberInfo {
   weeklyXp: number;
   joinedAt: string;
   online: boolean;
+  lastActiveAt: string | null;
   identity: PublicIdentity | null;
 }
 
@@ -379,7 +380,14 @@ export interface BadgeInfo extends BadgeMini {
 
 export interface MeResponse {
   user: AuthResponse["user"];
-  stats: { comments: number; likesReceived: number; chaptersRead: number; accountDays: number };
+  stats: {
+    comments: number;
+    likesReceived: number;
+    chaptersRead: number;
+    accountDays: number;
+    streakDays: number;
+    weeklyRank: number;
+  };
   xp: number;
   level: number;
   equippedBadgeId: string | null;
@@ -623,6 +631,7 @@ export interface QuestInfo {
   progress: number;
   target: number;
   completedAt: string | null;
+  deepLink: string | null;
   resetsAt: string | null;
   rewards: RewardInfo[];
 }
