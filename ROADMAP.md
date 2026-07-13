@@ -423,11 +423,31 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - [x] Doc cleanup: 13 stale/shipped backlog lines marked in
       `UI-UX/NOT_YET_IMPLEMENTED.md`.
 
-**Pre-Arena plan in progress** (see `.claude/plans/check-roadmap-and-all-mutable-dragonfly.md`):
-1. ✅ Announcements + THE SYSTEM (above)
-2. ✅ Moderation groundwork (above)
-3. ✅ Arena Draw competition (above)
-4. ✅ Backlog polish batch (above)
+### Web admin console ✅ (2026-07-13, browser-verified against the live dev API)
+- [x] **`/console`** — Vite + React + TS SPA (deps: react, react-router, vite
+      only; dark System theme). **Served by the API same-origin at
+      `/console/`** (`@fastify/static` + SPA fallback, registered only when a
+      build exists) — zero CORS surface. Dev: `cd console && npm run dev`
+      (:5173 proxies to :3000). Prod build: `cd console && npm run build`.
+- [x] **8 pages**, sidebar filtered by capability, zero-capability sign-ins
+      rejected: Dashboard (live overview counts) · **Content audit** (browse
+      ALL posts/comments, filters, direct remove/restore/warn/suspend/ban) ·
+      Reports queue · Appeals · Audit log (expandable snapshots) · Readers
+      (titles/roles with owner-password confirm) · **Announcements** (THE
+      SYSTEM composer: pin + notify-everyone, unpin, audited retire) ·
+      **Arena events** (quiz/pool/draw builders + auto-announce toggle).
+- [x] Verified in-browser: owner login → dashboard counts → content audit
+      listing all 16 real posts → reports queue showing the real pending
+      report → announcement composer → arena builder with live event history.
+- ⚠ **Deploy note**: Railway build must also run `cd console && npm ci &&
+      npm run build` (or prebuild dist); without it the API simply serves no
+      console (clean fallback).
+
+**Pre-Arena plan — COMPLETE** (see `.claude/plans/check-roadmap-and-all-mutable-dragonfly.md`):
+1. ✅ Announcements + THE SYSTEM · 2. ✅ Moderation groundwork ·
+3. ✅ Arena Draw competition · 4. ✅ Backlog polish batch · 5. ✅ Web admin console
+
+**→ NEXT: Arena PvP** (`ARENA_PLAN.md`) — the final track.
 3. Arena **Draw competition** (unblocked by image storage)
 4. Backlog polish batch (search autocomplete + enriched rows, guild directory
    chips, thread READ ▸, guild XP multiplier perk, motion sweep, reader parity,

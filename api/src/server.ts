@@ -1,6 +1,9 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { registerRoutes } from "./routes/index.js";
@@ -53,6 +56,21 @@ app.setErrorHandler((error, req, reply) => {
 });
 
 registerRoutes(app);
+
+// Web admin console: the built SPA from /console/dist, served same-origin at
+// /console/ (no CORS surface). Registered only when a build exists, so the
+// API boots clean in dev without one — use `vite dev` (:5173) there instead.
+const consoleDist = path.resolve(process.cwd(), "../console/dist");
+if (existsSync(consoleDist)) {
+  await app.register(fastifyStatic, {
+    root: consoleDist,
+    prefix: "/console/",
+    wildcard: false,
+  });
+  // SPA fallback: any non-asset /console path renders the app shell.
+  app.get("/console", (_req, reply) => reply.redirect("/console/"));
+  app.get("/console/*", (_req, reply) => reply.sendFile("index.html", consoleDist));
+}
 
 // Best-effort delivery for queued, spoiler-safe pushes. Database notifications
 // remain the source of truth if the provider or network is unavailable.
