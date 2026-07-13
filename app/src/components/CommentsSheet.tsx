@@ -16,7 +16,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { api, type CommentInfo } from "../api";
+import { api, type CommentInfo, type ReactionType } from "../api";
 import { celebrateBadges } from "../badges";
 import { getSessionUser, subscribeSession } from "../session";
 import { colors } from "../theme";
@@ -26,6 +26,7 @@ import { showLevelUp } from "./LevelUp";
 import { TermsAcceptance } from "./TermsAcceptance";
 import { EyeOff, Flag } from "lucide-react-native";
 import { LinkedText } from "./LinkedText";
+import { ReactionBar } from "./ReactionBar";
 import { ReportModal, type ReportTarget } from "./ReportModal";
 import { showQuestCompletions } from "./QuestToast";
 
@@ -124,16 +125,20 @@ export function CommentsSheet({
     }
   };
 
-  const toggleLike = async (comment: CommentInfo) => {
+  const react = async (comment: CommentInfo, type: ReactionType) => {
     try {
-      const res = await api.toggleLike(comment.id);
+      const res = await api.reactToComment(comment.id, type);
       queryClient.setQueryData<CommentInfo[]>(queryKey, (old) =>
         patchTree(old ?? [], comment.id, (c) => ({
           ...c,
-          likedByMe: res.liked,
-          likeCount: res.likeCount,
+          reactions: res.reactions,
+          myReaction: res.myReaction,
+          likedByMe: !!res.myReaction,
+          likeCount: Object.values(res.reactions).reduce((sum, n) => sum + n, 0),
         })),
       );
+      showQuestCompletions(res.completedQuests);
+      if (res.levelUp) showLevelUp(res.levelUp);
     } catch {
       // leave as-is; next refetch corrects it
     }
@@ -202,22 +207,12 @@ export function CommentsSheet({
         <LinkedText style={styles.commentBody}>{item.body}</LinkedText>
       )}
       <View style={styles.actionsRow}>
-        <Pressable
-          style={styles.likeBtn}
-          onPress={() => (user ? toggleLike(item) : undefined)}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel={item.likedByMe ? "Unlike comment" : "Like comment"}
-        >
-          <Text style={[styles.likeText, item.likedByMe && styles.likedText]}>
-            {item.likedByMe ? "♥" : "♡"}
-          </Text>
-          {item.likeCount > 0 ? (
-            <Text style={[styles.likeCount, item.likedByMe && styles.likedText]}>
-              {item.likeCount}
-            </Text>
-          ) : null}
-        </Pressable>
+        <ReactionBar
+          reactions={item.reactions}
+          myReaction={item.myReaction}
+          onReact={(type) => void react(item, type)}
+          disabled={!user}
+        />
         {user && (
           <Pressable style={styles.replyBtnWrap} onPress={() => setReplyTo(item)} hitSlop={12}>
             <Text style={styles.replyBtn}>Reply</Text>
@@ -369,20 +364,6 @@ const styles = StyleSheet.create({
   delete: { color: colors.danger, fontSize: 12 },
   commentBody: { color: colors.text, marginTop: 5, lineHeight: 20, fontSize: 14.5 },
   actionsRow: { flexDirection: "row", gap: 8, marginTop: 8, alignItems: "center" },
-  likeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  likeText: { color: colors.muted, fontSize: 16, lineHeight: 18 },
-  likeCount: { color: colors.muted, fontSize: 12.5, fontWeight: "700", fontVariant: ["tabular-nums"] },
-  likedText: { color: colors.danger },
   replyBtnWrap: { paddingVertical: 5, paddingHorizontal: 10 },
   replyBtn: { color: colors.accentSoft, fontSize: 13, fontWeight: "700" },
   error: { color: colors.danger, paddingHorizontal: 16, paddingTop: 6 },

@@ -661,11 +661,14 @@ model Block {
 model CommentLike {
   userId    String
   commentId String
+  // Reaction type: like | hype | mindblown | pain | dead — same set as posts.
+  type      String   @default("like")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@id([userId, commentId])
+  @@index([commentId, type])
 }
 
 model Series {

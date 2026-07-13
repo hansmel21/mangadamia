@@ -850,8 +850,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         orderBy: { createdAt: "desc" },
         take: 500,
         include: {
-          _count: { select: { likes: true } },
-          likes: me ? { where: { userId: me.id }, select: { userId: true } } : false,
+          likes: { select: { userId: true, type: true } },
         },
       });
       const identities = await identitiesForUsers(rows.map((c) => c.userId), me?.id);
@@ -866,23 +865,32 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         createdAt: Date;
         likeCount: number;
         likedByMe: boolean;
+        reactions: Record<string, number>;
+        myReaction: string | null;
         mine: boolean;
         replies: CommentNode[];
       }
-      const serialize = (c: (typeof rows)[number]): CommentNode => ({
-        id: c.id,
-        parentId: c.parentId,
-        body: c.body,
-        isSpoiler: c.isSpoiler,
-        author: identities.get(c.userId) ?? null,
-        username: identities.get(c.userId)?.username ?? "Removed Reader",
-        level: identities.get(c.userId)?.level ?? null,
-        createdAt: c.createdAt,
-        likeCount: c._count.likes,
-        likedByMe: me ? c.likes.length > 0 : false,
-        mine: me ? c.userId === me.id : false,
-        replies: [],
-      });
+      const serialize = (c: (typeof rows)[number]): CommentNode => {
+        const reactions: Record<string, number> = {};
+        for (const l of c.likes) reactions[l.type] = (reactions[l.type] ?? 0) + 1;
+        const myReaction = me ? (c.likes.find((l) => l.userId === me.id)?.type ?? null) : null;
+        return {
+          id: c.id,
+          parentId: c.parentId,
+          body: c.body,
+          isSpoiler: c.isSpoiler,
+          author: identities.get(c.userId) ?? null,
+          username: identities.get(c.userId)?.username ?? "Removed Reader",
+          level: identities.get(c.userId)?.level ?? null,
+          createdAt: c.createdAt,
+          likeCount: c.likes.length,
+          likedByMe: !!myReaction,
+          reactions,
+          myReaction,
+          mine: me ? c.userId === me.id : false,
+          replies: [],
+        };
+      };
       // Thread: top-level newest first, replies oldest first underneath
       const byId = new Map(rows.map((c) => [c.id, serialize(c)]));
       const topLevel: CommentNode[] = [];
@@ -989,6 +997,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         createdAt: comment.createdAt,
         likeCount: 0,
         likedByMe: false,
+        reactions: {},
+        myReaction: null,
         mine: true,
         replies: [],
         xpAwarded: 10,
@@ -2186,8 +2196,13 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
-  app.post<{ Params: { id: string } }>("/comments/:id/like", async (req) => {
+  // React to a chapter comment — same emote set and semantics as posts: one
+  // reaction per reader, tap the same emote to clear, another to swap. EXP
+  // tracks whether the reader has *a* reaction, not which emote.
+  app.post<{ Params: { id: string } }>("/comments/:id/react", async (req) => {
     const user = await requireActiveUser(req);
+    const { type } = z.object({ type: z.string() }).parse(req.body);
+    if (!isReactionType(type)) throw httpError(400, "Unknown reaction");
     const comment = await prisma.comment.findUnique({ where: { id: req.params.id } });
     if (!comment || comment.moderationStatus !== "visible") {
       throw httpError(404, "No such comment");
@@ -2196,22 +2211,22 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       throw httpError(403, "You cannot interact with this user");
     }
     const key = { userId: user.id, commentId: req.params.id };
-    const existing = await prisma.commentLike.findUnique({
-      where: { userId_commentId: key },
-    });
-    if (existing) {
+    const existing = await prisma.commentLike.findUnique({ where: { userId_commentId: key } });
+    const action = !existing ? "create" : existing.type === type ? "remove" : "switch";
+    if (action === "create") await prisma.commentLike.create({ data: { ...key, type } });
+    else if (action === "remove")
       await prisma.commentLike.delete({ where: { userId_commentId: key } });
-    } else {
-      await prisma.commentLike.create({ data: key });
-    }
+    else await prisma.commentLike.update({ where: { userId_commentId: key }, data: { type } });
+
     // XP for the comment's author (no farming your own comments)
-    if (comment.userId !== user.id) {
+    const delta = (action === "create" ? 5 : 0) - (action === "remove" ? 5 : 0);
+    if (comment.userId !== user.id && delta !== 0) {
       await prisma.user.update({
         where: { id: comment.userId },
-        data: { xp: { increment: existing ? -5 : 5 } },
+        data: { xp: { increment: delta } },
       });
-      await bumpWeeklyXp(prisma, comment.userId, existing ? -5 : 5);
-      if (!existing) {
+      await bumpWeeklyXp(prisma, comment.userId, delta);
+      if (delta > 0) {
         await creditGuild(comment.userId, 5);
         void bumpGuildEvent(comment.userId, "reaction_received");
         await evaluateBadges(comment.userId);
@@ -2219,8 +2234,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           userId: comment.userId,
           actorId: user.id,
           kind: "comment_like",
-          title: "Your comment got a like",
-          safeBody: `@${user.username} liked your comment.`,
+          title: "Your comment got a reaction",
+          safeBody: `@${user.username} reacted to your comment.`,
           targetUrl: "/notifications",
           metadata: { commentId: comment.id },
           dedupeKey: `comment-like:${comment.id}:${user.id}`,
@@ -2233,16 +2248,22 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         });
       }
     }
-    const likeCount = await prisma.commentLike.count({ where: { commentId: req.params.id } });
-    const activity = !existing
-      ? await recordActivity(user.id, { type: "like_given", eventKey: `comment:${comment.id}` })
-      : { completedQuests: [], levelUp: null };
-    if (!existing && comment.userId !== user.id) {
+    const activity =
+      action === "create"
+        ? await recordActivity(user.id, { type: "like_given", eventKey: `comment:${comment.id}` })
+        : { completedQuests: [], levelUp: null };
+    if (action === "create" && comment.userId !== user.id) {
       await recordActivity(comment.userId, {
         type: "like_received",
         eventKey: `comment:${comment.id}:${user.id}`,
       });
     }
-    return { liked: !existing, likeCount, ...activity };
+    const groups = await prisma.commentLike.groupBy({
+      by: ["type"],
+      where: { commentId: comment.id },
+      _count: true,
+    });
+    const reactions = Object.fromEntries(groups.map((g) => [g.type, g._count]));
+    return { reactions, myReaction: action === "remove" ? null : type, ...activity };
   });
 }

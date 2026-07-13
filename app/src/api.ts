@@ -344,6 +344,8 @@ export interface CommentInfo {
   createdAt: string;
   likeCount: number;
   likedByMe: boolean;
+  reactions: Record<string, number>;
+  myReaction: string | null;
   mine: boolean;
   replies?: CommentInfo[];
   completedQuests?: QuestCompletion[];
@@ -1006,11 +1008,13 @@ export const api = {
     }),
   deleteComment: (id: string) =>
     request<{ ok: boolean }>(`/comments/${encodeURIComponent(id)}`, "DELETE"),
-  toggleLike: (id: string) =>
-    request<{ liked: boolean; likeCount: number }>(
-      `/comments/${encodeURIComponent(id)}/like`,
-      "POST",
-    ),
+  reactToComment: (id: string, type: ReactionType) =>
+    request<{
+      reactions: Record<string, number>;
+      myReaction: string | null;
+      completedQuests: QuestCompletion[];
+      levelUp: number | null;
+    }>(`/comments/${encodeURIComponent(id)}/react`, "POST", { type }),
 
   adminReports: (status: "pending" | "resolved" | "dismissed" = "pending") =>
     get<AdminReportResponse>(`/admin/reports?status=${status}`),
