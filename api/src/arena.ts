@@ -45,6 +45,9 @@ export interface QuizConfig {
 export interface PollConfig {
   options: string[];
 }
+export interface DrawConfig {
+  prompt: string;
+}
 
 export function arenaStatus(e: { startsAt: Date; endsAt: Date }, now = new Date()): string {
   if (now < e.startsAt) return "upcoming";
@@ -57,9 +60,12 @@ export function arenaStatus(e: { startsAt: Date; endsAt: Date }, now = new Date(
 export const QUIZ_ENTRY_XP = 10;
 export const QUIZ_PER_CORRECT_XP = 5;
 export const POLL_VOTE_XP = 5;
+export const DRAW_ENTRY_XP = 10;
+export const DRAW_VOTE_XP = 2;
 // Close-out bonuses (paid lazily when an ended event is first read).
 export const QUIZ_WINNER_XP = 100;
 export const POLL_MAJORITY_XP = 20;
+export const DRAW_WINNER_XP = 100;
 
 export function scoreQuiz(config: QuizConfig, answers: number[]): number {
   let score = 0;
@@ -136,6 +142,54 @@ export async function finalizeArenaEvent(eventId: string): Promise<void> {
           safeBody: `You won "${event.title}" — +${QUIZ_WINNER_XP} XP and the Gate Scholar title.`,
           targetUrl: "/arena",
           dedupeKey: `arena-win:${event.id}`,
+        });
+      }
+    } else if (event.kind === "draw") {
+      // Most community votes wins; ties break to the earliest entry.
+      const tally = await prisma.arenaVote.groupBy({
+        by: ["entryId"],
+        where: { eventId: event.id },
+        _count: true,
+      });
+      const votesByEntry = new Map(tally.map((t) => [t.entryId, t._count]));
+      const winner = [...event.entries].sort((a, b) => {
+        const diff = (votesByEntry.get(b.id) ?? 0) - (votesByEntry.get(a.id) ?? 0);
+        if (diff !== 0) return diff;
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      })[0];
+      if (winner && (votesByEntry.get(winner.id) ?? 0) > 0) {
+        await awardArenaXp(winner.userId, DRAW_WINNER_XP);
+        await prisma.userTitle.upsert({
+          where: { userId_titleId: { userId: winner.userId, titleId: "gate-artisan" } },
+          create: { userId: winner.userId, titleId: "gate-artisan", source: "arena" },
+          update: {},
+        });
+        await prisma.rewardGrant.upsert({
+          where: {
+            userId_rewardType_rewardId_sourceType_sourceId: {
+              userId: winner.userId,
+              rewardType: "title",
+              rewardId: "gate-artisan",
+              sourceType: "arena",
+              sourceId: event.id,
+            },
+          },
+          create: {
+            userId: winner.userId,
+            rewardType: "title",
+            rewardId: "gate-artisan",
+            sourceType: "arena",
+            sourceId: event.id,
+          },
+          update: {},
+        });
+        await createNotification({
+          userId: winner.userId,
+          kind: "reward_granted",
+          title: "Draw competition won!",
+          safeBody: `Your entry took "${event.title}" — +${DRAW_WINNER_XP} XP and the Gate Artisan title.`,
+          targetUrl: "/arena",
+          dedupeKey: `arena-draw-win:${event.id}`,
         });
       }
     } else if (event.kind === "poll") {

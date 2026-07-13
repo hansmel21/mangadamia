@@ -7,11 +7,14 @@ import { z } from "zod";
 import {
   arenaStatus,
   awardArenaXp,
+  DRAW_ENTRY_XP,
+  DRAW_VOTE_XP,
   finalizeArenaEvent,
   POLL_VOTE_XP,
   QUIZ_ENTRY_XP,
   QUIZ_PER_CORRECT_XP,
   scoreQuiz,
+  type DrawConfig,
   type PollConfig,
   type QuizConfig,
 } from "../arena.js";
@@ -21,6 +24,7 @@ import { prisma } from "../db/client.js";
 import { currentWeekKey, weekEndsAt, weekNumber } from "../guilds.js";
 import { identitiesForUsers } from "../identity.js";
 import { recordActivity } from "../quests.js";
+import { isStoredImageUrl } from "../storage.js";
 
 function httpError(statusCode: number, message: string): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -41,6 +45,9 @@ const quizConfigSchema = z.object({
 });
 const pollConfigSchema = z.object({
   options: z.array(z.string().trim().min(1).max(120)).min(2).max(6),
+});
+const drawConfigSchema = z.object({
+  prompt: z.string().trim().min(3).max(300),
 });
 
 // Public payload for a quiz question: never leaks the correct index.
@@ -140,6 +147,42 @@ export function registerArenaRoutes(app: FastifyInstance): void {
       };
     }
 
+    if (event.kind === "draw") {
+      const config = event.config as unknown as DrawConfig;
+      const [entries, votes, myVote] = await Promise.all([
+        prisma.arenaEntry.findMany({
+          where: { eventId: event.id },
+          orderBy: { createdAt: "asc" },
+        }),
+        prisma.arenaVote.groupBy({ by: ["entryId"], where: { eventId: event.id }, _count: true }),
+        me
+          ? prisma.arenaVote.findUnique({
+              where: { eventId_voterId: { eventId: event.id, voterId: me.id } },
+            })
+          : null,
+      ]);
+      const votesByEntry = new Map(votes.map((v) => [v.entryId, v._count]));
+      const identities = await identitiesForUsers(entries.map((e) => e.userId), me?.id);
+      const gallery = entries
+        .map((e) => ({
+          id: e.id,
+          imageUrl: (e.payload as { imageUrl?: string }).imageUrl ?? null,
+          caption: (e.payload as { caption?: string }).caption ?? null,
+          author: identities.get(e.userId) ?? null,
+          votes: votesByEntry.get(e.id) ?? 0,
+          mine: !!me && e.userId === me.id,
+          createdAt: e.createdAt,
+        }))
+        .sort((a, b) => b.votes - a.votes || a.createdAt.getTime() - b.createdAt.getTime());
+      return {
+        ...base,
+        prompt: config.prompt,
+        entries: gallery,
+        myVoteEntryId: myVote?.entryId ?? null,
+        totalVotes: votes.reduce((sum, v) => sum + v._count, 0),
+      };
+    }
+
     // poll
     const config = event.config as unknown as PollConfig;
     const tally = await prisma.arenaEntry.findMany({
@@ -202,6 +245,40 @@ export function registerArenaRoutes(app: FastifyInstance): void {
         };
       }
 
+      if (event.kind === "draw") {
+        const { imageUrl, caption } = z
+          .object({
+            imageUrl: z.string().trim().max(500),
+            caption: z.string().trim().max(140).optional(),
+          })
+          .parse(req.body);
+        if (!isStoredImageUrl(imageUrl)) {
+          throw httpError(400, "Upload your drawing through the app's photo picker first");
+        }
+        const existing = await prisma.arenaEntry.findUnique({
+          where: { eventId_userId: { eventId: event.id, userId: user.id } },
+        });
+        if (existing) throw httpError(409, "You already entered this competition");
+        await prisma.arenaEntry.create({
+          data: {
+            eventId: event.id,
+            userId: user.id,
+            payload: { imageUrl, ...(caption ? { caption } : {}) },
+          },
+        });
+        await awardArenaXp(user.id, DRAW_ENTRY_XP);
+        const activity = await recordActivity(user.id, {
+          type: "arena_entry",
+          eventKey: event.id,
+        });
+        return {
+          ok: true,
+          xpAwarded: DRAW_ENTRY_XP,
+          levelUp: activity.levelUp,
+          completedQuests: activity.completedQuests,
+        };
+      }
+
       // poll — one stake per reader; re-voting moves it (no extra XP).
       const config = event.config as unknown as PollConfig;
       const { option } = z
@@ -229,6 +306,39 @@ export function registerArenaRoutes(app: FastifyInstance): void {
         levelUp: activity.levelUp,
         completedQuests: activity.completedQuests,
       };
+    },
+  );
+
+  // ── Draw competition: vote for an entry ───────────────────────────────
+  // One vote per reader per event; re-voting moves it. Artists can't vote
+  // for their own entry.
+  app.post<{ Params: { id: string } }>(
+    "/arena/events/:id/vote",
+    { config: { rateLimit: { max: 60, timeWindow: "1 hour" } } },
+    async (req) => {
+      const user = await requireActiveUser(req);
+      const { entryId } = z.object({ entryId: z.string().min(1) }).parse(req.body);
+      const event = await prisma.arenaEvent.findUnique({ where: { id: req.params.id } });
+      if (!event || event.kind !== "draw") throw httpError(404, "No such competition");
+      if (arenaStatus(event) !== "live") throw httpError(409, "Voting is closed");
+      const entry = await prisma.arenaEntry.findUnique({ where: { id: entryId } });
+      if (!entry || entry.eventId !== event.id) throw httpError(404, "No such entry");
+      if (entry.userId === user.id) throw httpError(400, "You can't vote for your own entry");
+      const existing = await prisma.arenaVote.findUnique({
+        where: { eventId_voterId: { eventId: event.id, voterId: user.id } },
+      });
+      if (existing) {
+        await prisma.arenaVote.update({
+          where: { eventId_voterId: { eventId: event.id, voterId: user.id } },
+          data: { entryId },
+        });
+        return { ok: true, myVoteEntryId: entryId, xpAwarded: 0 };
+      }
+      await prisma.arenaVote.create({
+        data: { eventId: event.id, voterId: user.id, entryId },
+      });
+      await awardArenaXp(user.id, DRAW_VOTE_XP);
+      return { ok: true, myVoteEntryId: entryId, xpAwarded: DRAW_VOTE_XP };
     },
   );
 
@@ -274,7 +384,7 @@ export function registerArenaRoutes(app: FastifyInstance): void {
     const admin = await requireCapability(req, "manage_rewards");
     const body = z
       .object({
-        kind: z.enum(["quiz", "poll"]),
+        kind: z.enum(["quiz", "poll", "draw"]),
         title: z.string().trim().min(3).max(120),
         description: z.string().trim().max(500).default(""),
         startsAt: z.coerce.date(),
@@ -289,7 +399,11 @@ export function registerArenaRoutes(app: FastifyInstance): void {
       .parse(req.body);
     if (body.endsAt <= body.startsAt) throw httpError(400, "endsAt must be after startsAt");
     const config =
-      body.kind === "quiz" ? quizConfigSchema.parse(body.config) : pollConfigSchema.parse(body.config);
+      body.kind === "quiz"
+        ? quizConfigSchema.parse(body.config)
+        : body.kind === "draw"
+          ? drawConfigSchema.parse(body.config)
+          : pollConfigSchema.parse(body.config);
     if (body.kind === "quiz") {
       for (const question of (config as QuizConfig).questions) {
         if (question.correct >= question.options.length) {

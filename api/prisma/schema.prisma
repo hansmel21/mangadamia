@@ -110,6 +110,7 @@ model User {
   guildXpContributions GuildXpTransaction[]
   pollVotes            PollVote[]
   arenaEntries         ArenaEntry[]
+  arenaVotes           ArenaVote[]
 }
 
 // ── Arena: scheduled weekly games (ARENA_PLAN.md, phase 1) ─────────────────
@@ -117,7 +118,7 @@ model User {
 // finalizedAt marks the lazy close-out that pays winner rewards.
 model ArenaEvent {
   id          String       @id @default(cuid())
-  kind        String // "quiz" | "poll"
+  kind        String // "quiz" | "poll" | "draw"
   title       String
   description String
   startsAt    DateTime
@@ -125,24 +126,43 @@ model ArenaEvent {
   canonicalId String? // optional series focus
   // quiz: { questions: [{ q, options[<=4], correct }], durationSec }
   // poll: { options: string[] }
+  // draw: { prompt: string }
   config      Json
   finalizedAt DateTime?
   createdAt   DateTime     @default(now())
   entries     ArenaEntry[]
+  votes       ArenaVote[]
 
   @@index([endsAt])
 }
 
+// Draw-competition votes: voters aren't entrants, one vote per reader per
+// event, re-voting moves it (same rule as prediction pools).
+model ArenaVote {
+  eventId   String
+  voterId   String
+  entryId   String
+  createdAt DateTime   @default(now())
+  event     ArenaEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  entry     ArenaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  voter     User       @relation(fields: [voterId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, voterId])
+  @@index([entryId])
+}
+
 model ArenaEntry {
-  id        String     @id @default(cuid())
+  id        String      @id @default(cuid())
   eventId   String
   userId    String
   // quiz: { answers: number[], ms: number }; poll: { option: number }
+  // draw: { imageUrl: string, caption?: string }
   payload   Json
   score     Int?
-  createdAt DateTime   @default(now())
-  event     ArenaEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  event     ArenaEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  votes     ArenaVote[]
 
   @@unique([eventId, userId]) // one entry per reader per event
   @@index([eventId, score])

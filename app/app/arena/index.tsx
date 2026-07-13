@@ -47,6 +47,7 @@ export default function ArenaScreen() {
   const events = hub.data?.events ?? [];
   const liveQuiz = events.find((e) => e.kind === "quiz" && e.status === "live");
   const livePolls = events.filter((e) => e.kind === "poll" && e.status === "live");
+  const liveDraws = events.filter((e) => e.kind === "draw" && e.status === "live");
   const past = events.filter((e) => e.status === "ended");
 
   return (
@@ -94,6 +95,24 @@ export default function ArenaScreen() {
           {/* prediction pools */}
           {livePolls.map((poll) => (
             <PoolCard key={poll.id} summary={poll} signedIn={!!user} />
+          ))}
+
+          {/* draw competitions */}
+          {liveDraws.map((draw) => (
+            <Pressable
+              key={draw.id}
+              style={({ pressed }) => [styles.drawCard, pressed && { opacity: 0.85 }]}
+              onPress={() => router.push({ pathname: "/arena/[id]", params: { id: draw.id } })}
+              accessibilityRole="button"
+              accessibilityLabel="Open the draw competition"
+            >
+              <Text style={styles.drawEyebrow}>🎨 DRAW COMPETITION · LIVE</Text>
+              <Text style={styles.drawTitle}>{draw.title}</Text>
+              <Text style={styles.drawMeta}>
+                {draw.entryCount} {draw.entryCount === 1 ? "entry" : "entries"} ·{" "}
+                {draw.entered ? "you're in — go vote ▸" : "submit your drawing ▸"}
+              </Text>
+            </Pressable>
           ))}
 
           {/* weekly EXP board */}
@@ -144,7 +163,7 @@ export default function ArenaScreen() {
                   key={event.id}
                   style={styles.pastRow}
                   onPress={() =>
-                    event.kind === "quiz"
+                    event.kind === "quiz" || event.kind === "draw"
                       ? router.push({ pathname: "/arena/[id]", params: { id: event.id } })
                       : undefined
                   }
@@ -353,6 +372,18 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   quietText: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+
+  drawCard: {
+    borderWidth: 1.5,
+    borderColor: "rgba(255,77,135,0.5)",
+    backgroundColor: "rgba(255,77,135,0.05)",
+    borderRadius: 4,
+    padding: 14,
+    gap: 5,
+  },
+  drawEyebrow: { color: "#FF4D87", fontSize: 9.5, fontWeight: "900", letterSpacing: 1.6 },
+  drawTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
+  drawMeta: { color: colors.muted, fontSize: 11.5 },
 
   quizCard: {
     position: "relative",

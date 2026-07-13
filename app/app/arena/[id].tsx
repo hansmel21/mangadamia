@@ -1,10 +1,12 @@
-// Quiz runner — one question at a time with a countdown, answers locked on
-// tap, one submission per reader. The answer key never reaches the device
-// until the entry is locked, so results (✓/✗ review) render only after
-// submission or once the event has ended.
+// Arena event screen — quiz runner (one question at a time, countdown,
+// answer key withheld until entry locks) and the draw-competition gallery
+// (submit a drawing, vote for favourites, winner banner after close).
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Image as ExpoImage } from "expo-image";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { ArrowLeft } from "lucide-react-native";
+import { ArrowLeft, ImagePlus } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,14 +17,20 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api, type ArenaQuizDetail } from "../../src/api";
+import {
+  api,
+  resolveMediaUrl,
+  type ArenaDrawDetail,
+  type ArenaQuizDetail,
+} from "../../src/api";
 import { showExpGain } from "../../src/components/ExpToast";
 import { showLevelUp } from "../../src/components/LevelUp";
 import { showQuestCompletions } from "../../src/components/QuestToast";
 import { ScreenTitle, SystemKey } from "../../src/components/SystemUI";
+import { UserIdentity } from "../../src/components/UserIdentity";
 import { colors, fonts } from "../../src/theme";
 
-export default function QuizRunnerScreen() {
+export default function ArenaEventScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -32,6 +40,13 @@ export default function QuizRunnerScreen() {
     enabled: !!id,
   });
   const quiz = event.data?.kind === "quiz" ? (event.data as ArenaQuizDetail) : null;
+  const draw = event.data?.kind === "draw" ? (event.data as ArenaDrawDetail) : null;
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["arenaEvent", id] });
+    void queryClient.invalidateQueries({ queryKey: ["arenaEvents"] });
+    void queryClient.invalidateQueries({ queryKey: ["weeklyBoard"] });
+  };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -41,11 +56,13 @@ export default function QuizRunnerScreen() {
           <ArrowLeft color={colors.text} size={22} strokeWidth={2} />
         </Pressable>
         <ScreenTitle tone="foil" size={16}>
-          WEEKLY QUIZ
+          {draw ? "DRAW COMPETITION" : "WEEKLY QUIZ"}
         </ScreenTitle>
       </View>
       {event.isLoading ? (
         <ActivityIndicator color={colors.foil} style={{ marginTop: 48 }} />
+      ) : draw ? (
+        <DrawView draw={draw} onChanged={refresh} />
       ) : !quiz ? (
         <Text style={styles.missing}>This event is no longer available.</Text>
       ) : quiz.entered || quiz.status === "ended" ? (
@@ -53,16 +70,152 @@ export default function QuizRunnerScreen() {
       ) : quiz.status === "upcoming" ? (
         <Text style={styles.missing}>This quiz hasn't opened yet.</Text>
       ) : (
-        <Runner
-          quiz={quiz}
-          onSubmitted={() => {
-            void queryClient.invalidateQueries({ queryKey: ["arenaEvent", id] });
-            void queryClient.invalidateQueries({ queryKey: ["arenaEvents"] });
-            void queryClient.invalidateQueries({ queryKey: ["weeklyBoard"] });
-          }}
-        />
+        <Runner quiz={quiz} onSubmitted={refresh} />
       )}
     </View>
+  );
+}
+
+// ── Draw competition: prompt, submit, gallery + votes ───────────────────────
+function DrawView({ draw, onChanged }: { draw: ArenaDrawDetail; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const live = draw.status === "live";
+  const winner = draw.status === "ended" && draw.entries.length > 0 ? draw.entries[0] : null;
+
+  const submitEntry = async () => {
+    if (busy) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: false,
+      quality: 1,
+    });
+    if (picked.canceled || !picked.assets[0]) return;
+    setBusy(true);
+    setError("");
+    try {
+      const asset = picked.assets[0];
+      const jpeg = await manipulateAsync(
+        asset.uri,
+        asset.width > 1600 ? [{ resize: { width: 1600 } }] : [],
+        { compress: 0.85, format: SaveFormat.JPEG },
+      );
+      const { url } = await api.uploadImage(jpeg.uri);
+      const res = await api.arenaDrawEntry(draw.id, url);
+      showExpGain(res.xpAwarded);
+      showQuestCompletions(res.completedQuests);
+      if (res.levelUp) showLevelUp(res.levelUp);
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const vote = async (entryId: string) => {
+    if (busy || !live) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await api.arenaDrawVote(draw.id, entryId);
+      if (res.xpAwarded > 0) showExpGain(res.xpAwarded);
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.runnerBody}>
+      <View style={styles.promptCard}>
+        <View style={[styles.tick, styles.tickTL]} pointerEvents="none" />
+        <View style={[styles.tick, styles.tickBR]} pointerEvents="none" />
+        <Text style={styles.promptEyebrow}>◆ THIS WEEK'S PROMPT</Text>
+        <Text style={styles.questionText}>{draw.prompt}</Text>
+        <Text style={styles.promptMeta}>
+          {draw.entryCount} {draw.entryCount === 1 ? "entry" : "entries"} · {draw.totalVotes}{" "}
+          {draw.totalVotes === 1 ? "vote" : "votes"}
+          {draw.status === "upcoming" ? " · opens soon" : ""}
+        </Text>
+      </View>
+
+      {winner ? (
+        <View style={styles.winnerBanner}>
+          <Text style={styles.winnerEyebrow}>👑 WINNER</Text>
+          {winner.author ? <UserIdentity identity={winner.author} compact /> : null}
+          <Text style={styles.winnerVotes}>{winner.votes} votes · Gate Artisan</Text>
+        </View>
+      ) : null}
+
+      {live && !draw.entered ? (
+        <Pressable
+          style={({ pressed }) => [styles.submitKey, (pressed || busy) && { opacity: 0.7 }]}
+          disabled={busy}
+          onPress={() => void submitEntry()}
+          accessibilityRole="button"
+          accessibilityLabel="Submit your drawing"
+        >
+          {busy ? (
+            <ActivityIndicator color={colors.accentSoft} size="small" />
+          ) : (
+            <>
+              <ImagePlus color={colors.accentSoft} size={16} strokeWidth={2.2} />
+              <Text style={styles.submitKeyText}>SUBMIT YOUR DRAWING</Text>
+            </>
+          )}
+        </Pressable>
+      ) : null}
+
+      {error ? <Text style={styles.drawError}>{error}</Text> : null}
+
+      <View style={styles.gallery}>
+        {draw.entries.map((entry) =>
+          entry.imageUrl ? (
+            <Pressable
+              key={entry.id}
+              style={[
+                styles.galleryCell,
+                draw.myVoteEntryId === entry.id && styles.galleryCellVoted,
+              ]}
+              disabled={!live || entry.mine || busy}
+              onPress={() => void vote(entry.id)}
+              accessibilityRole="button"
+              accessibilityLabel={entry.mine ? "Your entry" : "Vote for this entry"}
+            >
+              <ExpoImage
+                source={{ uri: resolveMediaUrl(entry.imageUrl) }}
+                style={styles.galleryImage}
+                contentFit="cover"
+                transition={120}
+              />
+              <View style={styles.galleryMeta}>
+                {entry.author ? (
+                  <UserIdentity identity={entry.author} compact />
+                ) : null}
+                <Text
+                  style={[
+                    styles.galleryVotes,
+                    draw.myVoteEntryId === entry.id && { color: colors.foil },
+                  ]}
+                >
+                  {entry.mine ? "YOURS" : `▲ ${entry.votes}`}
+                </Text>
+              </View>
+            </Pressable>
+          ) : null,
+        )}
+      </View>
+      {draw.entries.length === 0 ? (
+        <Text style={styles.missing}>
+          {live ? "No entries yet — claim the first slot." : "Nobody entered this one."}
+        </Text>
+      ) : live ? (
+        <Text style={styles.hint}>tap an entry to vote · one vote, re-tapping moves it</Text>
+      ) : null}
+    </ScrollView>
   );
 }
 
@@ -338,4 +491,56 @@ const styles = StyleSheet.create({
   },
   reviewQ: { color: colors.text, fontSize: 12.5, fontWeight: "700", lineHeight: 17 },
   reviewA: { fontSize: 11.5, marginTop: 5, fontWeight: "600" },
+
+  promptCard: {
+    position: "relative",
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: "rgba(245,184,76,0.5)",
+    borderRadius: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  promptEyebrow: { color: colors.foil, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.6 },
+  promptMeta: { color: colors.muted, fontSize: 11 },
+  winnerBanner: {
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: "rgba(245,184,76,0.6)",
+    borderRadius: 4,
+    padding: 14,
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(245,184,76,0.06)",
+  },
+  winnerEyebrow: { color: colors.foil, fontSize: 11, fontWeight: "900", letterSpacing: 2 },
+  winnerVotes: { color: colors.foilSoft, fontSize: 11, fontWeight: "800" },
+  submitKey: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(124,92,255,0.18)",
+    borderWidth: 1.5,
+    borderColor: "rgba(124,92,255,0.65)",
+    borderRadius: 8,
+    paddingVertical: 13,
+  },
+  submitKeyText: { color: colors.accentSoft, fontWeight: "900", fontSize: 12, letterSpacing: 1.4 },
+  drawError: { color: colors.danger, marginTop: 10, fontSize: 12.5, textAlign: "center" },
+  gallery: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  galleryCell: {
+    width: "48%",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    overflow: "hidden",
+    backgroundColor: colors.card,
+  },
+  galleryCellVoted: { borderColor: colors.foil, borderWidth: 1.5 },
+  galleryImage: { width: "100%", aspectRatio: 1 },
+  galleryMeta: { padding: 8, gap: 4 },
+  galleryVotes: { color: colors.accentSoft, fontSize: 10.5, fontWeight: "900", letterSpacing: 0.5 },
 });

@@ -274,7 +274,7 @@ export type ArenaStatus = "upcoming" | "live" | "ended";
 
 export interface ArenaEventSummary {
   id: string;
-  kind: "quiz" | "poll";
+  kind: "quiz" | "poll" | "draw";
   title: string;
   description: string;
   startsAt: string;
@@ -307,6 +307,24 @@ export interface ArenaPollDetail extends ArenaEventSummary {
   votes: number[];
   totalVotes: number;
   myVote: number | null;
+}
+
+export interface ArenaDrawEntry {
+  id: string;
+  imageUrl: string | null;
+  caption: string | null;
+  author: PublicIdentity | null;
+  votes: number;
+  mine: boolean;
+  createdAt: string;
+}
+
+export interface ArenaDrawDetail extends ArenaEventSummary {
+  kind: "draw";
+  prompt: string;
+  entries: ArenaDrawEntry[];
+  myVoteEntryId: string | null;
+  totalVotes: number;
 }
 
 export interface WeeklyBoardRow {
@@ -991,7 +1009,22 @@ export const api = {
     ),
   arenaEvents: () => get<ArenaEventsResponse>("/arena/events"),
   arenaEvent: (id: string) =>
-    get<ArenaQuizDetail | ArenaPollDetail>(`/arena/events/${encodeURIComponent(id)}`),
+    get<ArenaQuizDetail | ArenaPollDetail | ArenaDrawDetail>(
+      `/arena/events/${encodeURIComponent(id)}`,
+    ),
+  arenaDrawEntry: (id: string, imageUrl: string, caption?: string) =>
+    request<{
+      ok: boolean;
+      xpAwarded: number;
+      levelUp: number | null;
+      completedQuests: QuestCompletion[];
+    }>(`/arena/events/${encodeURIComponent(id)}/entry`, "POST", { imageUrl, caption }),
+  arenaDrawVote: (id: string, entryId: string) =>
+    request<{ ok: boolean; myVoteEntryId: string; xpAwarded: number }>(
+      `/arena/events/${encodeURIComponent(id)}/vote`,
+      "POST",
+      { entryId },
+    ),
   arenaQuizEntry: (id: string, answers: number[], ms: number) =>
     request<{
       ok: boolean;

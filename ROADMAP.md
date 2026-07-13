@@ -389,9 +389,25 @@ contribution board · edit UI · weekly events · perks/decorations.**
       counts. E2E: unreported post found → direct remove (404 public) →
       restore (200) → audit shows both with `report=none`.
 
+### Arena Draw competition ✅ (2026-07-13, API E2E-tested; UI pending device test)
+- [x] **Draw events** — ArenaEvent kind `draw` (`config.prompt`), entries are
+      uploaded drawings (`isStoredImageUrl`-validated, +10 XP), **ArenaVote**
+      (migration `arena_draw`): one community vote per reader, re-vote moves
+      it, no self-votes, +2 XP first vote. Close-out: most votes wins
+      (ties → earliest entry) → **+100 XP + Gate Artisan title** (seeded) +
+      notification.
+- [x] Client: draw card on the Arena hub; event screen renders the prompt,
+      SUBMIT YOUR DRAWING (reuses the photo pick→JPEG→upload pipeline),
+      2-col vote gallery with author identities + live counts, gold border on
+      your vote, 👑 WINNER banner after close. Admin creator accepts
+      `kind: "draw"` (console UI comes with the web console phase).
+- [x] E2E: create → upload entry (+10) → vote (+2) → self-vote blocked →
+      finalize → winner 110 XP + gate-artisan.
+
 **Pre-Arena plan in progress** (see `.claude/plans/check-roadmap-and-all-mutable-dragonfly.md`):
 1. ✅ Announcements + THE SYSTEM (above)
 2. ✅ Moderation groundwork (above)
+3. ✅ Arena Draw competition (above)
 3. Arena **Draw competition** (unblocked by image storage)
 4. Backlog polish batch (search autocomplete + enriched rows, guild directory
    chips, thread READ ▸, guild XP multiplier perk, motion sweep, reader parity,
