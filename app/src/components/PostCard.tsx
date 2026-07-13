@@ -89,6 +89,7 @@ export function PostCard({
   const threadCount = post.commentCount ?? post.replies.length;
   const directReplies = post.replies.length;
   const canReply = !preview && !!onReply;
+  const official = !!post.official;
   const kindMeta = POST_KINDS[post.kind] ?? POST_KINDS.record;
 
   const seriesChips =
@@ -104,24 +105,29 @@ export function PostCard({
         <>
           {/* Kind notch breaking the top border + corner ticks — the mini
               System-window treatment; the thread root gets all four. */}
-          <View style={[styles.notch, { borderColor: kindMeta.color }]} pointerEvents="none">
-            <Text style={[styles.notchText, { color: kindMeta.color }]}>
-              {kindMeta.icon} {kindMeta.label}
+          <View
+            style={[styles.notch, { borderColor: official ? colors.data : kindMeta.color }]}
+            pointerEvents="none"
+          >
+            <Text style={[styles.notchText, { color: official ? colors.data : kindMeta.color }]}>
+              {official ? "⚙ THE SYSTEM" : `${kindMeta.icon} ${kindMeta.label}`}
             </Text>
           </View>
-          <View style={[styles.tick, styles.tickTL]} pointerEvents="none" />
-          <View style={[styles.tick, styles.tickTR]} pointerEvents="none" />
-          {root ? (
+          <View style={[styles.tick, styles.tickTL, official && styles.tickOfficial]} pointerEvents="none" />
+          <View style={[styles.tick, styles.tickTR, official && styles.tickOfficial]} pointerEvents="none" />
+          {root || official ? (
             <>
-              <View style={[styles.tick, styles.tickBL]} pointerEvents="none" />
-              <View style={[styles.tick, styles.tickBR]} pointerEvents="none" />
+              <View style={[styles.tick, styles.tickBL, official && styles.tickOfficial]} pointerEvents="none" />
+              <View style={[styles.tick, styles.tickBR, official && styles.tickOfficial]} pointerEvents="none" />
             </>
           ) : null}
         </>
       ) : null}
 
       <View style={[styles.headerRow, !isReply && styles.headerRowNotched]}>
-        {post.author ? (
+        {official ? (
+          <Text style={styles.systemWordmark}>⟐ THE SYSTEM</Text>
+        ) : post.author ? (
           <UserIdentity
             identity={post.author}
             compact
@@ -346,7 +352,11 @@ export function PostCard({
     return (
       <Pressable
         onPress={() => onOpen?.(post)}
-        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        style={({ pressed }) => [
+          styles.card,
+          official && styles.cardOfficial,
+          pressed && styles.cardPressed,
+        ]}
         accessibilityRole="button"
         accessibilityLabel="Open post thread"
       >
@@ -355,7 +365,11 @@ export function PostCard({
     );
   }
 
-  return <View style={[styles.card, root && styles.cardRoot]}>{inner}</View>;
+  return (
+    <View style={[styles.card, root && styles.cardRoot, official && styles.cardOfficial]}>
+      {inner}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -371,6 +385,22 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   cardPressed: { borderColor: "rgba(124,92,255,0.7)", opacity: 0.96 },
+  cardOfficial: {
+    borderWidth: 1.5,
+    borderColor: "rgba(84,214,255,0.55)",
+    shadowColor: colors.data,
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
+  },
+  tickOfficial: { borderColor: colors.data },
+  systemWordmark: {
+    color: colors.data,
+    fontSize: 12.5,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
   cardRoot: {
     borderWidth: 1.5,
     borderColor: "rgba(124,92,255,0.55)",

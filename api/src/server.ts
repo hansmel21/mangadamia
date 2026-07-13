@@ -56,8 +56,9 @@ registerRoutes(app);
 
 // Best-effort delivery for queued, spoiler-safe pushes. Database notifications
 // remain the source of truth if the provider or network is unavailable.
-void dispatchPendingPushes();
-setInterval(() => void dispatchPendingPushes(), 30_000).unref();
+// Batch of 250 so an announcement blast to the whole userbase drains quickly.
+void dispatchPendingPushes(250);
+setInterval(() => void dispatchPendingPushes(250), 30_000).unref();
 
 // Scheduled close-outs: ended arena events pay their winners and finished
 // guild wars freeze + pay promptly instead of waiting for the next read.

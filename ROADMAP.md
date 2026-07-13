@@ -351,7 +351,40 @@ contribution board · edit UI · weekly events · perks/decorations.**
       records RECENT SCANS), roster **idle Nh/Nd** labels for offline members,
       **breathing pulse** on the online dots (guild banner + roster).
 
+### THE SYSTEM: official announcements ✅ (2026-07-13, API E2E-tested; UI pending device test)
+- [x] **Official posts** — `Post.isOfficial` (migration `official_announcements`,
+      server-set only — unspoofable from the composer); serialized as
+      **THE SYSTEM** (`official: true`, no author identity); `pinned` holds
+      them in `GET /announcements/active` (top 3, block-proof). Feed block
+      filter bypassed for officials in the global feed + thread view only.
+- [x] **Admin endpoints** (cap `manage_rewards`): create (`pinned`/`notify`
+      options), list, pin/unpin, audited delete. **Broadcast fan-out**:
+      batched `createMany` notifications to all active readers
+      (kind `announcement` → existing announcements preference bucket),
+      idempotent dedupe, push dispatcher batch raised to 250.
+- [x] **Arena auto-announce** — `POST /admin/arena/events` takes
+      `announce: { pinned, notify }` and publishes "⚔ NEW ARENA EVENT…".
+- [x] **Client** — SYSTEM NOTICE kind; official PostCards render with cyan
+      System treatment (⚙ THE SYSTEM notch, 4 corner ticks + glow, wordmark
+      instead of avatar); pinned notices at the top of the Dungeon feed
+      (deduped from the stream). E2E: publish → active → 4/4 fan-out →
+      unpin → audited delete.
+- [x] Fix: Dungeon filter deck no longer pushes the sort key off-screen
+      (chips wrap in their own column; HOT ▾ keeps a fixed slot).
+
 ## 🗺️ Deferred / next (phased — see the plan file)
+
+**Pre-Arena plan in progress** (see `.claude/plans/check-roadmap-and-all-mutable-dragonfly.md`):
+1. ✅ Announcements + THE SYSTEM (above)
+2. Moderation groundwork: `applyModerationAction` refactor, `GET /admin/content`
+   (browse ALL posts/comments), direct + restore actions, `GET /admin/overview`
+3. Arena **Draw competition** (unblocked by image storage)
+4. Backlog polish batch (search autocomplete + enriched rows, guild directory
+   chips, thread READ ▸, guild XP multiplier perk, motion sweep, reader parity,
+   history CLEAR, doc cleanup)
+5. **Web admin console** (final pre-Arena item): standalone desktop console —
+   content audit, reports/appeals/audit, users, announcements composer, arena
+   event creator. Vite+React SPA in `/console`, served by the API (same origin).
 
 _Guilds Phase 4 done and **device-verified** (2026-07-12). GIPHY_API_KEY is
 configured in api/.env — **last check: GIF posting + picker on device**, then

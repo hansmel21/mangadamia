@@ -405,6 +405,9 @@ model Post {
   // "/uploads/…" in dev, Cloudinary in prod).
   imageUrls        String[]         @default([])
   isSpoiler        Boolean          @default(false)
+  // THE SYSTEM's official announcements: server-set only (admin endpoints),
+  // rendered without the author's identity; `pinned` holds them atop the feed.
+  isOfficial       Boolean          @default(false)
   createdAt        DateTime         @default(now())
   moderationStatus String           @default("visible") // visible | removed
   moderationReason String?
@@ -437,6 +440,7 @@ model Post {
   @@index([rootId])
   @@index([guildId, createdAt])
   @@index([canonicalId, kind])
+  @@index([isOfficial, pinned, createdAt])
 }
 
 // A choice on a poll post; vote tallies come from PollVote.

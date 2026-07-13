@@ -1139,6 +1139,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     gifUrl: string | null;
     imageUrls: string[];
     isSpoiler: boolean;
+    official: boolean;
     createdAt: Date;
     author: Awaited<ReturnType<typeof identityForUser>>;
     username: string;
@@ -1167,6 +1168,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     // Present on quote-reposts: the embedded post being quoted.
     quotedPost: {
       id: string;
+      official: boolean;
       author: Awaited<ReturnType<typeof identityForUser>>;
       username: string;
       body: string;
@@ -1203,6 +1205,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           gifUrl: true,
           imageUrls: true,
           isSpoiler: true,
+          isOfficial: true,
           createdAt: true,
           moderationStatus: true,
           canonical: { select: { id: true, title: true, coverUrl: true } },
@@ -1221,6 +1224,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     gifUrl: string | null;
     imageUrls: string[];
     isSpoiler: boolean;
+    isOfficial: boolean;
     createdAt: Date;
     userId: string;
     chapterNumber: number | null;
@@ -1241,6 +1245,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       gifUrl: string | null;
       imageUrls: string[];
       isSpoiler: boolean;
+      isOfficial: boolean;
       createdAt: Date;
       moderationStatus: string;
       canonical: { id: string; title: string; coverUrl: string | null } | null;
@@ -1261,10 +1266,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     gifUrl: p.gifUrl,
     imageUrls: p.imageUrls,
     isSpoiler: p.isSpoiler,
+    // THE SYSTEM speaks without a personal identity attached.
+    official: p.isOfficial,
     createdAt: p.createdAt,
-    author: identities.get(p.userId) ?? null,
-    username: identities.get(p.userId)?.username ?? "Removed Reader",
-    level: identities.get(p.userId)?.level ?? null,
+    author: p.isOfficial ? null : (identities.get(p.userId) ?? null),
+    username: p.isOfficial ? "THE SYSTEM" : (identities.get(p.userId)?.username ?? "Removed Reader"),
+    level: p.isOfficial ? null : (identities.get(p.userId)?.level ?? null),
     reactions: reactionCounts,
     myReaction: Array.isArray(p.likes) && p.likes[0] ? p.likes[0].type : null,
     mine: !!meId && p.userId === meId,
@@ -1292,8 +1299,11 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       p.quotedPost && p.quotedPost.moderationStatus === "visible"
         ? {
             id: p.quotedPost.id,
-            author: identities.get(p.quotedPost.userId) ?? null,
-            username: identities.get(p.quotedPost.userId)?.username ?? "Removed Reader",
+            official: p.quotedPost.isOfficial,
+            author: p.quotedPost.isOfficial ? null : (identities.get(p.quotedPost.userId) ?? null),
+            username: p.quotedPost.isOfficial
+              ? "THE SYSTEM"
+              : (identities.get(p.quotedPost.userId)?.username ?? "Removed Reader"),
             body: p.quotedPost.body,
             kind: p.quotedPost.kind,
             rating: p.quotedPost.rating,
@@ -1462,7 +1472,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         // Guild-board posts never surface in public feeds.
         guildId: null,
         moderationStatus: "visible",
-        userId: { notIn: blockedIds },
+        // Blocks hide readers from each other, but never THE SYSTEM's posts.
+        // The following/guild branches below still scope by author list, so
+        // officials don't leak into those feeds.
+        AND: [{ OR: [{ isOfficial: true }, { userId: { notIn: blockedIds } }] }],
         ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
         ...(guildmateIds ? { userId: { in: guildmateIds, notIn: blockedIds } } : {}),
         ...(kind ? { kind } : {}),
@@ -1500,6 +1513,35 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     }));
   });
 
+  // THE SYSTEM's pinned announcements — rendered above the Dungeon feed.
+  // Deliberately unfiltered by blocks: official notices reach everyone.
+  app.get("/announcements/active", async (req) => {
+    const me = await getUser(req);
+    const rows = await prisma.post.findMany({
+      where: { isOfficial: true, pinned: true, moderationStatus: "visible", parentId: null },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+      include: postInclude(me?.id),
+    });
+    const rootIds = rows.map((p) => p.id);
+    const [counts, reactionMap] = await Promise.all([
+      rootIds.length
+        ? prisma.post.groupBy({
+            by: ["rootId"],
+            where: { rootId: { in: rootIds }, moderationStatus: "visible" },
+            _count: true,
+          })
+        : [],
+      reactionsForPosts(rootIds),
+    ]);
+    const countByRoot = new Map(counts.map((c) => [c.rootId, c._count]));
+    const identities = await identitiesForUsers([], me?.id);
+    return rows.map((p) => ({
+      ...serializePost(p, identities, me?.id, reactionMap.get(p.id) ?? {}),
+      commentCount: countByRoot.get(p.id) ?? 0,
+    }));
+  });
+
   // A single post plus its whole nested reply thread (Reddit-style): the root
   // post, its top-level comments, and every reply beneath them. Opening any
   // reply resolves to the root post the conversation hangs off.
@@ -1514,7 +1556,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       include: postInclude(me?.id),
     });
     if (!rootPost || rootPost.moderationStatus !== "visible") throw httpError(404, "No such post");
-    if (me && blockedIds.includes(rootPost.userId)) throw httpError(404, "No such post");
+    if (me && !rootPost.isOfficial && blockedIds.includes(rootPost.userId)) {
+      throw httpError(404, "No such post");
+    }
     // Guild-board threads are members-only. 404 (not 403) so existence
     // doesn't leak to outsiders.
     if (rootPost.guildId) {

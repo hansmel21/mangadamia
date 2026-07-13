@@ -7,6 +7,7 @@ import {
   verifyPassword,
   type Capability,
 } from "../auth.js";
+import { createAnnouncement } from "../announcements.js";
 import { prisma } from "../db/client.js";
 import { createNotification } from "../notifications.js";
 import { identitiesForUsers } from "../identity.js";
@@ -384,6 +385,80 @@ export function registerAdminRoutes(app: FastifyInstance): void {
   app.get("/admin/audit", async (req) => {
     await requireCapability(req, "view_audit");
     return prisma.moderationAction.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
+  });
+
+  // ── Official announcements (THE SYSTEM's voice) ───────────────────────
+  app.post("/admin/announcements", async (req) => {
+    const admin = await requireCapability(req, "manage_rewards");
+    const { body, pinned, notify, targetUrl } = z
+      .object({
+        body: z.string().trim().min(3).max(4000),
+        pinned: z.boolean().default(true),
+        notify: z.boolean().default(false),
+        targetUrl: z.string().trim().max(200).optional(),
+      })
+      .parse(req.body);
+    const { postId } = await createAnnouncement({ admin, body, pinned, notify, targetUrl });
+    return { postId };
+  });
+
+  app.get("/admin/announcements", async (req) => {
+    await requireCapability(req, "manage_rewards");
+    const posts = await prisma.post.findMany({
+      where: { isOfficial: true },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { _count: { select: { likes: true, replies: true } } },
+    });
+    return posts.map((p) => ({
+      id: p.id,
+      body: p.body,
+      pinned: p.pinned,
+      moderationStatus: p.moderationStatus,
+      createdAt: p.createdAt,
+      reactionCount: p._count.likes,
+      replyCount: p._count.replies,
+    }));
+  });
+
+  app.patch<{ Params: { id: string } }>("/admin/announcements/:id", async (req) => {
+    await requireCapability(req, "manage_rewards");
+    const { pinned } = z.object({ pinned: z.boolean() }).parse(req.body);
+    const updated = await prisma.post.updateMany({
+      where: { id: req.params.id, isOfficial: true },
+      data: { pinned },
+    });
+    if (updated.count === 0) {
+      throw Object.assign(new Error("No such announcement"), { statusCode: 404 });
+    }
+    return { ok: true, pinned };
+  });
+
+  app.delete<{ Params: { id: string } }>("/admin/announcements/:id", async (req) => {
+    const admin = await requireCapability(req, "manage_rewards");
+    const post = await prisma.post.findFirst({
+      where: { id: req.params.id, isOfficial: true },
+    });
+    if (!post) throw Object.assign(new Error("No such announcement"), { statusCode: 404 });
+    await prisma.$transaction([
+      prisma.post.update({
+        where: { id: post.id },
+        data: { moderationStatus: "removed", pinned: false, moderatedAt: new Date() },
+      }),
+      prisma.moderationAction.create({
+        data: {
+          moderatorId: admin.id,
+          moderatorSnapshot: admin.username,
+          targetType: "post",
+          targetId: post.id,
+          action: "remove_content",
+          reasonCode: "other",
+          reason: "Official announcement retired by an administrator",
+          beforeSnapshot: jsonSnapshot({ body: post.body, pinned: post.pinned }),
+        },
+      }),
+    ]);
+    return { ok: true };
   });
 
   app.get("/admin/users", async (req) => {

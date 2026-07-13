@@ -539,7 +539,7 @@ export interface ModerationNotice {
   } | null;
 }
 
-export type PostKind = "record" | "theory" | "review" | "spoiler_intel" | "poll";
+export type PostKind = "record" | "theory" | "review" | "spoiler_intel" | "poll" | "announcement";
 export type ReactionType = "like" | "hype" | "mindblown" | "pain" | "dead";
 
 export interface PollInfo {
@@ -566,6 +566,7 @@ export interface GifSearchPage {
 
 export interface QuotedPostInfo {
   id: string;
+  official?: boolean;
   author: PublicIdentity | null;
   username: string;
   body: string;
@@ -595,6 +596,7 @@ export interface PostInfo {
   gifUrl: string | null;
   imageUrls: string[];
   isSpoiler: boolean;
+  official?: boolean;
   createdAt: string;
   author: PublicIdentity | null;
   username: string;
@@ -814,6 +816,7 @@ export const api = {
       numbers,
     }),
 
+  activeAnnouncements: () => get<PostInfo[]>("/announcements/active"),
   trending: (limit = 5) =>
     get<{ window: "1h" | "24h"; threads: TrendingThread[] }>(`/posts/trending?limit=${limit}`),
   feed: (

@@ -31,6 +31,8 @@ const KIND_TILE: Record<PostKind, string> = {
   review: "REVIEW",
   poll: "POLL",
   spoiler_intel: "INTEL",
+  // Never rendered — announcements are authored by THE SYSTEM, not readers.
+  announcement: "NOTICE",
 };
 
 export function PostComposer({

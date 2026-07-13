@@ -15,6 +15,7 @@ import {
   type PollConfig,
   type QuizConfig,
 } from "../arena.js";
+import { createAnnouncement } from "../announcements.js";
 import { getUser, requireActiveUser, requireCapability } from "../auth.js";
 import { prisma } from "../db/client.js";
 import { currentWeekKey, weekEndsAt, weekNumber } from "../guilds.js";
@@ -270,7 +271,7 @@ export function registerArenaRoutes(app: FastifyInstance): void {
 
   // ── Admin: create an event ────────────────────────────────────────────
   app.post("/admin/arena/events", async (req) => {
-    await requireCapability(req, "manage_rewards");
+    const admin = await requireCapability(req, "manage_rewards");
     const body = z
       .object({
         kind: z.enum(["quiz", "poll"]),
@@ -280,6 +281,10 @@ export function registerArenaRoutes(app: FastifyInstance): void {
         endsAt: z.coerce.date(),
         canonicalId: z.string().optional(),
         config: z.unknown(),
+        // Auto-publish a SYSTEM announcement for the event.
+        announce: z
+          .object({ pinned: z.boolean().default(true), notify: z.boolean().default(false) })
+          .optional(),
       })
       .parse(req.body);
     if (body.endsAt <= body.startsAt) throw httpError(400, "endsAt must be after startsAt");
@@ -303,6 +308,16 @@ export function registerArenaRoutes(app: FastifyInstance): void {
         config: config as object,
       },
     });
+    if (body.announce) {
+      const when = body.startsAt.getTime() <= Date.now() ? "LIVE NOW" : `opens ${body.startsAt.toISOString().slice(0, 10)}`;
+      await createAnnouncement({
+        admin,
+        body: `⚔ NEW ARENA EVENT: ${body.title} — ${when}.${body.description ? `\n${body.description}` : ""}\nEnter from the Arena before ${body.endsAt.toISOString().slice(0, 10)}.`,
+        pinned: body.announce.pinned,
+        notify: body.announce.notify,
+        targetUrl: "/arena",
+      });
+    }
     return { id: event.id };
   });
 }

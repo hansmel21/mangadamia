@@ -66,7 +66,7 @@ export default function FeedScreen() {
     getNextPageParam: (last, pages) => (last.length > 0 ? pages.length + 1 : undefined),
   });
 
-  const posts = feed.data?.pages.flat() ?? [];
+  const feedPosts = feed.data?.pages.flat() ?? [];
   // Cross-fade + rise the list whenever the type/scope/sort changes.
   const listKey = `${feedMode}:${typeFilter}:${sort}:${topic}`;
   const listFade = useSwitchFade(listKey);
@@ -90,6 +90,17 @@ export default function FeedScreen() {
     refetchInterval: 120_000,
   });
   const hotThread = trending.data?.threads[0] ?? null;
+
+  // THE SYSTEM's pinned announcements — always at the top of the dungeon.
+  const announcements = useQuery({
+    queryKey: ["announcements"],
+    queryFn: api.activeAnnouncements,
+    staleTime: 120_000,
+  });
+  // Pinned notices render in the header — drop them from the stream so a
+  // fresh announcement doesn't show twice on page 1.
+  const pinnedIds = new Set((announcements.data ?? []).map((a) => a.id));
+  const posts = feedPosts.filter((p) => !pinnedIds.has(p.id));
 
   const patch = (id: string, fn: (p: PostInfo) => PostInfo) => {
     queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(queryKey, (old) => {
@@ -176,32 +187,35 @@ export default function FeedScreen() {
         </Pressable>
       </View>
 
-      {/* filter deck — kind chips + FOLLOWING scope + sort cycle key */}
+      {/* filter deck — chips wrap in their own column; the sort key keeps a
+          fixed slot at the row's end so it can never be pushed off-screen */}
       <View style={styles.deck}>
-        {(["all", "theory", "review"] as const).map((f) => (
-          <SystemKey
-            key={f}
-            variant="chip"
-            label={f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
-            active={typeFilter === f && feedMode === "global"}
-            onPress={() => selectTypeFilter(f)}
-          />
-        ))}
-        <SystemKey
-          variant="chip"
-          label="FOLLOWING"
-          active={feedMode === "following"}
-          disabled={!user}
-          onPress={selectFollowing}
-        />
-        {myGuildId ? (
+        <View style={styles.deckChips}>
+          {(["all", "theory", "review"] as const).map((f) => (
+            <SystemKey
+              key={f}
+              variant="chip"
+              label={f === "all" ? "ALL" : f === "theory" ? "THEORIES" : "REVIEWS"}
+              active={typeFilter === f && feedMode === "global"}
+              onPress={() => selectTypeFilter(f)}
+            />
+          ))}
           <SystemKey
             variant="chip"
-            label="GUILD"
-            active={feedMode === "guild"}
-            onPress={selectGuild}
+            label="FOLLOWING"
+            active={feedMode === "following"}
+            disabled={!user}
+            onPress={selectFollowing}
           />
-        ) : null}
+          {myGuildId ? (
+            <SystemKey
+              variant="chip"
+              label="GUILD"
+              active={feedMode === "guild"}
+              onPress={selectGuild}
+            />
+          ) : null}
+        </View>
         <Pressable
           style={({ pressed }) => [styles.sortKey, pressed && { opacity: 0.7 }]}
           onPress={cycleSort}
@@ -257,9 +271,30 @@ export default function FeedScreen() {
             data={posts}
             keyExtractor={(p) => p.id}
             ListHeaderComponent={
-              war.data?.war && myGuildId ? (
-                <WarRallyCard war={war.data.war} myGuildId={myGuildId} />
-              ) : null
+              <>
+                {(announcements.data ?? []).map((a) => (
+                  <PostCard
+                    key={a.id}
+                    post={a}
+                    preview
+                    onOpen={openThread}
+                    onReact={react}
+                    onVote={vote}
+                    onQuote={(p) => {
+                      setQuoteTarget(p);
+                      setComposerOpen(true);
+                    }}
+                    onDelete={remove}
+                    onReport={(p) =>
+                      setReportTarget({ type: "post", id: p.id, username: p.username })
+                    }
+                    viewerSignedIn={!!user}
+                  />
+                ))}
+                {war.data?.war && myGuildId ? (
+                  <WarRallyCard war={war.data.war} myGuildId={myGuildId} />
+                ) : null}
+              </>
             }
             renderItem={({ item }) => (
               <PostCard
@@ -440,12 +475,12 @@ const styles = StyleSheet.create({
   arenaText: { color: colors.foilSoft, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
   deck: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 4,
     marginHorizontal: 16,
     marginTop: 10,
   },
+  deckChips: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 },
   ticker: {
     flexDirection: "row",
     alignItems: "center",
@@ -463,7 +498,6 @@ const styles = StyleSheet.create({
   tickerBody: { color: colors.mutedStrong, fontSize: 11.5, flex: 1 },
   tickerArrow: { color: colors.foil, fontSize: 11, fontWeight: "900" },
   sortKey: {
-    marginLeft: "auto",
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 4,
