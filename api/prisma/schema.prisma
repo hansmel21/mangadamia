@@ -394,6 +394,9 @@ model Post {
   // Hosted GIF attachment URL. Phase 3 starts with provider-hosted GIFs so
   // there is no user-upload storage or moderation pipeline yet.
   gifUrl           String?
+  // Uploaded photo attachments (max 4) — storage.ts URLs only (local
+  // "/uploads/…" in dev, Cloudinary in prod).
+  imageUrls        String[]         @default([])
   isSpoiler        Boolean          @default(false)
   createdAt        DateTime         @default(now())
   moderationStatus String           @default("visible") // visible | removed

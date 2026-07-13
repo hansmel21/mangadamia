@@ -277,17 +277,42 @@ Plan: `.claude/plans/i-think-we-should-quizzical-wirth.md`.
 **🏰 Guilds Phase 4 (full depth) is COMPLETE: invites · wall/board ·
 contribution board · edit UI · weekly events · perks/decorations.**
 
+### Fix: account deletion runs guild succession ✅ (2026-07-12)
+- [x] `deleteUserCompletely` now applies the leave route's rules in the
+      deletion transaction (officer/oldest-member succession + notification,
+      last-member dissolve) — deleting a guildmaster can no longer orphan a
+      guild. Dev DB scanned: no existing orphans. Exercised live via the E2E
+      cleanup below.
+
+### Social v2 — Phase 3b: images on posts ✅ (2026-07-12, API E2E-tested; UI pending device test)
+- [x] **Storage abstraction** (`api/src/storage.ts`) — local-disk adapter in
+      dev (`api/uploads/`, gitignored, served by `GET /uploads/:file` with a
+      UUID-pattern path guard + immutable caching); **Cloudinary adapter** for
+      prod (signed REST upload, no SDK dep) — flips on via `CLOUDINARY_URL`,
+      optional `CLOUDINARY_MODERATION` for Play-compliant AI gating (both in
+      `.env.example`).
+- [x] **Upload route** `POST /uploads/image` — raw `image/jpeg` binary body
+      (no multipart dep), 3MB limit, JPEG magic-byte check, auth + terms +
+      rate-limited (40/h).
+- [x] **`Post.imageUrls`** (max 4, migration `post_images`) — server accepts
+      only URLs our storage produced (`isStoredImageUrl`); serialized through
+      feed/thread/quote like `gifUrl`.
+- [x] **Client** — composer 📷 key (`expo-image-picker` + `-manipulator`,
+      SDK 54): multi-select up to 4, always re-encodes to JPEG (HEIC-safe) and
+      downscales to ≤1600px, uploads via `FileSystem.uploadAsync` binary,
+      thumbnail row with ✕, publish disabled while uploading. `PostCard`
+      renders 1 image full-width (4:3) or a 2-col grid; relative dev URLs
+      resolve against the API base (`resolveMediaUrl`).
+- [x] **API-level E2E verified**: register → upload → serve (200) → post with
+      image → foreign-URL rejection → account cleanup via the new deletion
+      path. Device pass still needed for the picker UI.
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
 _Guilds Phase 4 done and **device-verified** (2026-07-12). GIPHY_API_KEY is
 configured in api/.env — **last check: GIF posting + picker on device**, then
 Social 3b images or Arena._
 
-**Social — Phase 3b: images in posts, comments & replies**
-- **Images** (Cloudinary, built local-first): client picker + compress
-  (`expo-image-picker`/`-manipulator`); `api/src/storage.ts` abstraction
-  (local-disk dev adapter now, Cloudinary adapter for prod); `Post.imageUrls`;
-  Cloudinary AI moderation gating in prod for Play compliance.
 
 
 **Arena — Phase 5 (its own track):** PvP turn-based manga-character battles,

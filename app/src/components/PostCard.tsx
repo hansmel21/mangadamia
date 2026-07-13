@@ -11,7 +11,7 @@ import { EyeOff, Flag, MessageSquare, Repeat2, Trash2 } from "lucide-react-nativ
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { pressFx } from "../anim";
-import type { PostInfo, ReactionType } from "../api";
+import { resolveMediaUrl, type PostInfo, type ReactionType } from "../api";
 import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
 import { LinkedText } from "./LinkedText";
@@ -190,6 +190,31 @@ export function PostCard({
           transition={140}
           accessibilityLabel="Attached GIF"
         />
+      ) : null}
+
+      {!shielded && post.imageUrls.length > 0 ? (
+        post.imageUrls.length === 1 ? (
+          <ExpoImage
+            source={{ uri: resolveMediaUrl(post.imageUrls[0]) }}
+            style={styles.photoSingle}
+            contentFit="cover"
+            transition={140}
+            accessibilityLabel="Attached photo"
+          />
+        ) : (
+          <View style={styles.photoGrid}>
+            {post.imageUrls.map((url) => (
+              <ExpoImage
+                key={url}
+                source={{ uri: resolveMediaUrl(url) }}
+                style={styles.photoCell}
+                contentFit="cover"
+                transition={140}
+                accessibilityLabel="Attached photo"
+              />
+            ))}
+          </View>
+        )
       ) : null}
 
       {post.kind === "poll" && post.poll ? (
@@ -390,6 +415,24 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 16 / 9,
     marginTop: 11,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  photoSingle: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    marginTop: 11,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 11 },
+  photoCell: {
+    width: "48.9%",
+    aspectRatio: 1,
     borderRadius: 3,
     borderWidth: 1,
     borderColor: colors.border,

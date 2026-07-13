@@ -13,6 +13,7 @@ import { registerLegalRoutes } from "./legal.js";
 import { registerGuildRoutes } from "./guilds.js";
 import { registerArenaRoutes } from "./arena.js";
 import { registerGifRoutes } from "./gifs.js";
+import { registerUploadRoutes } from "./uploads.js";
 
 const listQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -80,6 +81,7 @@ export function registerRoutes(app: FastifyInstance): void {
   registerGuildRoutes(app);
   registerArenaRoutes(app);
   registerGifRoutes(app);
+  registerUploadRoutes(app);
 
   app.get("/sources", async () =>
     sources.map((s) => ({ id: s.id, name: s.name, languages: s.languages })),

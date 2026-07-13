@@ -4,10 +4,12 @@
 // gradient PUBLISH RECORD key. On success, celebrates badges/levels.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image as ExpoImage } from "expo-image";
-import { EyeOff, X } from "lucide-react-native";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import { EyeOff, ImagePlus, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { api, type PostInfo, type PostKind, type UnifiedCard } from "../api";
+import { api, resolveMediaUrl, type PostInfo, type PostKind, type UnifiedCard } from "../api";
 import { celebrateBadges } from "../badges";
 import { getLastReadTag } from "../library";
 import { POST_KINDS } from "../ranks";
@@ -63,6 +65,8 @@ export function PostComposer({
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [gifUrl, setGifUrl] = useState("");
   const [gifPickerOpen, setGifPickerOpen] = useState(false);
+  const [images, setImages] = useState<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
   // Prefilled from the reader's last read position; ✕ removes it.
   const [autoTag, setAutoTag] = useState<
     { canonicalId: string; title: string; chapterNumber: number } | null
@@ -77,6 +81,7 @@ export function PostComposer({
       setRating(0);
       setPollOptions(["", ""]);
       setGifUrl("");
+      setImages([]);
       if (!replyTo && !quote && !context) {
         try {
           setAutoTag(getLastReadTag() ?? null);
@@ -102,6 +107,36 @@ export function PostComposer({
   // The auto-tag applies when the hunter hasn't tagged anything manually and
   // isn't reviewing (a review's series must be chosen deliberately).
   const autoTagActive = !!autoTag && !isReview && selectedSeries.length === 0 && !context;
+
+  // Pick up to 4 photos; always re-encode to JPEG (iPhone HEIC → JPEG) and
+  // downscale to ≤1600px wide before the raw-binary upload.
+  const pickImages = async () => {
+    if (images.length >= 4 || uploadingImages) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: 4 - images.length,
+      quality: 1,
+    });
+    if (picked.canceled) return;
+    setUploadingImages(true);
+    setError("");
+    try {
+      for (const asset of picked.assets.slice(0, 4 - images.length)) {
+        const jpeg = await manipulateAsync(
+          asset.uri,
+          asset.width > 1600 ? [{ resize: { width: 1600 } }] : [],
+          { compress: 0.8, format: SaveFormat.JPEG },
+        );
+        const { url } = await api.uploadImage(jpeg.uri);
+        setImages((prev) => (prev.length < 4 ? [...prev, url] : prev));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
 
   const submit = async () => {
     const text = body.trim();
@@ -132,6 +167,7 @@ export function PostComposer({
         kind: replyTo || isQuote ? undefined : kind,
         rating: isReview ? rating : undefined,
         gifUrl: gifUrl.trim() || undefined,
+        imageUrls: images.length > 0 ? images : undefined,
         pollOptions: isPoll ? cleanPollOptions : undefined,
         quotedPostId: isQuote ? quote.id : undefined,
         seriesTags: replyTo
@@ -161,6 +197,7 @@ export function PostComposer({
       setRating(0);
       setPollOptions(["", ""]);
       setGifUrl("");
+      setImages([]);
       queryClient.invalidateQueries({ queryKey: ["feed"] });
       onPosted?.(created);
       onClose();
@@ -350,8 +387,48 @@ export function PostComposer({
           </View>
         ) : null}
 
-        {/* GIF key + spoiler shield toggle + char counter */}
+        {images.length > 0 || uploadingImages ? (
+          <View style={styles.imageRow}>
+            {images.map((url) => (
+              <View key={url} style={styles.imageThumbWrap}>
+                <ExpoImage
+                  source={{ uri: resolveMediaUrl(url) }}
+                  style={styles.imageThumb}
+                  contentFit="cover"
+                  transition={100}
+                />
+                <Pressable
+                  style={styles.imageThumbRemove}
+                  hitSlop={8}
+                  onPress={() => setImages((prev) => prev.filter((u) => u !== url))}
+                  accessibilityLabel="Remove photo"
+                >
+                  <X color="#fff" size={11} strokeWidth={2.5} />
+                </Pressable>
+              </View>
+            ))}
+            {uploadingImages ? (
+              <View style={[styles.imageThumbWrap, styles.imageThumbLoading]}>
+                <ActivityIndicator color={colors.accent} size="small" />
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* photo + GIF keys + spoiler shield toggle + char counter */}
         <View style={styles.metaRow}>
+          <Pressable
+            style={(s) => [
+              styles.gifKey,
+              { opacity: s.pressed || images.length >= 4 || uploadingImages ? 0.5 : 1 },
+            ]}
+            disabled={images.length >= 4 || uploadingImages}
+            onPress={() => void pickImages()}
+            accessibilityRole="button"
+            accessibilityLabel="Add photos"
+          >
+            <ImagePlus color={colors.accentSoft} size={14} strokeWidth={2.2} />
+          </Pressable>
           <Pressable
             style={(s) => [styles.gifKey, { opacity: s.pressed ? 0.6 : 1 }]}
             onPress={() => setGifPickerOpen(true)}
@@ -386,7 +463,7 @@ export function PostComposer({
         <SystemKey
           label={replyTo ? "SEND REPLY" : "PUBLISH RECORD"}
           onPress={submit}
-          disabled={!body.trim() || busy}
+          disabled={!body.trim() || busy || uploadingImages}
           style={styles.publish}
           icon={busy ? <ActivityIndicator color="#fff" size="small" /> : undefined}
         />
@@ -530,6 +607,36 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     paddingHorizontal: 11,
     paddingVertical: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  imageThumbWrap: { width: 64, height: 64, borderRadius: 3, overflow: "hidden" },
+  imageThumb: {
+    width: "100%",
+    height: "100%",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    backgroundColor: colors.card,
+  },
+  imageThumbLoading: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  imageThumbRemove: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   gifKeyText: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },

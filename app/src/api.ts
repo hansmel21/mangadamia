@@ -1,5 +1,6 @@
 // Client for our own backend API (the /api folder of this repo).
 import Constants from "expo-constants";
+import * as FileSystem from "expo-file-system/legacy";
 import { getToken } from "./session";
 
 // Where is the backend?
@@ -21,6 +22,13 @@ function resolveBaseUrl(): string {
 }
 
 export const API_URL = resolveBaseUrl();
+
+// Post images from the dev local-disk adapter are stored as relative
+// "/uploads/…" paths; resolve those against the API host. Absolute URLs
+// (Cloudinary in prod, Giphy GIFs) pass through untouched.
+export function resolveMediaUrl(url: string): string {
+  return url.startsWith("/") ? `${API_URL}${url}` : url;
+}
 
 export interface SourceInfo {
   id: string;
@@ -542,6 +550,7 @@ export interface QuotedPostInfo {
   kind: PostKind;
   rating: number | null;
   gifUrl: string | null;
+  imageUrls: string[];
   isSpoiler: boolean;
   createdAt: string;
   series: { canonicalId: string; title: string; coverUrl?: string | null } | null;
@@ -562,6 +571,7 @@ export interface PostInfo {
   kind: PostKind;
   rating: number | null;
   gifUrl: string | null;
+  imageUrls: string[];
   isSpoiler: boolean;
   createdAt: string;
   author: PublicIdentity | null;
@@ -667,6 +677,29 @@ export const api = {
   browseNew: (page = 1) => get<UnifiedCard[]>(`/browse/new?page=${page}`),
   ranks: () => get<RankedCard[]>("/ranks"),
   recommended: () => get<UnifiedCard[]>("/recommended"),
+  // Raw-JPEG binary upload (the composer re-encodes to JPEG first).
+  uploadImage: async (fileUri: string): Promise<{ url: string }> => {
+    const token = getToken();
+    const res = await FileSystem.uploadAsync(`${API_URL}/uploads/image`, fileUri, {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers: {
+        "content-type": "image/jpeg",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (res.status < 200 || res.status >= 300) {
+      let message = `Image upload failed (${res.status})`;
+      try {
+        const parsed = JSON.parse(res.body) as { message?: string };
+        if (parsed.message) message = parsed.message;
+      } catch {
+        // keep the fallback message
+      }
+      throw new Error(message);
+    }
+    return JSON.parse(res.body) as { url: string };
+  },
   searchGifs: (q: string, cursor?: string) =>
     get<GifSearchPage>(
       `/gifs/search?q=${encodeURIComponent(q)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
@@ -784,6 +817,7 @@ export const api = {
       kind?: PostKind;
       rating?: number;
       gifUrl?: string;
+      imageUrls?: string[];
       pollOptions?: string[];
       quotedPostId?: string;
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];
