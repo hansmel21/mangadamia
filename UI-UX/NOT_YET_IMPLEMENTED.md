@@ -31,15 +31,15 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ Daily-directive strip (top uncompleted daily quest, progress + XP → Quest Log).
 - ✅ Rails: square corners, CH.n badge on LATEST covers.
 - 🎨 **TOP MATCH instant search** (debounced-as-you-type) — current search is submit-based.
-- ⚠ **TRENDING IN THE DUNGEONS** — needs `GET /posts/trending?window=1h`.
+- ✅ **TRENDING IN THE DUNGEONS** — shipped 2026-07-13 (`GET /posts/trending`, Home rail).
 - ⚠ **Rank sigil + ★ rating + reads + posts/hr on result rows** — search payload has no rank/rating/activity metrics.
 
 ## Dungeon feed (§2) — layout DONE (Phase 2); backend items remain
 - ✅ In-screen DUNGEON ScreenTitle + ARENA key; one-row filter deck (ALL/THEORIES/REVIEWS/FOLLOWING chips + HOT▾ sort cycle); NEW RECORD gradient key.
 - ✅ PostCard rework: mini SystemWindow + kind notch, HunterAvatar + GuildChip, `OPEN THREAD ▸` in `colors.data`.
-- ⚠ **Online counter** ("312 ONLINE") — needs `GET /presence/count` (or approximate active-sessions-last-15-min). Poll 60s.
-- ⚠ **Raid-thread ticker** (top post by comments/hr) — needs `GET /posts/trending?window=1h`.
-- 🔀 **GUILD feed chip** (`feedMode: "guild"`) — `api.feed()` has no `mode='guild'`; server must filter posts by `author.guildId === viewer.guildId`. (FOLLOWING chip fills the slot meanwhile.)
+- ✂ **Online counter** (global) — cut by decision 2026-07-13; presence is per-guild only.
+- ✅ **Raid-thread ticker** — shipped 2026-07-13 (HOT ticker fed by /posts/trending).
+- ✅ **GUILD feed chip** — shipped 2026-07-13 (`feed=guild`, guildmates’ public posts).
 - ⚠ **Guild-war rally card** pinned in-feed when viewer's guild has an active war — needs `GET /guilds/:id/war` (see Guild War below).
 
 ## Composer (§3) — DONE (Phase 2)
@@ -60,7 +60,7 @@ The design's own build order (foundation → nav → feed → status/quests/libr
 - ✅ **Guild War**: `GuildWar` model + lazy weekly matchmaking (nearest-XP unpaired guild, member-triggered), scores derived from members' `weeklyXp` and snapshotted on read. `GET /guilds/:id/war` + `/wars` (history with won/lost). Client: red war window on the Guild tab (scores, bar, CONTRIBUTE → feed, inline HISTORY) + **rally card pinned in the Dungeon feed** during an active war.
 - ✅ **Guild Raid**: `GuildRaidProgress` model; first-completion-per-week chapter events tick it (same distinct-event window as quests — not farmable); +250 guild XP paid once on target. `GET /guilds/:id/raid` (target scales with roster, `myShare`). Client: gold raid card on the Guild tab.
 - ✅ **Guild Board**: reuses Post + new `pinned` flag. `GET/POST /guilds/:id/board`, `POST /posts/:id/pin` (officers). Replies inherit `guildId`; leak guards added everywhere (public feed, post detail, react, vote, quote, profile recentPosts — all verified 404/hidden for outsiders). Client: board preview on Guild tab + full board screen (`guild/board/[id]`) with inline composer + officer pin toggles.
-- ⚠ **Presence per guild** ("14 ONLINE") — no per-guild online count.
+- ✅ **Presence per guild** — shipped 2026-07-13 (User.lastActiveAt, onlineCount + roster dots).
 - 🔀 **Roster enrichment**: applicant LV/rank/chapters in request payload (⚠ include stats), member `idle Nd` from `lastActiveAt` (⚠ expose), online dot (⚠ presence).
 - 🔀 **Guild XP multiplier** ("+10% XP" recruit copy) — ⚠ if it should be real.
 - 🎨 Directory war-status chips (`AT WAR`/`RECRUITING`) + #1 gold card — restyle; `AT WAR` can now read war state.

@@ -33,6 +33,9 @@ model User {
   username             String                  @unique
   passwordHash         String
   createdAt            DateTime                @default(now())
+  // Bumped (throttled, ≤1 write/5min) on any authenticated request — feeds
+  // the per-guild "n ONLINE" presence.
+  lastActiveAt         DateTime                @default(now())
   role                 String                  @default("user") // user | moderator | admin
   status               String                  @default("active") // active | suspended | banned
   suspendedUntil       DateTime?

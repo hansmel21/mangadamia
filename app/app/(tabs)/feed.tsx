@@ -40,7 +40,7 @@ export default function FeedScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [quoteTarget, setQuoteTarget] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
-  const [feedMode, setFeedMode] = useState<"global" | "following">("global");
+  const [feedMode, setFeedMode] = useState<"global" | "following" | "guild">("global");
   const [typeFilter, setTypeFilter] = useState<"all" | "theory" | "review">("all");
   const [sort, setSort] = useState<"new" | "top" | "hot">("new");
   const [topic, setTopic] = useState("");
@@ -81,6 +81,15 @@ export default function FeedScreen() {
     enabled: !!myGuildId,
     staleTime: 120_000,
   });
+
+  // Hot-thread ticker: the top trending thread right now.
+  const trending = useQuery({
+    queryKey: ["trending", 1],
+    queryFn: () => api.trending(1),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+  const hotThread = trending.data?.threads[0] ?? null;
 
   const patch = (id: string, fn: (p: PostInfo) => PostInfo) => {
     queryClient.setQueryData<{ pages: PostInfo[][]; pageParams: unknown[] }>(queryKey, (old) => {
@@ -141,6 +150,11 @@ export default function FeedScreen() {
     setFeedMode("following");
     setTypeFilter("all");
   };
+  const selectGuild = () => {
+    clearFeedPages();
+    setFeedMode("guild");
+    setTypeFilter("all");
+  };
   const cycleSort = () => {
     clearFeedPages();
     setSort(SORT_ORDER[(SORT_ORDER.indexOf(sort) + 1) % SORT_ORDER.length]);
@@ -180,6 +194,14 @@ export default function FeedScreen() {
           disabled={!user}
           onPress={selectFollowing}
         />
+        {myGuildId ? (
+          <SystemKey
+            variant="chip"
+            label="GUILD"
+            active={feedMode === "guild"}
+            onPress={selectGuild}
+          />
+        ) : null}
         <Pressable
           style={({ pressed }) => [styles.sortKey, pressed && { opacity: 0.7 }]}
           onPress={cycleSort}
@@ -189,6 +211,22 @@ export default function FeedScreen() {
           <Text style={styles.sortText}>{sort.toUpperCase()} ▾</Text>
         </Pressable>
       </View>
+
+      {hotThread ? (
+        <Pressable
+          style={({ pressed }) => [styles.ticker, pressed && { opacity: 0.75 }]}
+          onPress={() => router.push({ pathname: "/post/[id]", params: { id: hotThread.id } })}
+          accessibilityRole="button"
+          accessibilityLabel="Open the hottest thread"
+        >
+          <Text style={styles.tickerLabel}>◆ HOT</Text>
+          <Text style={styles.tickerBody} numberOfLines={1}>
+            {hotThread.username ? `@${hotThread.username}: ` : ""}
+            {hotThread.isSpoiler ? "⚠ Spoiler thread" : hotThread.body}
+          </Text>
+          <Text style={styles.tickerArrow}>▸</Text>
+        </Pressable>
+      ) : null}
 
       {topic ? (
         <View style={styles.topicRow}>
@@ -402,11 +440,28 @@ const styles = StyleSheet.create({
   arenaText: { color: colors.foilSoft, fontSize: 9.5, fontWeight: "900", letterSpacing: 1 },
   deck: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 4,
     marginHorizontal: 16,
     marginTop: 10,
   },
+  ticker: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "rgba(245,184,76,0.35)",
+    borderRadius: 3,
+    backgroundColor: "rgba(245,184,76,0.05)",
+  },
+  tickerLabel: { color: colors.foil, fontSize: 9, fontWeight: "900", letterSpacing: 1.4 },
+  tickerBody: { color: colors.mutedStrong, fontSize: 11.5, flex: 1 },
+  tickerArrow: { color: colors.foil, fontSize: 11, fontWeight: "900" },
   sortKey: {
     marginLeft: "auto",
     borderWidth: 1,

@@ -1325,12 +1325,91 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return map;
   };
 
+  // Hottest public threads right now: root posts ranked by fresh reactions +
+  // replies (replies weigh double). Widens 1h → 24h when the hour is quiet so
+  // the ticker never goes dark on a small app.
+  app.get("/posts/trending", async (req) => {
+    const { limit } = z
+      .object({ limit: z.coerce.number().int().min(1).max(10).default(5) })
+      .parse(req.query);
+    const me = await getUser(req);
+    const blockedIds = me ? await hiddenUserIds(me.id) : [];
+    const scoresFor = async (sinceMs: number) => {
+      const since = new Date(Date.now() - sinceMs);
+      const [likes, replies] = await Promise.all([
+        prisma.postLike.groupBy({
+          by: ["postId"],
+          where: { createdAt: { gte: since } },
+          _count: true,
+        }),
+        prisma.post.groupBy({
+          by: ["rootId"],
+          where: {
+            createdAt: { gte: since },
+            parentId: { not: null },
+            moderationStatus: "visible",
+          },
+          _count: true,
+        }),
+      ]);
+      const scores = new Map<string, number>();
+      for (const l of likes) scores.set(l.postId, (scores.get(l.postId) ?? 0) + l._count);
+      for (const r of replies) {
+        if (r.rootId) scores.set(r.rootId, (scores.get(r.rootId) ?? 0) + r._count * 2);
+      }
+      return scores;
+    };
+    let window: "1h" | "24h" = "1h";
+    let scores = await scoresFor(3_600_000);
+    if (scores.size < 3) {
+      window = "24h";
+      scores = await scoresFor(86_400_000);
+    }
+    const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit * 3);
+    const posts = ranked.length
+      ? await prisma.post.findMany({
+          where: {
+            id: { in: ranked.map(([id]) => id) },
+            parentId: null,
+            guildId: null,
+            moderationStatus: "visible",
+            userId: { notIn: blockedIds },
+          },
+          select: { id: true, body: true, kind: true, isSpoiler: true, userId: true },
+        })
+      : [];
+    const identities = await identitiesForUsers(posts.map((p) => p.userId), me?.id);
+    const byId = new Map(posts.map((p) => [p.id, p]));
+    const threads: {
+      id: string;
+      body: string;
+      kind: string;
+      isSpoiler: boolean;
+      username: string | null;
+      score: number;
+    }[] = [];
+    for (const [id, score] of ranked) {
+      const p = byId.get(id);
+      if (!p) continue; // reply, guild-board, blocked, or removed
+      threads.push({
+        id: p.id,
+        body: p.isSpoiler ? "" : p.body.slice(0, 140),
+        kind: p.kind,
+        isSpoiler: p.isSpoiler,
+        username: identities.get(p.userId)?.username ?? null,
+        score,
+      });
+      if (threads.length >= limit) break;
+    }
+    return { window, threads };
+  });
+
   app.get("/posts", async (req) => {
     const { page, canonicalId, feed, kind, sort, topic } = z
       .object({
         page: z.coerce.number().int().min(1).default(1),
         canonicalId: z.string().optional(),
-        feed: z.enum(["global", "following"]).default("global"),
+        feed: z.enum(["global", "following", "guild"]).default("global"),
         kind: z.enum(["theory", "review"]).optional(),
         sort: z.enum(["new", "top", "hot"]).default("new"),
         topic: z
@@ -1342,6 +1421,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       .parse(req.query);
     const me = await getUser(req);
     if (feed === "following" && !me) throw httpError(401, "Sign in to view your Following feed");
+    if (feed === "guild" && !me) throw httpError(401, "Sign in to view your guild's feed");
     const blockedIds = me ? await hiddenUserIds(me.id) : [];
     const followingIds =
       feed === "following" && me
@@ -1352,6 +1432,18 @@ export function registerSocialRoutes(app: FastifyInstance): void {
             })
           ).map((row) => row.followingId)
         : null;
+    // Guild feed = guildmates' PUBLIC posts (the members-only board is separate).
+    let guildmateIds: string[] | null = null;
+    if (feed === "guild" && me) {
+      const membership = await prisma.guildMember.findUnique({ where: { userId: me.id } });
+      if (!membership) throw httpError(404, "You're not in a guild");
+      guildmateIds = (
+        await prisma.guildMember.findMany({
+          where: { guildId: membership.guildId },
+          select: { userId: true },
+        })
+      ).map((m) => m.userId);
+    }
     // new = chronological; top = most-reacted all-time; hot = most-reacted in
     // the last week (a small-app-friendly "what's popular right now").
     const orderBy =
@@ -1366,6 +1458,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         moderationStatus: "visible",
         userId: { notIn: blockedIds },
         ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
+        ...(guildmateIds ? { userId: { in: guildmateIds, notIn: blockedIds } } : {}),
         ...(kind ? { kind } : {}),
         ...(topic ? { body: { contains: `#${topic}`, mode: "insensitive" } } : {}),
         ...(sort === "hot" ? { createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } : {}),

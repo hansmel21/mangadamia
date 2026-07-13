@@ -173,6 +173,12 @@ export default function GuildTab() {
                     {g.memberCount}/{g.memberCap}
                   </Text>
                 </View>
+                {g.onlineCount > 0 ? (
+                  <View style={styles.onlineRow}>
+                    <View style={styles.onlineDot} />
+                    <Text style={styles.onlineNowText}>{g.onlineCount} ONLINE</Text>
+                  </View>
+                ) : null}
               </View>
               <View style={styles.bannerBar}>
                 <SystemProgress value={xpPct} height={5} />
@@ -491,6 +497,8 @@ const styles = StyleSheet.create({
   bannerPower: { color: colors.accentSoft, fontSize: 11, fontWeight: "900" },
   onlineRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   onlineText: { color: colors.muted, fontSize: 11, fontWeight: "700" },
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.fresh },
+  onlineNowText: { color: colors.fresh, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
   bannerBar: { maxWidth: 220, marginTop: 2 },
 
   war: {

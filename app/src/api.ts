@@ -152,7 +152,18 @@ export interface GuildMemberInfo {
   contributionXp: number;
   weeklyXp: number;
   joinedAt: string;
+  online: boolean;
   identity: PublicIdentity | null;
+}
+
+// One hot thread from GET /posts/trending (feed ticker + Home rail).
+export interface TrendingThread {
+  id: string;
+  body: string;
+  kind: PostKind;
+  isSpoiler: boolean;
+  username: string | null;
+  score: number;
 }
 
 export interface GuildDetail {
@@ -176,6 +187,7 @@ export interface GuildDetail {
   power: number;
   memberCount: number;
   memberCap: number;
+  onlineCount: number;
   myRole: GuildRole | null;
   inAnotherGuild: boolean;
   joinRequestPending: boolean;
@@ -793,10 +805,12 @@ export const api = {
       numbers,
     }),
 
+  trending: (limit = 5) =>
+    get<{ window: "1h" | "24h"; threads: TrendingThread[] }>(`/posts/trending?limit=${limit}`),
   feed: (
     page = 1,
     canonicalId?: string,
-    feed: "global" | "following" = "global",
+    feed: "global" | "following" | "guild" = "global",
     kind?: "theory" | "review",
     sort: "new" | "top" | "hot" = "new",
     topic?: string,

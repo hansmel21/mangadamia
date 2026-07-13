@@ -170,9 +170,17 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     const memberIds = guild.members.map((m) => m.userId);
     const [identities, memberUsers, myMembership] = await Promise.all([
       identitiesForUsers(memberIds, me?.id),
-      prisma.user.findMany({ where: { id: { in: memberIds } }, select: { id: true, xp: true } }),
+      prisma.user.findMany({
+        where: { id: { in: memberIds } },
+        select: { id: true, xp: true, lastActiveAt: true },
+      }),
       me ? prisma.guildMember.findUnique({ where: { userId: me.id } }) : null,
     ]);
+    // Presence: active in the last 10 minutes (lastActiveAt bumps ≤ every 5).
+    const onlineCutoff = Date.now() - 10 * 60 * 1000;
+    const onlineIds = new Set(
+      memberUsers.filter((u) => u.lastActiveAt.getTime() >= onlineCutoff).map((u) => u.id),
+    );
     const level = guildLevelForXp(guild.xp);
     const isMember = myMembership?.guildId === guild.id;
     const canManage = isMember && officerRoles.includes(myMembership!.role);
@@ -230,6 +238,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       power: guildPower(memberUsers.map((u) => u.xp)),
       memberCount: guild.members.length,
       memberCap: guildMemberCap(level),
+      onlineCount: onlineIds.size,
       myRole: isMember ? myMembership!.role : null,
       inAnotherGuild: !!myMembership && !isMember,
       joinRequestPending: !!myRequest,
@@ -240,6 +249,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
           contributionXp: m.contributionXp,
           weeklyXp: m.weeklyXp,
           joinedAt: m.joinedAt,
+          online: onlineIds.has(m.userId),
           identity: identities.get(m.userId) ?? null,
         }))
         .sort(

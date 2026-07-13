@@ -307,6 +307,24 @@ contribution board · edit UI · weekly events · perks/decorations.**
       image → foreign-URL rejection → account cleanup via the new deletion
       path. Device pass still needed for the picker UI.
 
+### Social pack: comment reactions + trending + guild presence ✅ (2026-07-13, API-tested; UI pending device test)
+- [x] **Reactions on chapter comments** — `CommentLike.type` (migration
+      `comment_reactions`), `/comments/:id/react` with post-identical
+      toggle/swap semantics; `CommentsSheet` uses the shared `ReactionBar`
+      emote tray. (Achievement auto-records: cut by decision.)
+- [x] **Trending threads** — `GET /posts/trending`: root posts ranked by fresh
+      reactions + replies (replies ×2), 1h window auto-widening to 24h.
+      Client: **HOT ticker** on the Dungeon feed (tap → thread) and
+      **TRENDING IN THE DUNGEONS** rail on Home (top 3).
+- [x] **Per-guild presence** (global online counter: cut by decision) —
+      `User.lastActiveAt` bumped ≤1×/5min by the auth layer (fire-and-forget);
+      hall payload gains `onlineCount` + per-member `online` (10-min window).
+      Client: green "n ONLINE" on the guild banner, Online stat in the Hall,
+      green dots on the roster.
+- [x] **GUILD feed chip** — `GET /posts?feed=guild` (guildmates' public posts;
+      the members-only board stays separate); chip on the Dungeon filter deck
+      for guild members.
+
 ## 🗺️ Deferred / next (phased — see the plan file)
 
 _Guilds Phase 4 done and **device-verified** (2026-07-12). GIPHY_API_KEY is

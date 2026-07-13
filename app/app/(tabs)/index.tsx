@@ -206,6 +206,38 @@ function DailyDirective() {
   );
 }
 
+// ── Trending threads — hottest Dungeon conversations right now ──────────────
+function TrendingRail() {
+  const trending = useQuery({
+    queryKey: ["trending", 3],
+    queryFn: () => api.trending(3),
+    staleTime: 120_000,
+  });
+  const threads = trending.data?.threads ?? [];
+  if (threads.length === 0) return null;
+  return (
+    <View style={styles.trendingBox}>
+      <Text style={styles.trendingTitle}>◆ TRENDING IN THE DUNGEONS</Text>
+      {threads.map((t, i) => (
+        <Pressable
+          key={t.id}
+          style={({ pressed }) => [styles.trendingRow, pressed && { opacity: 0.7 }]}
+          onPress={() => router.push({ pathname: "/post/[id]", params: { id: t.id } })}
+          accessibilityRole="button"
+          accessibilityLabel="Open trending thread"
+        >
+          <Text style={[styles.trendingPos, i === 0 && { color: colors.foil }]}>{i + 1}</Text>
+          <Text style={styles.trendingBody} numberOfLines={1}>
+            {t.username ? `@${t.username}: ` : ""}
+            {t.isSpoiler ? "⚠ Spoiler thread" : t.body}
+          </Text>
+          <Text style={styles.trendingArrow}>▸</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 // ── Horizontal rail ──────────────────────────────────────────────────────────
 function Rail({
   title,
@@ -578,6 +610,7 @@ export default function BrowseScreen() {
                 <View>
                   <Hero cards={cards.slice(0, 10)} />
                   {user ? <DailyDirective /> : null}
+                  <TrendingRail />
                   <Rail title="LATEST DROPS" cards={latest.data} chapterBadges />
                   <Rail title="NEW SERIES" cards={newest.data} />
                   <Rail title="RANKS — MOST READ" cards={ranks.data} rankMode />
@@ -883,6 +916,22 @@ const styles = StyleSheet.create({
   heroDots: { flexDirection: "row", justifyContent: "center", gap: 5, paddingVertical: 8 },
   heroDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "rgba(124,92,255,0.25)" },
   heroDotActive: { backgroundColor: colors.accentSoft, width: 14 },
+  trendingBox: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    borderRadius: 4,
+    backgroundColor: colors.card,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 7,
+  },
+  trendingTitle: { color: colors.data, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.6 },
+  trendingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  trendingPos: { color: colors.muted, fontSize: 10, fontWeight: "900", width: 12 },
+  trendingBody: { color: colors.mutedStrong, fontSize: 12, flex: 1 },
+  trendingArrow: { color: colors.data, fontSize: 11, fontWeight: "900" },
   directive: {
     flexDirection: "row",
     alignItems: "center",

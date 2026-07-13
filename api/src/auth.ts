@@ -108,6 +108,16 @@ export async function createSession(userId: string): Promise<string> {
   return token;
 }
 
+// Presence: bump lastActiveAt on authenticated traffic, at most once per
+// 5 minutes per user. Fire-and-forget — presence must never break a request.
+const ACTIVITY_BUMP_MS = 5 * 60 * 1000;
+function touchActivity(user: User): void {
+  if (Date.now() - user.lastActiveAt.getTime() < ACTIVITY_BUMP_MS) return;
+  void prisma.user
+    .update({ where: { id: user.id }, data: { lastActiveAt: new Date() } })
+    .catch(() => {});
+}
+
 /** Resolve the user for a request's bearer token, or null. */
 export async function getUser(req: FastifyRequest): Promise<User | null> {
   const auth = req.headers.authorization;
@@ -117,6 +127,7 @@ export async function getUser(req: FastifyRequest): Promise<User | null> {
     include: { user: true },
   });
   if (!session || session.expiresAt < new Date()) return null;
+  touchActivity(session.user);
   if (
     session.user.status === "suspended" &&
     session.user.suspendedUntil &&

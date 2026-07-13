@@ -245,6 +245,7 @@ function HallTab({
         </Text>
         <View style={styles.statRow}>
           <Stat value={`${guild.memberCount}/${guild.memberCap}`} label="Members" />
+          <Stat value={String(guild.onlineCount)} label="Online" />
           <Stat value={String(guild.xp)} label="Total GXP" />
           <Stat value={String(guild.power)} label="Power" />
         </View>
@@ -509,7 +510,10 @@ function RosterTab({
               <Text style={[styles.boardPos, i === 0 && { color: colors.foil }]}>{i + 1}</Text>
             ) : null}
             <View style={{ flex: 1 }}>
-              {m.identity ? <UserIdentity identity={m.identity} compact /> : null}
+              <View style={styles.memberNameRow}>
+                {m.online ? <View style={styles.memberOnlineDot} /> : null}
+                {m.identity ? <UserIdentity identity={m.identity} compact /> : null}
+              </View>
               <Text style={styles.contribution}>
                 {order === "weekly"
                   ? `${m.weeklyXp} GXP this week · ${m.contributionXp} total`
@@ -790,6 +794,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   contribution: { color: colors.muted, fontSize: 11, marginTop: 4, marginLeft: 39 },
+  memberNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  memberOnlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.fresh },
   memberRight: { alignItems: "flex-end", gap: 6 },
   roleBadge: { color: colors.muted, fontSize: 8.5, fontWeight: "900", letterSpacing: 1 },
   manageDots: { color: colors.accentSoft, fontSize: 20, fontWeight: "900", lineHeight: 20 },
