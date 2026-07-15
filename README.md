@@ -1,38 +1,60 @@
 # Mangadamia
 
 Mangadamia is an Expo/React Native reader and community client backed by a
-Fastify/PostgreSQL API. The only built-in remote catalog is the documented
-MangaDex API. The project contains no HTML source adapters, browser
-impersonation, Cloudflare workarounds, hotlink headers, or offline chapter
-downloads.
+Fastify/PostgreSQL API. Catalog content is aggregated from multiple sources
+(the documented MangaDex API plus the Asura Scans and Weeb Central scrapers).
+Scraping runs in a **separate `scraper/` service**, not inside the API — the
+API consumes it over HTTP as a remote source, keeps a PostgreSQL cache, and
+merges sources per canonical series so a title missing on one provider can be
+read from another ("servers").
 
 ## Architecture
 
 ```text
-Expo app ──HTTPS──> Mangadamia API ──JSON──> MangaDex API
-    │                    │
-    │                    └── PostgreSQL: accounts, sync, UGC, moderation
+Expo app ──HTTPS──> Mangadamia API ──HTTP(+key)──> Scraper service ──> MangaDex API
+    │                    │                              └──> Asura / Weeb Central (HTML)
+    │                    └── PostgreSQL: catalog cache, accounts, sync, UGC, moderation
     └── SQLite: on-device library, history, progress, session
 ```
 
 Manga titles, covers, and chapters remain the property of their respective
-creators, publishers, scanlation groups, and uploaders. The app visibly
-attributes MangaDex and links users to the corresponding MangaDex title page.
+creators, publishers, scanlation groups, and uploaders.
 
 ## Repository layout
 
-- `api/` — Fastify API, MangaDex adapter, PostgreSQL cache, accounts, sync,
-  reports, moderation, and public legal/deletion pages.
+- `api/` — Fastify API, remote-source adapters, PostgreSQL cache, accounts,
+  sync, reports, moderation, and public legal/deletion pages.
+- `scraper/` — standalone Fastify service that exposes the source adapters
+  (MangaDex + Asura + Weeb Central) over an HTTP API guarded by a shared key.
 - `app/` — Expo SDK 54 Android/iOS client.
+- `console/` — web admin console (Vite/React SPA, served by the API).
 
 ## Development
+
+Run the scraper and the API as two processes (plus Expo). Set the **same**
+`SCRAPER_API_KEY` in both `scraper/.env` and `api/.env`.
+
+### Scraper service
+
+```bash
+cd scraper
+npm install
+cp .env.example .env   # set SCRAPER_API_KEY to a long random value
+npm run dev            # listens on :4000
+```
+
+Exercise an adapter against the live site in isolation:
+
+```bash
+npm run test:source asura           # or mangadex / weebcentral
+```
 
 ### API
 
 ```bash
 cd api
 npm install
-cp .env.example .env
+cp .env.example .env   # set SCRAPER_URL=http://localhost:4000 and the matching SCRAPER_API_KEY
 npx prisma migrate dev
 npm run dev
 ```
@@ -48,7 +70,14 @@ ALLOWED_ORIGINS=https://your-web-client.example
 APP_USER_AGENT=Mangadamia/1.0 (support: support@your-domain.example)
 SUPPORT_EMAIL=support@your-domain.example
 DEVELOPER_LEGAL_NAME=Your legal developer name
+SCRAPER_URL=https://your-scraper-service.internal
+SCRAPER_API_KEY=<same long random value as scraper/.env>
 ```
+
+Deploy the scraper as its own service (e.g. a second Railway service pointed at
+`scraper/`, `PORT` + `SCRAPER_API_KEY` set). The API reaches it over the
+internal URL. If the scraper is down the API serves stale cache and failing
+sources drop out of feeds — degradation is graceful, not fatal.
 
 ### App
 

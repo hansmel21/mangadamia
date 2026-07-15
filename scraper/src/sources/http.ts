@@ -1,5 +1,9 @@
-// HTTP helper for approved APIs. Enforces a per-host request cadence.
+// Small HTTP helper shared by all source adapters.
+// Enforces per-host politeness: at most one request per host at a time,
+// with a minimum delay between requests, so we never hammer a source site.
 
+// Scraped sites get a conservative delay; MangaDex's official API allows
+// ~5 req/s per IP, so it can be polled faster (matters for long chapter feeds).
 const DEFAULT_DELAY_MS = 500;
 const HOST_DELAY_MS: Record<string, number> = {
   "api.mangadex.org": 250,
@@ -7,7 +11,8 @@ const HOST_DELAY_MS: Record<string, number> = {
 const lastRequestAt = new Map<string, number>();
 const queues = new Map<string, Promise<void>>();
 
-const USER_AGENT = process.env.APP_USER_AGENT ?? "Mangadamia/1.0 (MangaDex API client)";
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 async function throttle(host: string): Promise<void> {
   const prev = queues.get(host) ?? Promise.resolve();
@@ -50,4 +55,9 @@ export async function fetchJson<T = unknown>(url: string, init: RequestInit = {}
     headers: { accept: "application/json", ...init.headers },
   });
   return (await res.json()) as T;
+}
+
+export async function fetchHtml(url: string, init: RequestInit = {}): Promise<string> {
+  const res = await fetchWithPolicy(url, init);
+  return await res.text();
 }

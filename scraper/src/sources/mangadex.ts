@@ -1,5 +1,9 @@
 // MangaDex API adapter. This is the only remote catalog provider.
 // Docs: https://api.mangadex.org/docs/
+//
+// Play-compliance: this adapter is deliberately restricted to MangaDex's SAFE
+// rating only (see PLAY_COMPLIANCE.md). Do not add contentRating[]=suggestive
+// / erotica / pornographic here.
 
 import { fetchJson } from "./http.js";
 import type { ChapterInfo, PageInfo, SeriesDetail, SeriesSummary, Source } from "./types.js";

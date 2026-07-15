@@ -224,7 +224,7 @@ export default function SeriesScreen() {
         });
         for (const p of pages.slice(0, 3)) {
           if (cancelled) return;
-          await Image.prefetch(p.imageUrl);
+          await Image.prefetch(p.imageUrl, { headers: p.headers });
         }
       } catch {
         // best-effort — opening the reader fetches normally if this failed

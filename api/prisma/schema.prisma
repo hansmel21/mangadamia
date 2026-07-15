@@ -746,6 +746,7 @@ model Page {
   chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   index     Int
   imageUrl  String
+  headers   Json? // HTTP headers the app must send to load the image (e.g. Referer)
 
   @@unique([chapterId, index])
 }

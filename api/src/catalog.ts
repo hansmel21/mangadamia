@@ -185,6 +185,7 @@ export async function getPagesCached(
       return pages.map((p) => ({
         index: p.index,
         imageUrl: p.imageUrl,
+        headers: (p.headers as Record<string, string> | null) ?? undefined,
       }));
     }
   }
@@ -197,6 +198,7 @@ export async function getPagesCached(
         chapterId: chapter.id,
         index: p.index,
         imageUrl: p.imageUrl,
+        headers: (p.headers ?? undefined) as Prisma.InputJsonValue | undefined,
       })),
     }),
     prisma.chapter.update({

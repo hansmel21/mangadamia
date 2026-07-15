@@ -489,6 +489,36 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - [x] **Quest Log** — cadence chips scroll horizontally (they overflowed);
       new **COMPLETED** tab owns claimed quests (they leave the other tabs).
 
+### External scraper service ✅ (2026-07-15, E2E-tested end-to-end)
+- [x] **New `scraper/` service** (Fastify, stateless, no DB) hosting the three
+      source adapters — **MangaDex** (safe-only, Play-compliant) + **Asura
+      Scans** + **Weeb Central** (cheerio HTML scrapers, browser UA, per-host
+      throttle). Exposes the `Source` contract over REST behind an
+      `x-scraper-key` shared secret: `/sources`, `/sources/:id/list`
+      (popular/search/latest/newest), `/series/:id`, `/…/pages`, public
+      `/health`. `npm run test:source <id>` smoke-tests an adapter live.
+- [x] **API consumes it remotely** — `api/src/sources/remote.ts` factory +
+      static registry (`sources/index.ts`); deleted the in-process
+      `mangadex.ts`/`http.ts`. `catalog`/`unified`/`health` unchanged. Env
+      `SCRAPER_URL` + `SCRAPER_API_KEY`.
+- [x] **Multi-server restored** — with three sources back, cross-source
+      discovery + `/canonical/:id/sources` repopulate per-series "servers"
+      (verified: Solo Leveling → Asura 67ch + Weeb Central 68ch; licensed on
+      MangaDex). No switcher rebuild — it was dormant, not removed.
+- [x] **Page Referer headers** — migration `page_headers` (`Page.headers Json?`);
+      stored/returned by `getPagesCached`; threaded into the reader +
+      series-prefetch `expo-image` calls so scanlation CDNs (which 403 without
+      their own Referer) load.
+- [x] Verified: `/browse` merges all 3 sources, `/search` returns multi-server
+      cards, Asura pages carry `{Referer}` end-to-end + persisted in DB, and the
+      API serves cached data when the scraper is stopped (SWR fallback). All
+      three workspaces typecheck clean.
+- ⚠ **Policy note:** re-adds HTML scraping / browser UA / hotlink Referer
+      headers that the README/PLAY_COMPLIANCE previously disclaimed — revisit
+      Play submission posture before shipping to production.
+- ⚠ **Deploy:** scraper runs as its own service; set matching `SCRAPER_API_KEY`
+      on both sides (see README).
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Communities** — Reddit-style user-created communities (create/join, own
   feed, moderation) alongside guilds.

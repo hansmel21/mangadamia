@@ -51,6 +51,7 @@ type PageReaderItem = {
   chapterPageCount: number;
   pageIndex: number;
   imageUrl: string;
+  headers?: Record<string, string>;
 };
 type ReaderItem = PageReaderItem | { kind: "divider"; key: string; chapterNumber: number };
 
@@ -260,6 +261,7 @@ export default function ReaderScreen() {
           chapterPageCount: pgs.length,
           pageIndex: p.index,
           imageUrl: p.imageUrl,
+          headers: p.headers,
         });
       }
     }
@@ -307,7 +309,7 @@ export default function ReaderScreen() {
         if (!target) return;
         fetched.add(target.key);
         try {
-          await Image.prefetch(target.imageUrl);
+          await Image.prefetch(target.imageUrl, { headers: target.headers });
         } catch {
           // a failed prefetch is fine — the visible <Image> will retry it
         }
@@ -527,6 +529,7 @@ function PageLoadingOverlay({ label, progress }: { label: string; progress: numb
 // Each page owns its loading state so progress ticks only re-render that page.
 function ReaderPage({
   imageUrl,
+  headers,
   label,
   onTap,
   imageStyle,
@@ -535,6 +538,7 @@ function ReaderPage({
   onRatio,
 }: {
   imageUrl: string;
+  headers?: Record<string, string>;
   label: string;
   onTap: () => void;
   imageStyle: { width: number; height: number };
@@ -547,7 +551,7 @@ function ReaderPage({
   return (
     <Pressable onPress={onTap}>
       <Image
-        source={{ uri: imageUrl }}
+        source={{ uri: imageUrl, headers }}
         style={imageStyle}
         contentFit={contentFit}
         cachePolicy="memory-disk"
@@ -649,6 +653,7 @@ function VerticalReader({
         ) : (
           <ReaderPage
             imageUrl={item.imageUrl}
+            headers={item.headers}
             label={`Page ${item.pageIndex + 1}`}
             onTap={onTap}
             imageStyle={{ width, height: width / (ratios[item.key] ?? 0.7) }}
@@ -701,6 +706,7 @@ function PagedReader({
       renderItem={({ item }) => (
         <ReaderPage
           imageUrl={item.imageUrl}
+          headers={item.headers}
           label={`Page ${item.index + 1}`}
           onTap={onTap}
           imageStyle={{ width, height }}

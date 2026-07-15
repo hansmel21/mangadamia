@@ -34,7 +34,7 @@ export interface PageInfo {
 export type StatusFilter = "ongoing" | "completed";
 
 export interface Source {
-  id: string;
+  id: string; // "mangadex", "asura", ...
   name: string; // display name shown in the app
   languages: string[]; // ISO codes of chapter languages this adapter returns
 

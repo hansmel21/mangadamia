@@ -88,6 +88,9 @@ export interface SeriesDetail extends SeriesSummary {
 export interface PageInfo {
   index: number;
   imageUrl: string;
+  // Headers the app must send when loading the image (e.g. Referer for
+  // scanlation CDNs that reject requests without their own site as referrer).
+  headers?: Record<string, string>;
 }
 
 export interface AuthResponse {
