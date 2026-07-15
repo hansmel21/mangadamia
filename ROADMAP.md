@@ -470,6 +470,32 @@ contribution board · edit UI · weekly events · perks/decorations.**
       BOARD · **EVENTS** · INVITE (officers) · MANAGE; war window + raid +
       weekly event moved to the new nested `guild/events/[id]` screen.
 
+### Hotfix batch ✅ (2026-07-15, typechecked + API E2E; UI pending device test)
+- [x] **Dungeon feed blank on scope switch** — `useSwitchFade` now uses the JS
+      driver (a native-driven spring starting while the list was unmounted
+      left the remounted view stuck at opacity 0), and the feed's animated
+      wrapper stays mounted through loading.
+- [x] **Guild tab = the Hall** — members land straight on the full Hall
+      (banner, quick keys BOARD · EVENTS · MEMBERS · MANAGE, Guild Status,
+      Vanguard, Perk Track, board preview, LEAVE). `guild/[id]` keeps serving
+      foreign guilds + the members screen.
+- [x] **Hall tabs** — ROSTER renamed **MEMBERS** (invite box stays on top),
+      duplicated BOARD ↗ tab removed; `guild/[id]?tab=members` deep link.
+- [x] **Invite autocomplete** — new `GET /users/search?q=` (auth-gated,
+      prefix-ranked, ≤8 identities, banned/self excluded; E2E-verified);
+      debounced dropdown under the invite input, roster/pending filtered out.
+- [x] **"(tabs)" back-button text** — `headerBackButtonDisplayMode: "minimal"`
+      on the root stack (icon-only back everywhere).
+- [x] **Quest Log** — cadence chips scroll horizontally (they overflowed);
+      new **COMPLETED** tab owns claimed quests (they leave the other tabs).
+
+### Future ideas (owner requests, 2026-07-15)
+- **Communities** — Reddit-style user-created communities (create/join, own
+  feed, moderation) alongside guilds.
+- **Guild board priorities** — posts flaggable as priority/announcement tiers
+  beyond the pin (e.g. war-organization notices surfaced during an active
+  guild war).
+
 **→ NEXT: Arena PvP** (`ARENA_PLAN.md`) — the final track.
 3. Arena **Draw competition** (unblocked by image storage)
 4. Backlog polish batch (search autocomplete + enriched rows, guild directory

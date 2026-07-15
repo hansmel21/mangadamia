@@ -38,7 +38,7 @@ const rewardKindLabel: Record<RewardInfo["type"], string> = {
   cosmetic: "Cosmetic",
 };
 
-type CadenceFilter = "all" | "daily" | "weekly" | "seasonal" | "permanent";
+type CadenceFilter = "all" | "daily" | "weekly" | "seasonal" | "permanent" | "completed";
 
 // Server-provided deepLink wins; the keyword heuristic stays as the fallback
 // for quests without one.
@@ -105,10 +105,18 @@ export default function QuestsScreen() {
   const all = quests.data ?? [];
   const dailies = all.filter((q) => q.cadence === "daily");
   const dailiesDone = dailies.filter((q) => !!q.completedAt).length;
+  // Claimed quests live only in the COMPLETED log; every other tab shows
+  // active objectives, so a finished quest visibly moves over.
+  const completed = all.filter((q) => !!q.completedAt);
+  const active = all.filter((q) => !q.completedAt);
   const list =
-    filter === "all"
-      ? all
-      : all.filter((q) => (filter === "permanent" ? q.cadence === "permanent" || q.cadence === "hidden" : q.cadence === filter));
+    filter === "completed"
+      ? completed
+      : filter === "all"
+        ? active
+        : active.filter((q) =>
+            filter === "permanent" ? q.cadence === "permanent" || q.cadence === "hidden" : q.cadence === filter,
+          );
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -117,7 +125,13 @@ export default function QuestsScreen() {
         {countdown ? <Text style={styles.countdown}>RESET {countdown}</Text> : null}
       </View>
 
-      <View style={styles.chips}>
+      {/* Horizontal scroll: six chips never fit one row on narrow screens. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chips}
+      >
         <SystemKey variant="chip" label="ALL" active={filter === "all"} onPress={() => setFilter("all")} />
         <SystemKey
           variant="chip"
@@ -133,7 +147,13 @@ export default function QuestsScreen() {
           active={filter === "permanent"}
           onPress={() => setFilter("permanent")}
         />
-      </View>
+        <SystemKey
+          variant="chip"
+          label={completed.length > 0 ? `COMPLETED ${completed.length}` : "COMPLETED"}
+          active={filter === "completed"}
+          onPress={() => setFilter("completed")}
+        />
+      </ScrollView>
 
       {quests.isLoading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
@@ -300,7 +320,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontVariant: ["tabular-nums"],
   },
-  chips: { flexDirection: "row", gap: 4, paddingHorizontal: 16, marginTop: 10 },
+  chipsScroll: { flexGrow: 0, marginTop: 10 },
+  chips: { flexDirection: "row", gap: 4, paddingHorizontal: 16 },
   content: { padding: 16, gap: 10, paddingBottom: 48 },
   empty: { color: colors.muted, textAlign: "center", marginTop: 40, lineHeight: 22 },
   card: {

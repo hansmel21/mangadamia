@@ -23,7 +23,11 @@ export function useSwitchFade(dep: unknown) {
       return;
     }
     v.setValue(0);
-    Animated.spring(v, { toValue: 1, damping: 16, stiffness: 140, useNativeDriver: true }).start();
+    // JS driver on purpose: the switching content often unmounts/remounts
+    // around the reset (loading branch swap + key remount). A native-driven
+    // spring that starts while the view is detached can leave the remounted
+    // view stuck at the stale JS-side value (0) — an invisible screen.
+    Animated.spring(v, { toValue: 1, damping: 16, stiffness: 140, useNativeDriver: false }).start();
   }, [dep, v]);
   return {
     opacity: v,

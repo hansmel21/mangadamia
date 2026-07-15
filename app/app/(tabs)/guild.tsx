@@ -1,13 +1,15 @@
-// GUILD tab — the Hall home base (System Protocol §6). Guildless hunters get
-// a recruit window; members get the tappable banner (→ Hall), four quick keys
-// (BOARD · EVENTS · INVITE · MANAGE), and a board preview. Wars, raids and
-// weekly events nest under the EVENTS screen; roster lives in the Hall.
-import { useQuery } from "@tanstack/react-query";
+// GUILD tab — the Hall IS the tab (owner request): members land straight on
+// the full Hall — banner, quick keys (BOARD · EVENTS · MEMBERS · MANAGE),
+// Guild Status, Vanguard, Perk Track, board preview, leave. Guildless hunters
+// get a recruit window. Wars/raids/weekly events nest under EVENTS; the
+// roster lives on the MEMBERS screen (guild/[id]?tab=members).
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { MessageSquare, Settings2, Swords, UserPlus, Users } from "lucide-react-native";
+import { MessageSquare, Settings2, Swords, Users } from "lucide-react-native";
 import { useSyncExternalStore, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Pressable,
   RefreshControl,
@@ -18,10 +20,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePulseGlow } from "../../src/anim";
-import { api } from "../../src/api";
+import { api, type GuildMemberInfo } from "../../src/api";
 import { GUILD_DECOR, GuildEmblem } from "../../src/components/GuildCrest";
 import { HunterAvatar } from "../../src/components/HunterAvatar";
 import { ScreenTitle, SystemKey, SystemPanel, SystemProgress } from "../../src/components/SystemUI";
+import { SystemWindow } from "../../src/components/SystemWindow";
+import { UserIdentity } from "../../src/components/UserIdentity";
 import { getSessionUser, subscribeSession } from "../../src/session";
 import { colors, fonts } from "../../src/theme";
 
@@ -37,6 +41,7 @@ function timeAgo(iso: string): string {
 export default function GuildTab() {
   const insets = useSafeAreaInsets();
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
+  const queryClient = useQueryClient();
   const mine = useQuery({ queryKey: ["myGuild"], queryFn: api.myGuild, enabled: !!user });
   const myGuildId = mine.data?.guildId ?? null;
   const detail = useQuery({
@@ -55,6 +60,35 @@ export default function GuildTab() {
     g && g.xpForNextLevel > g.xpFloor
       ? ((g.xp - g.xpFloor) / (g.xpForNextLevel - g.xpFloor)) * 100
       : 0;
+
+  const leave = () => {
+    if (!g) return;
+    Alert.alert(
+      "Leave guild",
+      g.myRole === "guildmaster"
+        ? "You'll pass leadership to the next member. Leave this guild?"
+        : "Leave this guild?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.leaveGuild(g.id);
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["myGuild"] }),
+                queryClient.invalidateQueries({ queryKey: ["guild", g.id] }),
+                queryClient.invalidateQueries({ queryKey: ["guilds"] }),
+              ]);
+            } catch (e) {
+              Alert.alert("Guild", (e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -106,14 +140,10 @@ export default function GuildTab() {
             />
           }
         >
-          {/* banner — tap to open the Hall (roster, perks, invites) */}
-          <Pressable
-            onPress={() => openHall(g.id)}
-            accessibilityRole="button"
-            accessibilityLabel="Open the Guild Hall"
-            style={({ pressed }) => [
+          {/* banner — this tab IS the Hall now, so the banner is just the crest */}
+          <View
+            style={[
               styles.banner,
-              pressed && { opacity: 0.85 },
               g.decorationKey && GUILD_DECOR[g.decorationKey]
                 ? {
                     borderWidth: 1.5,
@@ -163,9 +193,9 @@ export default function GuildTab() {
                 <SystemProgress value={xpPct} height={5} />
               </View>
             </View>
-          </Pressable>
+          </View>
 
-          {/* quick keys — one job each; the banner above opens the Hall */}
+          {/* quick keys — one job each */}
           <View style={styles.quickKeys}>
             <QuickKey
               icon={<MessageSquare color={colors.accentBright} size={18} strokeWidth={2} />}
@@ -177,13 +207,13 @@ export default function GuildTab() {
               label="EVENTS"
               onPress={() => router.push({ pathname: "/guild/events/[id]", params: { id: g.id } })}
             />
-            {g.myRole === "guildmaster" || g.myRole === "officer" ? (
-              <QuickKey
-                icon={<UserPlus color={colors.accentBright} size={18} strokeWidth={2} />}
-                label="INVITE"
-                onPress={() => openHall(g.id)}
-              />
-            ) : null}
+            <QuickKey
+              icon={<Users color={colors.accentBright} size={18} strokeWidth={2} />}
+              label="MEMBERS"
+              onPress={() =>
+                router.push({ pathname: "/guild/[id]", params: { id: g.id, tab: "members" } })
+              }
+            />
             {g.myRole === "guildmaster" || g.myRole === "officer" ? (
               <QuickKey
                 icon={<Settings2 color={colors.accentBright} size={18} strokeWidth={2} />}
@@ -192,6 +222,42 @@ export default function GuildTab() {
               />
             ) : null}
           </View>
+
+          {/* Hall content, straight on the tab (owner request) */}
+          <SystemWindow title="Guild Status" dim>
+            <View style={styles.levelRow}>
+              <Text style={styles.levelText}>LV. {g.level}</Text>
+              <Text style={styles.powerText}>⚔ POWER {g.power}</Text>
+            </View>
+            <Text style={styles.xpLabel}>
+              {g.xp - g.xpFloor} / {g.xpForNextLevel - g.xpFloor} GXP to LV {g.level + 1}
+            </Text>
+            <View style={styles.statRow}>
+              <Stat value={`${g.memberCount}/${g.memberCap}`} label="Members" />
+              <Stat value={String(g.onlineCount)} label="Online" />
+              <Stat value={String(g.xp)} label="Total GXP" />
+            </View>
+          </SystemWindow>
+
+          <WeeklyVanguard members={g.members} />
+
+          <SystemWindow title="Perk Track" dim>
+            <View style={{ gap: 9 }}>
+              {g.perks.map((p) => (
+                <View key={p.key} style={styles.perkRow}>
+                  <Text style={[styles.perkLevel, !p.unlocked && { color: colors.muted }]}>
+                    LV {p.level}
+                  </Text>
+                  <Text style={[styles.perkLabel, !p.unlocked && { color: colors.muted }]}>
+                    {p.label}
+                  </Text>
+                  <Text style={[styles.perkState, p.unlocked && { color: colors.fresh }]}>
+                    {p.unlocked ? "✓" : "🔒"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </SystemWindow>
 
           {/* board preview */}
           <View style={styles.boardBox}>
@@ -237,14 +303,47 @@ export default function GuildTab() {
               ))
             )}
           </View>
+
+          <Pressable style={styles.leaveBtn} onPress={leave}>
+            <Text style={styles.leaveText}>LEAVE GUILD</Text>
+          </Pressable>
         </ScrollView>
       )}
     </View>
   );
 }
 
-function openHall(id: string) {
-  router.push({ pathname: "/guild/[id]", params: { id } });
+// This week's top-3 contributors (same card as the Hall screen).
+function WeeklyVanguard({ members }: { members: GuildMemberInfo[] }) {
+  const leaders = [...members]
+    .filter((m) => m.weeklyXp > 0 && m.identity)
+    .sort((a, b) => b.weeklyXp - a.weeklyXp)
+    .slice(0, 3);
+  if (leaders.length === 0) return null;
+  return (
+    <SystemWindow title="This Week's Vanguard" dim>
+      <View style={{ gap: 10 }}>
+        {leaders.map((m, i) => (
+          <View key={m.identity!.id ?? i} style={styles.vanguardRow}>
+            <Text style={[styles.vanguardRank, i === 0 && { color: colors.foil }]}>{i + 1}</Text>
+            <View style={{ flex: 1 }}>
+              <UserIdentity identity={m.identity!} compact />
+            </View>
+            <Text style={styles.vanguardXp}>{m.weeklyXp} GXP</Text>
+          </View>
+        ))}
+      </View>
+    </SystemWindow>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
 }
 
 // Breathing green presence dot.
@@ -304,6 +403,36 @@ const styles = StyleSheet.create({
 
 
   quickKeys: { flexDirection: "row", gap: 8 },
+  levelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  levelText: { color: colors.foil, fontFamily: fonts.display, fontSize: 18 },
+  powerText: { color: colors.accentSoft, fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
+  xpLabel: { color: colors.muted, fontSize: 11, marginTop: 6, fontVariant: ["tabular-nums"] },
+  statRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 14 },
+  stat: { alignItems: "center" },
+  statValue: { color: colors.text, fontFamily: fonts.display, fontSize: 18 },
+  statLabel: { color: colors.muted, fontSize: 11, marginTop: 2 },
+  perkRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  perkLevel: { color: colors.foil, fontSize: 10, fontWeight: "900", width: 36 },
+  perkLabel: { color: colors.text, fontSize: 12.5, flex: 1, lineHeight: 17 },
+  perkState: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  vanguardRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  vanguardRank: {
+    color: colors.accentSoft,
+    fontFamily: fonts.display,
+    fontSize: 16,
+    width: 18,
+    textAlign: "center",
+  },
+  vanguardXp: { color: colors.muted, fontSize: 11, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  leaveBtn: {
+    borderWidth: 1.5,
+    borderColor: "rgba(206,81,83,0.5)",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  leaveText: { color: colors.danger, fontWeight: "900", fontSize: 12, letterSpacing: 1.4 },
   quickKey: {
     flex: 1,
     alignItems: "center",

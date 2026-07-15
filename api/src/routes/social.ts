@@ -397,6 +397,35 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return { ok: true, privacy: settings };
   });
 
+  // Username autocomplete (guild invites, mentions). Prefix matches rank
+  // first; signed-in only so the user directory can't be scraped anonymously.
+  app.get("/users/search", async (req) => {
+    const me = await requireUser(req);
+    const { q } = z.object({ q: z.string().trim().min(2).max(30) }).parse(req.query);
+    const users = await prisma.user.findMany({
+      where: {
+        username: { contains: q, mode: "insensitive" },
+        status: { not: "banned" },
+        id: { not: me.id },
+      },
+      select: { id: true, username: true },
+      orderBy: { username: "asc" },
+      take: 12,
+    });
+    const lower = q.toLowerCase();
+    users.sort((a, b) => {
+      const ap = a.username.toLowerCase().startsWith(lower) ? 0 : 1;
+      const bp = b.username.toLowerCase().startsWith(lower) ? 0 : 1;
+      return ap - bp || a.username.localeCompare(b.username);
+    });
+    const top = users.slice(0, 8);
+    const identities = await identitiesForUsers(
+      top.map((u) => u.id),
+      me.id,
+    );
+    return top.map((u) => identities.get(u.id)).filter((i) => i && !i.anonymized);
+  });
+
   // ── Public profiles & safety ──────────────────────────────────────────
   app.get<{ Params: { username: string } }>("/users/:username", async (req) => {
     const me = await getUser(req);

@@ -56,6 +56,9 @@ export default function RootLayout() {
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
           headerShadowVisible: false,
+          // Icon-only back control — otherwise iOS shows the previous route's
+          // title next to the arrow, which surfaces as a literal "(tabs)".
+          headerBackButtonDisplayMode: "minimal",
           headerTitleStyle: fontsLoaded
             ? { fontFamily: fonts.displayBold, color: colors.accentSoft }
             : { color: colors.accentSoft, fontWeight: "800" },

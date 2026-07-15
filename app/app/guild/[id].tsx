@@ -1,8 +1,9 @@
 // Guild Hall (HQ). Two tabs: HALL (emblem, level/XP/power, join/leave) and
-// ROSTER (members + officer management, pending join requests + invitations).
+// MEMBERS (roster + officer management, pending join requests + invitations).
+// Open with ?tab=members to land on the roster directly.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -45,10 +46,10 @@ function MemberPulseDot() {
 }
 
 export default function GuildHallScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab: routeTab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"hall" | "roster">("hall");
+  const [tab, setTab] = useState<"hall" | "roster">(routeTab === "members" ? "roster" : "hall");
   const [busy, setBusy] = useState(false);
   const [manage, setManage] = useState<GuildMemberInfo | null>(null);
 
@@ -132,6 +133,7 @@ export default function GuildHallScreen() {
         </View>
       ) : (
         <>
+          {/* No BOARD tab here — the guild tab's quick key already covers it. */}
           <View style={styles.tabs}>
             {(["hall", "roster"] as const).map((t) => (
               <Pressable
@@ -140,17 +142,10 @@ export default function GuildHallScreen() {
                 onPress={() => setTab(t)}
               >
                 <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                  {t === "roster" ? `ROSTER · ${guild.memberCount}` : "HALL"}
+                  {t === "roster" ? `MEMBERS · ${guild.memberCount}` : "HALL"}
                 </Text>
               </Pressable>
             ))}
-            {/* The board lives on its own screen (inline composer + threads). */}
-            <Pressable
-              style={styles.tab}
-              onPress={() => router.push({ pathname: "/guild/board/[id]", params: { id } })}
-            >
-              <Text style={styles.tabText}>BOARD ↗</Text>
-            </Pressable>
           </View>
 
           {tab === "hall" ? (
@@ -413,6 +408,36 @@ function RosterTab({
           order === "weekly" ? b.weeklyXp - a.weeklyXp : b.contributionXp - a.contributionXp,
         );
   const [inviteName, setInviteName] = useState("");
+  // Autocomplete: debounce the typed name, search readers, and drop everyone
+  // already on the roster or holding a pending invite.
+  const [debouncedName, setDebouncedName] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedName(inviteName.trim().replace(/^@/, "")), 250);
+    return () => clearTimeout(t);
+  }, [inviteName]);
+  const suggestionsQ = useQuery({
+    queryKey: ["userSearch", debouncedName],
+    queryFn: () => api.searchUsers(debouncedName),
+    enabled: canManage && debouncedName.length >= 2,
+    staleTime: 30_000,
+  });
+  const excludedIds = useMemo(
+    () =>
+      new Set(
+        [
+          ...guild.members.map((m) => m.identity?.id),
+          ...guild.pendingInvites.map((i) => i.identity?.id),
+        ].filter(Boolean),
+      ),
+    [guild.members, guild.pendingInvites],
+  );
+  const typedName = inviteName.trim().replace(/^@/, "");
+  const suggestions = (suggestionsQ.data ?? []).filter(
+    (s) =>
+      s.id &&
+      !excludedIds.has(s.id) &&
+      s.username.toLowerCase() !== typedName.toLowerCase(),
+  );
   const sendInvite = () => {
     const name = inviteName.trim().replace(/^@/, "");
     if (!name) return;
@@ -444,6 +469,19 @@ function RosterTab({
               <Text style={styles.inviteSendText}>SEND</Text>
             </Pressable>
           </View>
+          {suggestions.length > 0 ? (
+            <View style={styles.suggestBox}>
+              {suggestions.map((s) => (
+                <Pressable
+                  key={s.id}
+                  style={({ pressed }) => [styles.suggestRow, pressed && { backgroundColor: colors.accentGhost }]}
+                  onPress={() => setInviteName(s.username)}
+                >
+                  <UserIdentity identity={s} compact />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           {guild.pendingInvites.length > 0 ? (
             <View style={{ gap: 10, marginTop: 4 }}>
               <Text style={styles.invitePendingLabel}>
@@ -754,6 +792,19 @@ const styles = StyleSheet.create({
   },
   inviteSendText: { color: colors.accentSoft, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
   invitePendingLabel: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.3 },
+  suggestBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    overflow: "hidden",
+  },
+  suggestRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
   vanguardRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   vanguardRank: {
     color: colors.accentSoft,

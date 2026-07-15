@@ -926,6 +926,8 @@ export const api = {
     ),
   report: (targetType: "post" | "comment" | "user", targetId: string, reason?: string) =>
     request<{ ok: boolean }>("/report", "POST", { targetType, targetId, reason }),
+  searchUsers: (q: string) =>
+    get<PublicIdentity[]>(`/users/search?q=${encodeURIComponent(q)}`),
 
   // ── Guilds ──────────────────────────────────────────────────────────────
   guilds: (sort: "level" | "new" = "level", q?: string) =>

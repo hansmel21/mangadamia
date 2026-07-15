@@ -330,10 +330,12 @@ export default function FeedScreen() {
         </View>
       ) : null}
 
-      {feed.isLoading ? (
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
-      ) : (
-        <Animated.View style={[{ flex: 1 }, listFade]}>
+      {/* The animated wrapper stays mounted through loading — swapping it out
+          while the switch-fade resets risks a view stuck at opacity 0. */}
+      <Animated.View style={[{ flex: 1 }, listFade]}>
+        {feed.isLoading ? (
+          <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
+        ) : (
           <FlatList
             key={listKey}
             data={posts}
@@ -398,8 +400,8 @@ export default function FeedScreen() {
               </Text>
             }
           />
-        </Animated.View>
-      )}
+        )}
+      </Animated.View>
 
       {user ? (
         <SystemKey
