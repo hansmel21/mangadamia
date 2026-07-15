@@ -1,6 +1,8 @@
-// Guild Hall (HQ). Two tabs: HALL (emblem, level/XP/power, join/leave) and
-// MEMBERS (roster + officer management, pending join requests + invitations).
-// Open with ?tab=members to land on the roster directly.
+// Guild Hall (HQ) for FOREIGN guilds — two tabs: HALL (emblem, level/XP/power,
+// join) and MEMBERS (roster). Open with ?tab=members to land on the roster.
+// Your OWN guild's hall lives on the guild tab, so for members this screen
+// only ever shows the roster (no duplicate HALL tab); bare links to your own
+// guild redirect to the guild tab instead.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -55,6 +57,13 @@ export default function GuildHallScreen() {
 
   const guildQ = useQuery({ queryKey: ["guild", id], queryFn: () => api.guild(id), enabled: !!id });
   const guild = guildQ.data;
+
+  // Your own guild's hall is the guild tab — this screen would just duplicate
+  // it. Members deep-linking here without ?tab=members go to the real Hall.
+  const isMine = guild?.myRole != null;
+  useEffect(() => {
+    if (isMine && routeTab !== "members") router.replace("/guild");
+  }, [isMine, routeTab]);
 
   const refresh = () =>
     Promise.all([
@@ -122,7 +131,9 @@ export default function GuildHallScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: guild ? guild.name : "Guild" }} />
-      {guildQ.isLoading ? (
+      {guildQ.isLoading || (isMine && routeTab !== "members") ? (
+        // Second case: a member landing on their own guild's page — the
+        // redirect to the guild-tab Hall is in flight, don't flash content.
         <ActivityIndicator color={colors.accent} style={{ marginTop: 48 }} />
       ) : !guild ? (
         <View style={styles.missing}>
@@ -133,22 +144,26 @@ export default function GuildHallScreen() {
         </View>
       ) : (
         <>
-          {/* No BOARD tab here — the guild tab's quick key already covers it. */}
-          <View style={styles.tabs}>
-            {(["hall", "roster"] as const).map((t) => (
-              <Pressable
-                key={t}
-                style={[styles.tab, tab === t && styles.tabActive]}
-                onPress={() => setTab(t)}
-              >
-                <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                  {t === "roster" ? `MEMBERS · ${guild.memberCount}` : "HALL"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {/* No BOARD tab here — the guild tab's quick key already covers it.
+              Members see no tabs at all: their HALL is the guild tab, so this
+              screen is purely the roster for them. */}
+          {!isMine ? (
+            <View style={styles.tabs}>
+              {(["hall", "roster"] as const).map((t) => (
+                <Pressable
+                  key={t}
+                  style={[styles.tab, tab === t && styles.tabActive]}
+                  onPress={() => setTab(t)}
+                >
+                  <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+                    {t === "roster" ? `MEMBERS · ${guild.memberCount}` : "HALL"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
 
-          {tab === "hall" ? (
+          {!isMine && tab === "hall" ? (
             <HallTab
               guild={guild}
               busy={busy}
