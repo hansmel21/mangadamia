@@ -152,6 +152,12 @@ export function PostCard({
         </View>
       </View>
 
+      {post.announcement && !isReply ? (
+        <View style={styles.noticeRow} pointerEvents="none">
+          <Text style={styles.noticeChip}>⚑ NOTICE</Text>
+        </View>
+      ) : null}
+
       {post.gate && showGateChip && !isReply ? (
         <View style={styles.gateChipRow}>
           <GateChip gate={post.gate} />
@@ -371,6 +377,7 @@ export function PostCard({
         style={({ pressed }) => [
           styles.card,
           official && styles.cardOfficial,
+          post.announcement && styles.cardNotice,
           pressed && styles.cardPressed,
         ]}
         accessibilityRole="button"
@@ -382,7 +389,14 @@ export function PostCard({
   }
 
   return (
-    <View style={[styles.card, root && styles.cardRoot, official && styles.cardOfficial]}>
+    <View
+      style={[
+        styles.card,
+        root && styles.cardRoot,
+        official && styles.cardOfficial,
+        post.announcement && styles.cardNotice,
+      ]}
+    >
       {inner}
     </View>
   );
@@ -390,6 +404,23 @@ export function PostCard({
 
 const styles = StyleSheet.create({
   gateChipRow: { flexDirection: "row", marginBottom: 7 },
+  cardNotice: {
+    borderWidth: 1.5,
+    borderColor: "rgba(205,164,94,0.6)",
+    backgroundColor: "rgba(205,164,94,0.04)",
+  },
+  noticeRow: { flexDirection: "row", marginBottom: 6 },
+  noticeChip: {
+    color: colors.foilSoft,
+    fontSize: 8.5,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    borderWidth: 1,
+    borderColor: "rgba(205,164,94,0.55)",
+    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
   card: {
     position: "relative",
     backgroundColor: colors.card,

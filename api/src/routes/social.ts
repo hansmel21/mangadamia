@@ -2192,7 +2192,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         moderationStatus: "visible",
         userId: { notIn: blockedIds },
       },
-      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ announcement: "desc" }, { pinned: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * 25,
       take: 25,
       include: postInclude(user.id),
@@ -2219,6 +2219,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       ...serializePost(p, identities, user.id, reactionMap.get(p.id) ?? {}),
       commentCount: countByRoot.get(p.id) ?? 0,
       pinned: p.pinned,
+      announcement: p.announcement,
       authorRole: roleByUser.get(p.userId) ?? null,
     }));
   });
@@ -2256,6 +2257,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         author: identity,
         username: user.username,
         pinned: false,
+        announcement: false,
         authorRole: membership.role,
         reactions: {},
         myReaction: null,
@@ -2265,11 +2267,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     },
   );
 
-  // Officers pin/unpin a board post (the 📌 row at the top of the board);
-  // wardens do the same inside their gate.
-  app.post<{ Params: { id: string } }>("/posts/:id/pin", async (req) => {
-    const user = await requireActiveUser(req);
-    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+  // Shared guard for board-tier actions: a top-level guild-board or gate post
+  // plus the caller's pin permission in that space.
+  async function requireTierPost(userId: string, postId: string) {
+    const post = await prisma.post.findUnique({ where: { id: postId } });
     if (
       !post ||
       post.moderationStatus !== "visible" ||
@@ -2280,7 +2281,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     }
     if (post.gateId) {
       const [membership, gate] = await Promise.all([
-        gateMembership(user.id, post.gateId),
+        gateMembership(userId, post.gateId),
         prisma.gate.findUnique({ where: { id: post.gateId }, select: { permissions: true } }),
       ]);
       if (!gate || !isGateMod(membership) || !hasGatePerm(gate, membership, "pin")) {
@@ -2288,7 +2289,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       }
     } else {
       const [membership, guild] = await Promise.all([
-        prisma.guildMember.findUnique({ where: { userId: user.id } }),
+        prisma.guildMember.findUnique({ where: { userId } }),
         prisma.guild.findUnique({ where: { id: post.guildId! }, select: { permissions: true } }),
       ]);
       if (
@@ -2300,9 +2301,33 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         throw httpError(403, "Officers only");
       }
     }
+    return post;
+  }
+
+  // Board tier: NORMAL < PINNED < ANNOUNCEMENT (a NOTICE — e.g. war
+  // organization). Pinned and announcement are mutually exclusive.
+  app.post<{ Params: { id: string } }>("/posts/:id/tier", async (req) => {
+    const user = await requireActiveUser(req);
+    const { tier } = z
+      .object({ tier: z.enum(["normal", "pinned", "announcement"]) })
+      .parse(req.body);
+    const post = await requireTierPost(user.id, req.params.id);
     const updated = await prisma.post.update({
       where: { id: post.id },
-      data: { pinned: !post.pinned },
+      data: { pinned: tier === "pinned", announcement: tier === "announcement" },
+    });
+    return { ok: true, pinned: updated.pinned, announcement: updated.announcement };
+  });
+
+  // Officers pin/unpin a board post (the 📌 row at the top of the board);
+  // wardens do the same inside their gate. Legacy toggle — delegates to the
+  // same guard and clears the announcement tier when flipping.
+  app.post<{ Params: { id: string } }>("/posts/:id/pin", async (req) => {
+    const user = await requireActiveUser(req);
+    const post = await requireTierPost(user.id, req.params.id);
+    const updated = await prisma.post.update({
+      where: { id: post.id },
+      data: { pinned: !post.pinned, announcement: false },
     });
     return { ok: true, pinned: updated.pinned };
   });
@@ -2323,8 +2348,13 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const blockedIds = me ? await hiddenUserIds(me.id) : [];
     const orderBy =
       sort === "new"
-        ? [{ pinned: "desc" as const }, { createdAt: "desc" as const }]
+        ? [
+            { announcement: "desc" as const },
+            { pinned: "desc" as const },
+            { createdAt: "desc" as const },
+          ]
         : [
+            { announcement: "desc" as const },
             { pinned: "desc" as const },
             { likes: { _count: "desc" as const } },
             { createdAt: "desc" as const },
@@ -2369,6 +2399,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       ...serializePost(p, identities, me?.id, reactionMap.get(p.id) ?? {}),
       commentCount: countByRoot.get(p.id) ?? 0,
       pinned: p.pinned,
+      announcement: p.announcement,
       authorRole: roleByUser.get(p.userId) ?? null,
     }));
   });

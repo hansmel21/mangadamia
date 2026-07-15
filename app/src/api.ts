@@ -751,6 +751,9 @@ export interface PostInfo {
   // crossed the reaction threshold onto the main wall.
   gate?: PostGateInfo | null;
   promoted?: boolean;
+  // Board tiers (guild board / gate feed rows): NOTICE sorts above pins.
+  pinned?: boolean;
+  announcement?: boolean;
   completedQuests?: QuestCompletion[];
   levelUp?: number | null;
 }
@@ -1128,6 +1131,12 @@ export const api = {
     request<{ ok: boolean; pinned: boolean }>(
       `/posts/${encodeURIComponent(postId)}/pin`,
       "POST",
+    ),
+  setPostTier: (postId: string, tier: "normal" | "pinned" | "announcement") =>
+    request<{ ok: boolean; pinned: boolean; announcement: boolean }>(
+      `/posts/${encodeURIComponent(postId)}/tier`,
+      "POST",
+      { tier },
     ),
 
   // ── Gates ────────────────────────────────────────────────────────────────

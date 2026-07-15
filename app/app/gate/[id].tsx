@@ -121,10 +121,10 @@ export default function GateScreen() {
       /* ignore */
     }
   };
-  const togglePin = async (p: GatePost) => {
+  const setTier = async (p: GatePost, tier: "normal" | "pinned" | "announcement") => {
     try {
-      const res = await api.pinGuildPost(p.id);
-      patch(p.id, (x) => ({ ...x, pinned: res.pinned }));
+      const res = await api.setPostTier(p.id, tier);
+      patch(p.id, (x) => ({ ...x, pinned: res.pinned, announcement: res.announcement }));
       void queryClient.invalidateQueries({ queryKey: postsKey });
     } catch {
       /* ignore */
@@ -310,15 +310,28 @@ export default function GateScreen() {
         }
         renderItem={({ item }) => (
           <View>
-            {item.pinned || canManage ? (
+            {item.pinned || item.announcement || canManage ? (
               <View style={styles.modRow}>
                 {item.pinned ? <Text style={styles.pinnedChip}>📌 PINNED</Text> : null}
                 <View style={{ flex: 1 }} />
                 {canManage ? (
                   <>
-                    <Pressable style={styles.modKey} onPress={() => togglePin(item)} hitSlop={6}>
+                    <Pressable
+                      style={styles.modKey}
+                      onPress={() => setTier(item, item.pinned ? "normal" : "pinned")}
+                      hitSlop={6}
+                    >
                       <Pin color={colors.foilSoft} size={11} strokeWidth={2.2} />
                       <Text style={styles.modKeyText}>{item.pinned ? "UNPIN" : "PIN"}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.modKey}
+                      onPress={() => setTier(item, item.announcement ? "normal" : "announcement")}
+                      hitSlop={6}
+                    >
+                      <Text style={styles.modKeyText}>
+                        {item.announcement ? "⚑ UNNOTICE" : "⚑ NOTICE"}
+                      </Text>
                     </Pressable>
                     {!item.mine ? (
                       <Pressable

@@ -660,6 +660,20 @@ depth → XP balance.
       remove 403 while untouched powers keep working, leader unaffected,
       `can` payloads match.
 
+### Depth 3 — Board NOTICE tier ✅ (2026-07-15, E2E 12/12)
+- [x] **`Post.announcement`** (migration `board_announcements`) — a tier above
+      pinned for guild boards + gate feeds (e.g. war-organization orders).
+      Mutually exclusive with pinned; `POST /posts/:id/tier
+      {normal|pinned|announcement}` behind the Phase-2 pin permission
+      (shared `requireTierPost` guard; legacy pin toggle delegates and clears
+      the tier). Ordering: NOTICE > pinned > rest on both boards. THE SYSTEM's
+      main-feed pinning untouched. Gate-remove also clears the tier.
+- [x] **Client**: gold ⚑ NOTICE treatment on PostCard + board rows; ⚑ tier
+      keys next to PIN on the gate feed mod row and the guild board rows
+      (which now render pin controls from the server `can.pin_board` truth).
+- [x] E2E 12/12: tier ordering, permission-toggle 403, legacy-pin clearing,
+      reply/tier 404, gate NOTICE first.
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active

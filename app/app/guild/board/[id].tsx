@@ -44,7 +44,8 @@ export default function GuildBoardScreen() {
     queryFn: () => api.guildBoard(id, 1),
     enabled: !!id,
   });
-  const canPin = guild.data?.myRole === "guildmaster" || guild.data?.myRole === "officer";
+  // Server truth: the pin_board capability honors the GM's permission toggles.
+  const canPin = guild.data?.can?.pin_board ?? false;
 
   const publish = async () => {
     const body = draft.trim();
@@ -64,6 +65,16 @@ export default function GuildBoardScreen() {
   const togglePin = async (postId: string) => {
     try {
       await api.pinGuildPost(postId);
+      await queryClient.invalidateQueries({ queryKey: ["guildBoard", id] });
+    } catch {
+      /* officers only; ignore */
+    }
+  };
+
+  // NOTICE tier — war organization and the like; sorts above pins.
+  const toggleNotice = async (postId: string, isNotice: boolean) => {
+    try {
+      await api.setPostTier(postId, isNotice ? "normal" : "announcement");
       await queryClient.invalidateQueries({ queryKey: ["guildBoard", id] });
     } catch {
       /* officers only; ignore */
@@ -106,6 +117,7 @@ export default function GuildBoardScreen() {
               style={({ pressed }) => [
                 styles.row,
                 p.pinned && styles.rowPinned,
+                p.announcement && styles.rowNotice,
                 pressed && { borderColor: colors.accentLine },
               ]}
               onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
@@ -122,15 +134,32 @@ export default function GuildBoardScreen() {
                     <Text style={styles.roleOfficer}>OFFICER</Text>
                   ) : null}
                   <Text style={styles.time}>{timeAgo(p.createdAt)}</Text>
+                  {p.announcement ? <Text style={styles.noticeFlag}>⚑ NOTICE</Text> : null}
                   {canPin ? (
-                    <Pressable hitSlop={8} onPress={() => togglePin(p.id)} accessibilityLabel="Pin">
-                      <Pin
-                        color={p.pinned ? colors.foil : colors.muted}
-                        size={13}
-                        strokeWidth={2}
-                        fill={p.pinned ? colors.foil : "none"}
-                      />
-                    </Pressable>
+                    <>
+                      <Pressable
+                        hitSlop={8}
+                        onPress={() => toggleNotice(p.id, !!p.announcement)}
+                        accessibilityLabel="Notice tier"
+                      >
+                        <Text
+                          style={[
+                            styles.noticeKey,
+                            p.announcement && { color: colors.foil },
+                          ]}
+                        >
+                          ⚑
+                        </Text>
+                      </Pressable>
+                      <Pressable hitSlop={8} onPress={() => togglePin(p.id)} accessibilityLabel="Pin">
+                        <Pin
+                          color={p.pinned ? colors.foil : colors.muted}
+                          size={13}
+                          strokeWidth={2}
+                          fill={p.pinned ? colors.foil : "none"}
+                        />
+                      </Pressable>
+                    </>
                   ) : p.pinned ? (
                     <Pin color={colors.foil} size={13} strokeWidth={2} fill={colors.foil} />
                   ) : null}
@@ -204,6 +233,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   rowPinned: { borderColor: "rgba(205,164,94,0.45)" },
+  rowNotice: { borderWidth: 1.5, borderColor: "rgba(205,164,94,0.65)", backgroundColor: "rgba(205,164,94,0.05)" },
+  noticeFlag: { color: colors.foilSoft, fontSize: 8, fontWeight: "900", letterSpacing: 0.8 },
+  noticeKey: { color: colors.muted, fontSize: 13, fontWeight: "900" },
   rowBody: { flex: 1 },
   rowHead: { flexDirection: "row", alignItems: "center", gap: 6 },
   user: { color: colors.text, fontSize: 13, fontWeight: "800", flexShrink: 1 },

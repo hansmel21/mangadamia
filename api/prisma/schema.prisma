@@ -460,6 +460,9 @@ model Post {
   promotedAt       DateTime?
   // Guild board / gate feed: officers or wardens pin a post to the top.
   pinned           Boolean          @default(false)
+  // Board tier above pinned: a NOTICE (e.g. war organization) — mutually
+  // exclusive with pinned, enforced by the tier endpoint.
+  announcement     Boolean          @default(false)
   // Quote-repost: this post embeds and comments on another top-level post.
   quotedPostId     String?
   quotedPost       Post?            @relation("QuotedPost", fields: [quotedPostId], references: [id], onDelete: SetNull)
