@@ -600,6 +600,9 @@ Plan: `.claude/plans/refactored-pondering-manatee.md`.
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active
   guild war).
+- **More depth for guilds + the account leveling system** — owner wants both
+  systems to grow richer (more to do inside a guild; more meaning/progression
+  attached to hunter levels). Scope to be designed together before building.
 
 **→ NEXT: Arena PvP** (`ARENA_PLAN.md`) — the final track.
 3. Arena **Draw competition** (unblocked by image storage)

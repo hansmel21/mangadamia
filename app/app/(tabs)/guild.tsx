@@ -6,7 +6,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { MessageSquare, Settings2, Swords, Users } from "lucide-react-native";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,9 +20,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePulseGlow } from "../../src/anim";
-import { api, type GuildMemberInfo } from "../../src/api";
+import { api, type GuildDetail, type GuildMemberInfo } from "../../src/api";
 import { GUILD_DECOR, GuildEmblem } from "../../src/components/GuildCrest";
 import { HunterAvatar } from "../../src/components/HunterAvatar";
+import { SystemModal } from "../../src/components/SystemModal";
 import { ScreenTitle, SystemKey, SystemPanel, SystemProgress } from "../../src/components/SystemUI";
 import { SystemWindow } from "../../src/components/SystemWindow";
 import { UserIdentity } from "../../src/components/UserIdentity";
@@ -54,6 +55,10 @@ export default function GuildTab() {
     queryFn: () => api.guildBoard(myGuildId as string, 1),
     enabled: !!myGuildId,
   });
+
+  // Which hall section's detail readout is open (tap a window to expand it,
+  // same pattern as the Status tab's stat grid).
+  const [infoModal, setInfoModal] = useState<"status" | "vanguard" | "perks" | null>(null);
 
   const g = detail.data;
   const xpPct =
@@ -223,41 +228,52 @@ export default function GuildTab() {
             ) : null}
           </View>
 
-          {/* Hall content, straight on the tab (owner request) */}
-          <SystemWindow title="Guild Status" dim>
-            <View style={styles.levelRow}>
-              <Text style={styles.levelText}>LV. {g.level}</Text>
-              <Text style={styles.powerText}>⚔ POWER {g.power}</Text>
-            </View>
-            <Text style={styles.xpLabel}>
-              {g.xp - g.xpFloor} / {g.xpForNextLevel - g.xpFloor} GXP to LV {g.level + 1}
-            </Text>
-            <View style={styles.statRow}>
-              <Stat value={`${g.memberCount}/${g.memberCap}`} label="Members" />
-              <Stat value={String(g.onlineCount)} label="Online" />
-              <Stat value={String(g.xp)} label="Total GXP" />
-            </View>
-          </SystemWindow>
+          {/* Hall content, straight on the tab (owner request). Each window
+              opens its full readout on tap, like the Status tab's stat grid. */}
+          <HallSection onPress={() => setInfoModal("status")} label="Open the full guild status">
+            <SystemWindow title="Guild Status" dim>
+              <Text style={styles.moreHint}>▸</Text>
+              <View style={styles.levelRow}>
+                <Text style={styles.levelText}>LV. {g.level}</Text>
+                <Text style={styles.powerText}>⚔ POWER {g.power}</Text>
+              </View>
+              <Text style={styles.xpLabel}>
+                {g.xp - g.xpFloor} / {g.xpForNextLevel - g.xpFloor} GXP to LV {g.level + 1}
+              </Text>
+              <View style={styles.statRow}>
+                <Stat value={`${g.memberCount}/${g.memberCap}`} label="Members" />
+                <Stat value={String(g.onlineCount)} label="Online" />
+                <Stat value={String(g.xp)} label="Total GXP" />
+              </View>
+            </SystemWindow>
+          </HallSection>
 
-          <WeeklyVanguard members={g.members} />
+          {g.members.some((m) => m.weeklyXp > 0 && m.identity) ? (
+            <HallSection onPress={() => setInfoModal("vanguard")} label="Open the weekly standings">
+              <WeeklyVanguard members={g.members} />
+            </HallSection>
+          ) : null}
 
-          <SystemWindow title="Perk Track" dim>
-            <View style={{ gap: 9 }}>
-              {g.perks.map((p) => (
-                <View key={p.key} style={styles.perkRow}>
-                  <Text style={[styles.perkLevel, !p.unlocked && { color: colors.muted }]}>
-                    LV {p.level}
-                  </Text>
-                  <Text style={[styles.perkLabel, !p.unlocked && { color: colors.muted }]}>
-                    {p.label}
-                  </Text>
-                  <Text style={[styles.perkState, p.unlocked && { color: colors.fresh }]}>
-                    {p.unlocked ? "✓" : "🔒"}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </SystemWindow>
+          <HallSection onPress={() => setInfoModal("perks")} label="Open the perk details">
+            <SystemWindow title="Perk Track" dim>
+              <Text style={styles.moreHint}>▸</Text>
+              <View style={{ gap: 9 }}>
+                {g.perks.map((p) => (
+                  <View key={p.key} style={styles.perkRow}>
+                    <Text style={[styles.perkLevel, !p.unlocked && { color: colors.muted }]}>
+                      LV {p.level}
+                    </Text>
+                    <Text style={[styles.perkLabel, !p.unlocked && { color: colors.muted }]}>
+                      {p.label}
+                    </Text>
+                    <Text style={[styles.perkState, p.unlocked && { color: colors.fresh }]}>
+                      {p.unlocked ? "✓" : "🔒"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </SystemWindow>
+          </HallSection>
 
           {/* board preview */}
           <View style={styles.boardBox}>
@@ -309,8 +325,188 @@ export default function GuildTab() {
           </Pressable>
         </ScrollView>
       )}
+
+      {g ? (
+        <>
+          <GuildStatusModal guild={g} open={infoModal === "status"} onClose={() => setInfoModal(null)} />
+          <VanguardModal guild={g} open={infoModal === "vanguard"} onClose={() => setInfoModal(null)} />
+          <PerkModal guild={g} open={infoModal === "perks"} onClose={() => setInfoModal(null)} />
+        </>
+      ) : null}
     </View>
   );
+}
+
+// A tappable hall window — opens its full detail modal, like the Status grid.
+function HallSection({
+  children,
+  onPress,
+  label,
+}: {
+  children: ReactNode;
+  onPress: () => void;
+  label: string;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => ({ opacity: pressed ? 0.82 : 1 })}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+// Full guild readout — every number behind the Guild Status window.
+function GuildStatusModal({
+  guild,
+  open,
+  onClose,
+}: {
+  guild: GuildDetail;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const guildmaster = guild.members.find((m) => m.role === "guildmaster");
+  const officers = guild.members.filter((m) => m.role === "officer").length;
+  const decor = guild.decorationKey ? (GUILD_DECOR[guild.decorationKey] ?? null) : null;
+  const weeklyTotal = guild.members.reduce((n, m) => n + m.weeklyXp, 0);
+  const rows: [string, string, boolean?][] = [
+    ["Level", `LV. ${guild.level}`, true],
+    ["Total GXP", `${guild.xp.toLocaleString()}`],
+    ["Next level", `${Math.max(0, guild.xpForNextLevel - guild.xp).toLocaleString()} GXP to go`],
+    ["Power", `⚔ ${guild.power.toLocaleString()}`, true],
+    ["This week", `${weeklyTotal.toLocaleString()} GXP`],
+    ["Members", `${guild.memberCount} / ${guild.memberCap}`],
+    ["Online now", `${guild.onlineCount}`],
+    ["Officers", `${officers}`],
+    ["Guildmaster", guildmaster?.identity ? `@${guildmaster.identity.username}` : "—", true],
+    ["Join policy", guild.joinPolicy.toUpperCase()],
+    ...(decor ? ([["Hall decoration", `${decor.icon} ${decor.name}`]] as [string, string][]) : []),
+    ...(guild.myRole ? ([["Your role", roleName(guild.myRole)]] as [string, string][]) : []),
+  ];
+  return (
+    <SystemModal visible={open} onClose={onClose} title="Guild Status">
+      <Text style={styles.modalGuildName}>
+        {guild.name} <Text style={{ color: guild.primaryColor }}>[{guild.tag}]</Text>
+      </Text>
+      {guild.motto ? <Text style={styles.modalMotto}>“{guild.motto}”</Text> : null}
+      {rows.map(([label, value, foil]) => (
+        <View key={label} style={styles.statLine}>
+          <Text style={styles.statLineLabel}>{label}</Text>
+          <Text style={[styles.statLineValue, foil && { color: colors.foil }]}>{value}</Text>
+        </View>
+      ))}
+      <ModalCloseKey onClose={onClose} />
+    </SystemModal>
+  );
+}
+
+// Full weekly standings — the Vanguard card only shows the top 3.
+function VanguardModal({
+  guild,
+  open,
+  onClose,
+}: {
+  guild: GuildDetail;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const ranked = [...guild.members]
+    .filter((m) => m.identity)
+    .sort((a, b) => b.weeklyXp - a.weeklyXp || b.contributionXp - a.contributionXp);
+  return (
+    <SystemModal visible={open} onClose={onClose} title="Weekly Standings">
+      <Text style={styles.modalSub}>
+        Every member's contribution this week — reads, records, and reactions all feed the guild.
+      </Text>
+      {ranked.map((m, i) => (
+        <View key={m.identity!.id ?? i} style={styles.vanguardRow}>
+          <Text style={[styles.vanguardRank, i === 0 && m.weeklyXp > 0 && { color: colors.foil }]}>
+            {i + 1}
+          </Text>
+          <View style={{ flex: 1 }}>
+            <UserIdentity identity={m.identity!} compact />
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={[styles.vanguardXp, m.weeklyXp > 0 && { color: colors.text }]}>
+              {m.weeklyXp} GXP
+            </Text>
+            <Text style={styles.vanguardAllTime}>{m.contributionXp} all-time</Text>
+          </View>
+        </View>
+      ))}
+      <ModalCloseKey onClose={onClose} />
+    </SystemModal>
+  );
+}
+
+// Perk + decoration catalog with unlock levels.
+function PerkModal({
+  guild,
+  open,
+  onClose,
+}: {
+  guild: GuildDetail;
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <SystemModal visible={open} onClose={onClose} title="Perk Track">
+      <Text style={styles.modalSub}>
+        Guild level is fed by member contribution and never drops. Each level milestone unlocks a
+        perk; hall decorations unlock alongside them.
+      </Text>
+      {guild.perks.map((p) => (
+        <View key={p.key} style={styles.statLine}>
+          <Text style={[styles.perkLevel, !p.unlocked && { color: colors.muted }]}>LV {p.level}</Text>
+          <Text style={[styles.perkLabel, !p.unlocked && { color: colors.muted }]}>{p.label}</Text>
+          <Text style={[styles.perkState, p.unlocked && { color: colors.fresh }]}>
+            {p.unlocked ? "✓" : "🔒"}
+          </Text>
+        </View>
+      ))}
+      <Text style={styles.modalSection}>HALL DECORATIONS</Text>
+      {guild.decorations.map((d) => {
+        const decor = GUILD_DECOR[d.key];
+        return (
+          <View key={d.key} style={styles.statLine}>
+            <Text style={[styles.perkLevel, !d.unlocked && { color: colors.muted }]}>
+              LV {d.minLevel}
+            </Text>
+            <Text style={[styles.perkLabel, !d.unlocked && { color: colors.muted }]}>
+              {decor ? `${decor.icon} ` : ""}
+              {d.name}
+            </Text>
+            <Text style={[styles.perkState, d.unlocked && { color: colors.fresh }]}>
+              {d.unlocked ? "✓" : "🔒"}
+            </Text>
+          </View>
+        );
+      })}
+      <ModalCloseKey onClose={onClose} />
+    </SystemModal>
+  );
+}
+
+function ModalCloseKey({ onClose }: { onClose: () => void }) {
+  return (
+    <View style={{ alignItems: "center" }}>
+      <Pressable
+        style={(s) => [styles.modalClose, { opacity: s.pressed ? 0.6 : 1 }]}
+        onPress={onClose}
+        hitSlop={8}
+      >
+        <Text style={styles.modalCloseText}>CLOSE</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function roleName(role: string): string {
+  return role === "guildmaster" ? "GUILDMASTER" : role.toUpperCase();
 }
 
 // This week's top-3 contributors (same card as the Hall screen).
@@ -322,6 +518,7 @@ function WeeklyVanguard({ members }: { members: GuildMemberInfo[] }) {
   if (leaders.length === 0) return null;
   return (
     <SystemWindow title="This Week's Vanguard" dim>
+      <Text style={styles.moreHint}>▸</Text>
       <View style={{ gap: 10 }}>
         {leaders.map((m, i) => (
           <View key={m.identity!.id ?? i} style={styles.vanguardRow}>
@@ -424,6 +621,52 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   vanguardXp: { color: colors.muted, fontSize: 11, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  vanguardAllTime: { color: colors.muted, fontSize: 9, fontVariant: ["tabular-nums"] },
+  moreHint: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  modalGuildName: {
+    color: colors.text,
+    fontFamily: fonts.display,
+    fontSize: 19,
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  modalMotto: { color: colors.muted, fontSize: 12, textAlign: "center", marginBottom: 8 },
+  modalSub: { color: colors.muted, fontSize: 11.5, lineHeight: 16, marginBottom: 10 },
+  modalSection: {
+    color: colors.accentSoft,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.6,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  statLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    justifyContent: "space-between",
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(28,32,41,0.6)",
+  },
+  statLineLabel: { color: colors.muted, fontSize: 12 },
+  statLineValue: { color: colors.text, fontSize: 12.5, fontWeight: "800" },
+  modalClose: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: colors.accentLine,
+    borderRadius: 4,
+    paddingHorizontal: 26,
+    paddingVertical: 9,
+  },
+  modalCloseText: { color: colors.accentSoft, fontSize: 11, fontWeight: "900", letterSpacing: 1.6 },
   leaveBtn: {
     borderWidth: 1.5,
     borderColor: "rgba(206,81,83,0.5)",

@@ -19,7 +19,6 @@ import {
   type UnifiedCard,
 } from "../api";
 import { celebrateBadges } from "../badges";
-import { getLastReadTag } from "../library";
 import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
 import { showExpGain } from "./ExpToast";
@@ -82,10 +81,6 @@ export function PostComposer({
   const [gifPickerOpen, setGifPickerOpen] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
-  // Prefilled from the reader's last read position; ✕ removes it.
-  const [autoTag, setAutoTag] = useState<
-    { canonicalId: string; title: string; chapterNumber: number } | null
-  >(null);
   // "POST INTO" — bare composes can target one of the reader's gates.
   const [pickedGate, setPickedGate] = useState<MyGate | null>(null);
   const [gatePickerOpen, setGatePickerOpen] = useState(false);
@@ -104,8 +99,7 @@ export function PostComposer({
       g.visibility !== "restricted" || g.approvedPoster || g.role !== "member",
   );
 
-  // Reset the type/rating/poll each time the composer opens, and re-read the
-  // last-read auto-tag (only meaningful for brand-new, uncontexted posts).
+  // Reset the type/rating/poll each time the composer opens.
   useEffect(() => {
     if (visible) {
       setKind(replyTo ? "record" : (initialKind ?? "record"));
@@ -116,15 +110,6 @@ export function PostComposer({
       setPostTitle("");
       setPickedGate(null);
       setGatePickerOpen(false);
-      if (!replyTo && !quote && !context) {
-        try {
-          setAutoTag(getLastReadTag() ?? null);
-        } catch {
-          setAutoTag(null);
-        }
-      } else {
-        setAutoTag(null);
-      }
     }
   }, [visible, replyTo, quote, context, initialKind]);
 
@@ -137,10 +122,6 @@ export function PostComposer({
     enabled: visible && !replyTo && !context && seriesQuery.trim().length >= 2,
     staleTime: 60_000,
   });
-
-  // The auto-tag applies when the hunter hasn't tagged anything manually and
-  // isn't reviewing (a review's series must be chosen deliberately).
-  const autoTagActive = !!autoTag && !isReview && selectedSeries.length === 0 && !context;
 
   // Pick up to 4 photos; always re-encode to JPEG (iPhone HEIC → JPEG) and
   // downscale to ≤1600px wide before the raw-binary upload.
@@ -214,14 +195,10 @@ export function PostComposer({
             ? context
               ? undefined
               : [{ canonicalId: reviewSeries! }]
-            : !context
-              ? selectedSeries.length > 0
-                ? selectedSeries
-                    .filter((series) => !!series.canonicalId)
-                    .map((series) => ({ canonicalId: series.canonicalId! }))
-                : autoTagActive && autoTag
-                  ? [{ canonicalId: autoTag.canonicalId, chapterNumber: autoTag.chapterNumber }]
-                  : undefined
+            : !context && selectedSeries.length > 0
+              ? selectedSeries
+                  .filter((series) => !!series.canonicalId)
+                  .map((series) => ({ canonicalId: series.canonicalId! }))
               : undefined,
       });
       showExpGain(created.xpAwarded);
@@ -373,24 +350,6 @@ export function PostComposer({
           </View>
         ) : null}
 
-        {/* Auto-tagged series row from the last read position */}
-        {autoTagActive && autoTag ? (
-          <View style={styles.autoTag}>
-            <View style={styles.autoTagSpine} />
-            <View style={styles.autoTagBody}>
-              <Text style={styles.autoTagTitle} numberOfLines={1}>
-                {autoTag.title}
-              </Text>
-              <Text style={styles.autoTagMeta}>
-                CH. {autoTag.chapterNumber} — auto-tagged from your last read
-              </Text>
-            </View>
-            <Pressable hitSlop={10} onPress={() => setAutoTag(null)} accessibilityLabel="Remove tag">
-              <X color={colors.muted} size={14} strokeWidth={2} />
-            </Pressable>
-          </View>
-        ) : null}
-
         {isReview ? (
           <View style={styles.ratingRow}>
             <Text style={styles.ratingLabel}>YOUR RATING</Text>
@@ -429,7 +388,38 @@ export function PostComposer({
             ) : null}
           </View>
         ) : null}
-        {!replyTo && !context && !isQuote && (!autoTagActive || isReview) ? (
+        {!replyTo && !isQuote ? (
+          <TextInput
+            style={styles.titleInput}
+            placeholder="Title (optional)"
+            placeholderTextColor={colors.muted}
+            value={postTitle}
+            onChangeText={setPostTitle}
+            maxLength={120}
+          />
+        ) : null}
+        <TextInput
+          style={styles.input}
+          placeholder={
+            replyTo
+              ? "Add to the record…"
+              : isQuote
+                ? "Add your take…"
+                : isPoll
+                  ? "Ask a question…"
+                  : "Log your record…"
+          }
+          placeholderTextColor={colors.muted}
+          value={body}
+          onChangeText={setBody}
+          multiline
+          autoFocus
+          maxLength={1000}
+        />
+
+        {/* Series tagging sits under the record text (owner request — no
+            auto-tag from the last read anymore; tagging is always deliberate). */}
+        {!replyTo && !context && !isQuote ? (
           <View style={styles.seriesPicker}>
             <TextInput
               style={styles.seriesInput}
@@ -461,35 +451,6 @@ export function PostComposer({
             ) : null}
           </View>
         ) : null}
-
-        {!replyTo && !isQuote ? (
-          <TextInput
-            style={styles.titleInput}
-            placeholder="Title (optional)"
-            placeholderTextColor={colors.muted}
-            value={postTitle}
-            onChangeText={setPostTitle}
-            maxLength={120}
-          />
-        ) : null}
-        <TextInput
-          style={styles.input}
-          placeholder={
-            replyTo
-              ? "Add to the record…"
-              : isQuote
-                ? "Add your take…"
-                : isPoll
-                  ? "Ask a question…"
-                  : "Log your record…"
-          }
-          placeholderTextColor={colors.muted}
-          value={body}
-          onChangeText={setBody}
-          multiline
-          autoFocus
-          maxLength={1000}
-        />
 
         {gifUrl ? (
           <View style={styles.gifPreviewWrap}>
@@ -617,23 +578,6 @@ const styles = StyleSheet.create({
   },
   kindIcon: { fontSize: 14 },
   kindLabel: { color: colors.muted, fontSize: 8.5, fontWeight: "900", letterSpacing: 1 },
-  autoTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(107,94,204,0.35)",
-    borderRadius: 3,
-    paddingVertical: 8,
-    paddingRight: 10,
-    marginBottom: 12,
-    overflow: "hidden",
-  },
-  autoTagSpine: { width: 2, alignSelf: "stretch", backgroundColor: colors.accent },
-  autoTagBody: { flex: 1, gap: 1 },
-  autoTagTitle: { color: colors.text, fontSize: 12, fontWeight: "800" },
-  autoTagMeta: { color: colors.accentBright, fontSize: 10, fontWeight: "700" },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   ratingLabel: { color: colors.accentSoft, fontSize: 10, fontWeight: "900", letterSpacing: 1.4 },
   pollBox: { gap: 7, marginBottom: 10 },
@@ -663,7 +607,7 @@ const styles = StyleSheet.create({
   },
   quoteLabel: { color: colors.accentSoft, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
   quoteBody: { color: colors.muted, fontSize: 13, lineHeight: 18 },
-  seriesPicker: { marginBottom: 10 },
+  seriesPicker: { marginTop: 10, marginBottom: 10 },
   seriesInput: {
     color: colors.text,
     backgroundColor: colors.card,
