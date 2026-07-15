@@ -313,6 +313,8 @@ model ReadChapter {
   canonical     CanonicalSeries @relation(fields: [canonicalId], references: [id], onDelete: Cascade)
 
   @@id([userId, canonicalId, chapterNumber])
+  // Weekly per-series leaderboards scan by series + first-read window.
+  @@index([canonicalId, readAt])
 }
 
 model Session {
@@ -663,6 +665,8 @@ model UserQuestProgress {
 
   @@unique([userId, questId, periodKey])
   @@index([userId, completedAt])
+  // Weekly-quests leaderboard: cross-user scan over a completedAt window.
+  @@index([completedAt])
 }
 
 model XpTransaction {
@@ -909,6 +913,24 @@ model GuildXpTransaction {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([guildId, createdAt])
+}
+
+// Frozen leaderboard history (ARENA_PLAN phase 2). While a week is live the
+// weekly_xp board is upserted by the 5-min tick (the per-user weekly window is
+// destroyed lazily at rollover, so it can't be reconstructed later — ≤5 min of
+// trailing XP is the accepted imprecision). Durable boards (weekly_quests,
+// series:<canonicalId>) are computed and frozen once after the week ends.
+// rows = [{ userId, value }] descending; identities resolve on read.
+model LeaderboardSnapshot {
+  id          String    @id @default(cuid())
+  board       String // weekly_xp | weekly_quests | series:<canonicalId>
+  periodKey   String // Monday-anchored UTC week key
+  rows        Json
+  finalizedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([board, periodKey])
+  @@index([board, finalizedAt, periodKey])
 }
 
 // ── Gates ─────────────────────────────────────────────────────────────────

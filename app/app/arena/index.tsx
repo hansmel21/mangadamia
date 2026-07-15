@@ -5,7 +5,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, Stack } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -43,6 +43,88 @@ export default function ArenaScreen() {
   const user = useSyncExternalStore(subscribeSession, getSessionUser);
   const hub = useQuery({ queryKey: ["arenaEvents"], queryFn: api.arenaEvents, staleTime: 60_000 });
   const board = useQuery({ queryKey: ["weeklyBoard"], queryFn: api.weeklyBoard, staleTime: 60_000 });
+
+  // Which weekly board is showing: EXP (default) · QUESTS · SERIES.
+  const [boardTab, setBoardTab] = useState<"xp" | "quests" | "series">("xp");
+  const [seriesId, setSeriesId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const questsBoard = useQuery({
+    queryKey: ["weeklyQuestsBoard"],
+    queryFn: api.weeklyQuestsBoard,
+    enabled: boardTab === "quests",
+    staleTime: 60_000,
+  });
+  const topSeries = useQuery({
+    queryKey: ["topSeriesBoards"],
+    queryFn: api.topSeriesBoards,
+    enabled: boardTab === "series",
+    staleTime: 120_000,
+  });
+  const activeSeriesId = seriesId ?? topSeries.data?.[0]?.canonicalId ?? null;
+  const seriesBoard = useQuery({
+    queryKey: ["seriesBoard", activeSeriesId],
+    queryFn: () => api.seriesBoard(activeSeriesId as string),
+    enabled: boardTab === "series" && !!activeSeriesId,
+    staleTime: 60_000,
+  });
+  const historyBoardKey =
+    boardTab === "xp"
+      ? "weekly_xp"
+      : boardTab === "quests"
+        ? "weekly_quests"
+        : activeSeriesId
+          ? `series:${activeSeriesId}`
+          : null;
+  const history = useQuery({
+    queryKey: ["boardHistory", historyBoardKey],
+    queryFn: () => api.boardHistory(historyBoardKey as string),
+    enabled: historyOpen && !!historyBoardKey,
+    staleTime: 120_000,
+  });
+
+  // Normalize whichever board is active into {rank, value, identity} rows.
+  const activeBoard =
+    boardTab === "xp"
+      ? {
+          loading: board.isLoading,
+          unit: "XP",
+          rows: (board.data?.rows ?? []).map((r) => ({
+            rank: r.rank,
+            value: r.xp,
+            identity: r.identity,
+          })),
+          me: board.data?.me ? { rank: board.data.me.rank, value: board.data.me.xp } : null,
+          empty: "The board is empty — this week's XP starts counting now.",
+        }
+      : boardTab === "quests"
+        ? {
+            loading: questsBoard.isLoading,
+            unit: "QUESTS",
+            rows: (questsBoard.data?.rows ?? []).map((r) => ({
+              rank: r.rank,
+              value: r.count,
+              identity: r.identity,
+            })),
+            me: questsBoard.data?.me
+              ? { rank: questsBoard.data.me.rank, value: questsBoard.data.me.count }
+              : null,
+            empty: "No quests cleared yet this week — be the first.",
+          }
+        : {
+            loading: topSeries.isLoading || seriesBoard.isLoading,
+            unit: "CH",
+            rows: (seriesBoard.data?.rows ?? []).map((r) => ({
+              rank: r.rank,
+              value: r.count,
+              identity: r.identity,
+            })),
+            me: seriesBoard.data?.me
+              ? { rank: seriesBoard.data.me.rank, value: seriesBoard.data.me.count }
+              : null,
+            empty: activeSeriesId
+              ? "Nobody has read this series yet this week."
+              : "No series activity yet this week.",
+          };
 
   const events = hub.data?.events ?? [];
   const liveQuiz = events.find((e) => e.kind === "quiz" && e.status === "live");
@@ -115,19 +197,72 @@ export default function ArenaScreen() {
             </Pressable>
           ))}
 
-          {/* weekly EXP board */}
+          {/* weekly boards — EXP · QUESTS · SERIES */}
           <View style={styles.boardBox}>
-            <Text style={styles.sectionLabel}>WEEKLY EXP BOARD</Text>
-            {board.isLoading ? (
+            <View style={styles.boardHead}>
+              <Text style={styles.sectionLabel}>WEEKLY BOARDS</Text>
+              <View style={styles.boardTabs}>
+                {(
+                  [
+                    { key: "xp", label: "EXP" },
+                    { key: "quests", label: "QUESTS" },
+                    { key: "series", label: "SERIES" },
+                  ] as const
+                ).map((t) => (
+                  <Pressable
+                    key={t.key}
+                    style={[styles.boardTab, boardTab === t.key && styles.boardTabOn]}
+                    onPress={() => {
+                      setBoardTab(t.key);
+                      setHistoryOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.boardTabText,
+                        boardTab === t.key && { color: colors.foilSoft },
+                      ]}
+                    >
+                      {t.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {boardTab === "series" && (topSeries.data?.length ?? 0) > 0 ? (
+              <View style={styles.seriesPicker}>
+                {(topSeries.data ?? []).map((s) => (
+                  <Pressable
+                    key={s.canonicalId}
+                    style={[
+                      styles.seriesChip,
+                      activeSeriesId === s.canonicalId && styles.seriesChipOn,
+                    ]}
+                    onPress={() => setSeriesId(s.canonicalId)}
+                  >
+                    <Text
+                      style={[
+                        styles.seriesChipText,
+                        activeSeriesId === s.canonicalId && { color: colors.foilSoft },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {s.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            {activeBoard.loading ? (
               <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
-            ) : (board.data?.rows.length ?? 0) === 0 ? (
-              <Text style={[styles.quietText, { marginTop: 10 }]}>
-                The board is empty — this week's XP starts counting now.
-              </Text>
+            ) : activeBoard.rows.length === 0 ? (
+              <Text style={[styles.quietText, { marginTop: 10 }]}>{activeBoard.empty}</Text>
             ) : (
               <>
-                <Podium rows={board.data!.rows} />
-                {board.data!.rows.slice(3).map((row) => (
+                <Podium rows={activeBoard.rows} />
+                {activeBoard.rows.slice(3).map((row) => (
                   <View key={row.rank} style={styles.boardRow}>
                     <Text style={styles.boardRank}>#{row.rank}</Text>
                     {row.identity ? (
@@ -136,22 +271,64 @@ export default function ArenaScreen() {
                     <Text style={styles.boardName} numberOfLines={1}>
                       {row.identity?.username ?? "Removed Reader"}
                     </Text>
-                    <Text style={styles.boardXp}>{row.xp.toLocaleString()} XP</Text>
+                    <Text style={styles.boardXp}>
+                      {row.value.toLocaleString()} {activeBoard.unit}
+                    </Text>
                   </View>
                 ))}
-                {board.data!.me ? (
+                {activeBoard.me ? (
                   <View style={styles.meRow}>
-                    <Text style={styles.meRank}>#{board.data!.me.rank}</Text>
+                    <Text style={styles.meRank}>#{activeBoard.me.rank}</Text>
                     <Text style={styles.meName}>you</Text>
                     <Text style={styles.meXp}>
-                      {board.data!.me.xp.toLocaleString()} XP this week
+                      {activeBoard.me.value.toLocaleString()} {activeBoard.unit} this week
                     </Text>
                   </View>
                 ) : user ? (
-                  <Text style={styles.meHint}>Earn XP this week to take a rank.</Text>
+                  <Text style={styles.meHint}>Earn a spot this week to take a rank.</Text>
                 ) : null}
               </>
             )}
+
+            {/* frozen past weeks */}
+            <Pressable
+              style={styles.historyKey}
+              onPress={() => setHistoryOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle past weeks"
+            >
+              <Text style={styles.historyKeyText}>
+                {historyOpen ? "▴ HIDE PAST WEEKS" : "▾ PAST WEEKS"}
+              </Text>
+            </Pressable>
+            {historyOpen ? (
+              history.isLoading ? (
+                <ActivityIndicator color={colors.accent} style={{ marginVertical: 10 }} />
+              ) : (history.data?.length ?? 0) === 0 ? (
+                <Text style={[styles.quietText, { marginTop: 6 }]}>
+                  No frozen weeks yet — history starts when this week ends.
+                </Text>
+              ) : (
+                (history.data ?? []).map((week) => (
+                  <View key={week.periodKey} style={styles.historyWeek}>
+                    <Text style={styles.historyWeekLabel}>WEEK {week.weekNo}</Text>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      {week.rows.map((r) => (
+                        <View key={r.rank} style={styles.historyRow}>
+                          <Text style={[styles.historyRank, r.rank === 1 && { color: colors.foil }]}>
+                            {r.rank === 1 ? "♛" : `#${r.rank}`}
+                          </Text>
+                          <Text style={styles.historyName} numberOfLines={1}>
+                            {r.identity?.username ?? "Removed Reader"}
+                          </Text>
+                          <Text style={styles.historyValue}>{r.value.toLocaleString()}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ))
+              )
+            ) : null}
           </View>
 
           {/* past results */}
@@ -298,7 +475,7 @@ function PoolCard({ summary, signedIn }: { summary: ArenaEventSummary; signedIn:
   );
 }
 
-type BoardRow = { rank: number; xp: number; identity: PublicIdentity | null };
+type BoardRow = { rank: number; value: number; identity: PublicIdentity | null };
 
 // Top three on pedestals — champion centered with the crown.
 function Podium({ rows }: { rows: BoardRow[] }) {
@@ -341,7 +518,7 @@ function Pedestal({
       >
         <Text style={[styles.pedestalRank, { color: tone }]}>{row.rank}</Text>
       </View>
-      <Text style={styles.pedestalXp}>{row.xp.toLocaleString()}</Text>
+      <Text style={styles.pedestalXp}>{row.value.toLocaleString()}</Text>
     </View>
   );
 }
@@ -467,6 +644,48 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     padding: 14,
   },
+  boardHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  boardTabs: { flexDirection: "row", gap: 5 },
+  boardTab: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  boardTabOn: { borderColor: "rgba(205,164,94,0.55)", backgroundColor: "rgba(205,164,94,0.08)" },
+  boardTabText: { color: colors.muted, fontSize: 8.5, fontWeight: "900", letterSpacing: 1 },
+  seriesPicker: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  seriesChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxWidth: "48%",
+  },
+  seriesChipOn: { borderColor: "rgba(205,164,94,0.55)", backgroundColor: "rgba(205,164,94,0.08)" },
+  seriesChipText: { color: colors.muted, fontSize: 9.5, fontWeight: "800" },
+  historyKey: { marginTop: 12, alignSelf: "center" },
+  historyKeyText: { color: colors.muted, fontSize: 9.5, fontWeight: "900", letterSpacing: 1.4 },
+  historyWeek: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(28,32,41,0.6)",
+  },
+  historyWeekLabel: { color: colors.foilSoft, fontSize: 9, fontWeight: "900", letterSpacing: 1, width: 56 },
+  historyRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  historyRank: { color: colors.muted, fontSize: 9.5, fontWeight: "900", width: 20 },
+  historyName: { color: colors.mutedStrong, fontSize: 11, fontWeight: "700", flex: 1 },
+  historyValue: { color: colors.muted, fontSize: 9.5, fontVariant: ["tabular-nums"] },
   podium: {
     flexDirection: "row",
     alignItems: "flex-end",

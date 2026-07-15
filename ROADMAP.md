@@ -3,7 +3,18 @@
 Living status doc. Updated after each milestone so work can resume cleanly.
 Design docs: `GUILDS_PLAN.md`, `ARENA_PLAN.md`.
 
-_Last updated: 2026-07-12._
+_Last updated: 2026-07-15._
+
+> **2026-07-15 device pass — ALL CLEAR.** The owner verified everything that
+> was pending on hardware: Gates (all tiers, promotion chip, directory tabs),
+> composer rework, Guild Hall detail modals, the keyboard/✕ fix, the guild
+> members de-dup, the hotfix batch, progression pack, THE SYSTEM
+> announcements, draw competition, polish batch, and the GIF/image pickers.
+> Every "pending device test" flag below is resolved.
+>
+> **Production sources decision (owner):** the app ships **multi-source**
+> (MangaDex + Asura + Weeb Central via the external scraper service) — that
+> is the point of the scraper API. No MangaDex-only production toggle.
 
 ## ✅ Shipped
 
@@ -595,6 +606,35 @@ Plan: `.claude/plans/refactored-pondering-manatee.md`.
 - Naming: OPEN/SEALED/HIDDEN gate · GATEKEEPER/WARDEN/RAIDER · ENTER/WITHDRAW/
   REQUEST ENTRY/AUTHORIZE. Fast-follows deferred: GateInvite, gate rank E→S
   flourish, gate posts on profiles.
+
+## 🧗 Depth batch (owner-approved plan, 2026-07-15 — 8 phases)
+Plan: `.claude/plans/refactored-pondering-manatee.md`. Arena boards →
+permissions → board tiers → gate ranks → level milestones → items → guild
+depth → XP balance.
+
+### Depth 1 — Arena boards, snapshots, history, champion cosmetics ✅ (2026-07-15, E2E 16/16)
+- [x] **`LeaderboardSnapshot`** (migration `arena_boards_snapshots`): board +
+      periodKey unique, rows Json, finalizedAt. The 5-min tick **live-upserts
+      this week's weekly_xp board** (the per-user weekly window is destroyed
+      lazily at rollover — ≤5 min trailing imprecision accepted) and **freezes
+      last week's boards once**: weekly_quests (durable via completedAt) +
+      the week's top-5 series boards (durable via first-read readAt).
+      Indexes: `UserQuestProgress(completedAt)`, `ReadChapter(canonicalId, readAt)`.
+- [x] **Weekly champions** paid at freeze (idempotent grants + deduped
+      notifications): #1 weekly_xp → **Monarch's Regalia** frame (legendary,
+      seeded), #1 weekly_quests → **Weekly Sovereign** title. **Season I
+      cosmetics seeded** (frame + avatar, 2026-07-20 → 08-17) using the
+      previously-unused availableFrom/Until columns — auto-granted to
+      champions while the window is open.
+- [x] **Endpoints**: `/arena/leaderboards/weekly_quests` (completedAt window,
+      me-rank), `/series/:canonicalId` (first-reads this week), `/top_series`
+      (picker feed), `/history?board=` (frozen podiums, deleted users
+      tolerated).
+- [x] **Client**: arena hub board selector **EXP | QUESTS | SERIES** (shared
+      podium + rows), top-series chip picker, collapsible **PAST WEEKS**
+      frozen podium history.
+- [x] E2E: 9/9 HTTP (ordering, me-ranks, 404s, regex guard) + 7/7 internals
+      (freeze exactly-once, champion grants idempotent, notification dedupe).
 
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers

@@ -7,7 +7,7 @@ import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import { registerRoutes } from "./routes/index.js";
-import { finalizeArenaEvent } from "./arena.js";
+import { finalizeArenaEvent, snapshotBoards } from "./arena.js";
 import { prisma } from "./db/client.js";
 import { finalizePastWars } from "./guilds.js";
 import { dispatchPendingPushes } from "./notifications.js";
@@ -93,6 +93,9 @@ async function runScheduledCloseouts(): Promise<void> {
     // best-effort; retried next tick
   }
   await finalizePastWars();
+  // Leaderboard snapshots: live-upsert this week's XP board and freeze last
+  // week's boards (+ crown the weekly champions) once after rollover.
+  await snapshotBoards();
 }
 void runScheduledCloseouts();
 setInterval(() => void runScheduledCloseouts(), 5 * 60_000).unref();

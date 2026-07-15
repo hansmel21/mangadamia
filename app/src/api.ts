@@ -401,6 +401,35 @@ export interface WeeklyBoardResponse {
   me: { rank: number; xp: number } | null;
 }
 
+// Count-based boards (quests completed / chapters read this week).
+export interface CountBoardRow {
+  rank: number;
+  count: number;
+  identity: PublicIdentity | null;
+}
+
+export interface CountBoardResponse {
+  weekNo: number;
+  weekEndsAt: string;
+  series?: { canonicalId: string; title: string; coverUrl: string | null };
+  rows: CountBoardRow[];
+  me: { rank: number; count: number } | null;
+}
+
+export interface TopSeriesBoard {
+  canonicalId: string;
+  title: string;
+  coverUrl: string | null;
+  reads: number;
+}
+
+// One frozen past week of a board (top 3 podium rows).
+export interface BoardHistoryWeek {
+  periodKey: string;
+  weekNo: number;
+  rows: { rank: number; value: number; identity: PublicIdentity | null }[];
+}
+
 export type Rarity = "common" | "rare" | "epic" | "legendary" | "mythic";
 
 export interface CosmeticMini {
@@ -1178,6 +1207,14 @@ export const api = {
       { option },
     ),
   weeklyBoard: () => get<WeeklyBoardResponse>("/arena/leaderboards/weekly_xp"),
+  weeklyQuestsBoard: () => get<CountBoardResponse>("/arena/leaderboards/weekly_quests"),
+  seriesBoard: (canonicalId: string) =>
+    get<CountBoardResponse>(`/arena/leaderboards/series/${encodeURIComponent(canonicalId)}`),
+  topSeriesBoards: () => get<TopSeriesBoard[]>("/arena/leaderboards/top_series"),
+  boardHistory: (board: string, limit = 8) =>
+    get<BoardHistoryWeek[]>(
+      `/arena/leaderboards/history?board=${encodeURIComponent(board)}&limit=${limit}`,
+    ),
 
   notifications: (cursor?: string) =>
     get<NotificationPage>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),

@@ -379,6 +379,140 @@ export function registerArenaRoutes(app: FastifyInstance): void {
     };
   });
 
+  // ── Weekly quests leaderboard (durable — counts completedAt this week) ──
+  app.get("/arena/leaderboards/weekly_quests", async (req) => {
+    const me = await getUser(req);
+    const weekKey = currentWeekKey();
+    const windowStart = new Date(`${weekKey}T00:00:00Z`);
+    const grouped = await prisma.userQuestProgress.groupBy({
+      by: ["userId"],
+      where: { completedAt: { gte: windowStart } },
+      _count: true,
+      orderBy: [{ _count: { userId: "desc" } }, { userId: "asc" }],
+      take: 500,
+    });
+    const top = grouped.slice(0, 20);
+    const identities = await identitiesForUsers(top.map((g) => g.userId), me?.id);
+    let mine: { rank: number; count: number } | null = null;
+    if (me) {
+      const myIndex = grouped.findIndex((g) => g.userId === me.id);
+      if (myIndex >= 0) mine = { rank: myIndex + 1, count: grouped[myIndex]._count };
+    }
+    return {
+      weekNo: weekNumber(weekKey),
+      weekEndsAt: weekEndsAt(weekKey),
+      rows: top.map((g, i) => ({
+        rank: i + 1,
+        count: g._count,
+        identity: identities.get(g.userId) ?? null,
+      })),
+      me: mine,
+    };
+  });
+
+  // ── Per-series weekly leaderboard (first-reads of that series this week) ─
+  app.get<{ Params: { canonicalId: string } }>(
+    "/arena/leaderboards/series/:canonicalId",
+    async (req) => {
+      const me = await getUser(req);
+      const weekKey = currentWeekKey();
+      const windowStart = new Date(`${weekKey}T00:00:00Z`);
+      const canonical = await prisma.canonicalSeries.findUnique({
+        where: { id: req.params.canonicalId },
+        select: { id: true, title: true, coverUrl: true },
+      });
+      if (!canonical) throw httpError(404, "Unknown series");
+      const grouped = await prisma.readChapter.groupBy({
+        by: ["userId"],
+        where: { canonicalId: canonical.id, readAt: { gte: windowStart } },
+        _count: true,
+        orderBy: [{ _count: { userId: "desc" } }, { userId: "asc" }],
+        take: 500,
+      });
+      const top = grouped.slice(0, 20);
+      const identities = await identitiesForUsers(top.map((g) => g.userId), me?.id);
+      let mine: { rank: number; count: number } | null = null;
+      if (me) {
+        const myIndex = grouped.findIndex((g) => g.userId === me.id);
+        if (myIndex >= 0) mine = { rank: myIndex + 1, count: grouped[myIndex]._count };
+      }
+      return {
+        weekNo: weekNumber(weekKey),
+        weekEndsAt: weekEndsAt(weekKey),
+        series: { canonicalId: canonical.id, title: canonical.title, coverUrl: canonical.coverUrl },
+        rows: top.map((g, i) => ({
+          rank: i + 1,
+          count: g._count,
+          identity: identities.get(g.userId) ?? null,
+        })),
+        me: mine,
+      };
+    },
+  );
+
+  // ── This week's hottest series (feeds the series-board picker) ──────────
+  app.get("/arena/leaderboards/top_series", async () => {
+    const weekKey = currentWeekKey();
+    const windowStart = new Date(`${weekKey}T00:00:00Z`);
+    const hot = await prisma.readChapter.groupBy({
+      by: ["canonicalId"],
+      where: { readAt: { gte: windowStart } },
+      _count: true,
+      orderBy: [{ _count: { canonicalId: "desc" } }],
+      take: 5,
+    });
+    const series = await prisma.canonicalSeries.findMany({
+      where: { id: { in: hot.map((h) => h.canonicalId) } },
+      select: { id: true, title: true, coverUrl: true },
+    });
+    const byId = new Map(series.map((s) => [s.id, s]));
+    return hot
+      .filter((h) => byId.has(h.canonicalId))
+      .map((h) => ({
+        canonicalId: h.canonicalId,
+        title: byId.get(h.canonicalId)!.title,
+        coverUrl: byId.get(h.canonicalId)!.coverUrl,
+        reads: h._count,
+      }));
+  });
+
+  // ── Frozen board history (past weeks' podiums) ──────────────────────────
+  app.get("/arena/leaderboards/history", async (req) => {
+    const me = await getUser(req);
+    const { board, limit } = z
+      .object({
+        board: z
+          .string()
+          .trim()
+          .regex(/^(weekly_xp|weekly_quests|series:[\w-]+)$/),
+        limit: z.coerce.number().int().min(1).max(12).default(8),
+      })
+      .parse(req.query);
+    const snaps = await prisma.leaderboardSnapshot.findMany({
+      where: { board, finalizedAt: { not: null } },
+      orderBy: { periodKey: "desc" },
+      take: limit,
+    });
+    const allIds = [
+      ...new Set(
+        snaps.flatMap((s) => ((s.rows as { userId: string }[] | null) ?? []).map((r) => r.userId)),
+      ),
+    ];
+    const identities = await identitiesForUsers(allIds, me?.id);
+    return snaps.map((s) => ({
+      periodKey: s.periodKey,
+      weekNo: weekNumber(s.periodKey),
+      rows: ((s.rows as { userId: string; value: number }[] | null) ?? [])
+        .slice(0, 3)
+        .map((r, i) => ({
+          rank: i + 1,
+          value: r.value,
+          // Deleted accounts render as "Removed Reader" client-side.
+          identity: identities.get(r.userId) ?? null,
+        })),
+    }));
+  });
+
   // ── Admin: create an event ────────────────────────────────────────────
   app.post("/admin/arena/events", async (req) => {
     const admin = await requireCapability(req, "manage_rewards");
