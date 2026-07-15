@@ -488,6 +488,9 @@ contribution board · edit UI · weekly events · perks/decorations.**
       on the root stack (icon-only back everywhere).
 - [x] **Quest Log** — cadence chips scroll horizontally (they overflowed);
       new **COMPLETED** tab owns claimed quests (they leave the other tabs).
+- [x] **HOME key closes search** — tapping the HOME tab while a search is open
+      dismisses the keyboard + clears the query/results back to the default
+      Home view (`tabPress` listener → `clearSearch`).
 
 ### External scraper service ✅ (2026-07-15, E2E-tested end-to-end)
 - [x] **New `scraper/` service** (Fastify, stateless, no DB) hosting the three

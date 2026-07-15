@@ -10,7 +10,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { Bell, Search, Swords, X } from "lucide-react-native";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -18,6 +18,7 @@ import {
   Animated,
   Easing,
   FlatList,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -506,6 +507,19 @@ export default function BrowseScreen() {
     setStatus("");
     showBar();
   };
+
+  // Tapping the HOME key while a search is open closes the search and returns
+  // to the default Home view (a no-op when nothing is being searched).
+  const navigation = useNavigation();
+  const clearSearchRef = useRef(clearSearch);
+  clearSearchRef.current = clearSearch;
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress" as never, () => {
+      Keyboard.dismiss();
+      clearSearchRef.current();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const latest = useQuery({
     queryKey: ["home", "latest"],
