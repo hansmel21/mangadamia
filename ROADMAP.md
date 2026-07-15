@@ -674,6 +674,16 @@ depth → XP balance.
 - [x] E2E 12/12: tier ordering, permission-toggle 403, legacy-pin clearing,
       reply/tier 404, gate NOTICE first.
 
+### Depth 4 — Gate rank E→S ✅ (2026-07-15, E2E 6/6, no migration)
+- [x] **Weekly activity rank** computed on read: visible posts+replies ×2 +
+      reactions ×1 this week (`gateActivityScores` — one groupBy + one raw
+      join for ≤50 gates/page; thresholds 10/25/60/120/250 in
+      `gateRankForScore`, tunable). Directory rows + gate detail carry
+      `rank` (+ `weeklyScore` on detail); masked hidden gates never leak one;
+      gate-removed posts don't count.
+- [x] **Client**: E→S sigil (rankColors) on GateRow and the gate header, plus
+      "GATE RANK n" in the meta line.
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active

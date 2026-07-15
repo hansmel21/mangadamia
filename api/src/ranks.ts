@@ -20,3 +20,14 @@ export function seriesRankForAverage(avg: number): Rank {
   if (avg >= 2.0) return "D";
   return "E";
 }
+
+// Gate rank from this week's in-gate activity score (posts ×2 + reactions).
+// Thresholds are tunable — an active small community should sit around B.
+export function gateRankForScore(score: number): Rank {
+  if (score >= 250) return "S";
+  if (score >= 120) return "A";
+  if (score >= 60) return "B";
+  if (score >= 25) return "C";
+  if (score >= 10) return "D";
+  return "E";
+}

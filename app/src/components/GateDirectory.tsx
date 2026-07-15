@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { api, type GateSummary } from "../api";
 import { GuildEmblem } from "./GuildCrest";
+import { rankColors } from "../ranks";
 import { colors, fonts } from "../theme";
 
 function openGate(id: string) {
@@ -137,6 +138,27 @@ export function GateVisibilityBadge({ visibility }: { visibility: string }) {
   return null;
 }
 
+// Weekly-activity rank sigil (E→S) — the hotter the gate, the higher the letter.
+export function GateRankSigil({ rank, size = 16 }: { rank: keyof typeof rankColors; size?: number }) {
+  const color = rankColors[rank];
+  return (
+    <View
+      style={[
+        styles.rankSigil,
+        {
+          width: size,
+          height: size,
+          borderRadius: size * 0.28,
+          borderColor: color,
+          backgroundColor: color + "1A",
+        },
+      ]}
+    >
+      <Text style={{ color, fontSize: size * 0.62, fontWeight: "900" }}>{rank}</Text>
+    </View>
+  );
+}
+
 function GateRow({ gate }: { gate: GateSummary }) {
   return (
     <Pressable
@@ -161,6 +183,7 @@ function GateRow({ gate }: { gate: GateSummary }) {
       )}
       <View style={styles.rowBody}>
         <View style={styles.rowNameLine}>
+          {gate.rank ? <GateRankSigil rank={gate.rank} /> : null}
           <Text style={styles.rowName} numberOfLines={1}>
             ⛩ {gate.name}
           </Text>
@@ -261,6 +284,7 @@ const styles = StyleSheet.create({
   },
   maskedEmblemText: { color: colors.muted, fontFamily: fonts.display, fontSize: 18 },
   rowBody: { flex: 1, gap: 2 },
+  rankSigil: { alignItems: "center", justifyContent: "center", borderWidth: 1.2 },
   rowNameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   rowName: { color: colors.text, fontSize: 14.5, fontWeight: "800", flexShrink: 1 },
   rowMeta: { color: colors.muted, fontSize: 12 },

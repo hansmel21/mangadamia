@@ -4,10 +4,12 @@
 // posters post), private "HIDDEN" (invisible to non-members, entry by request).
 // The gate feed itself lives in social.ts next to the guild board.
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { getUser, requireAcceptedTerms, requireActiveUser } from "../auth.js";
 import { prisma } from "../db/client.js";
-import { isGuildEmblem } from "../guilds.js";
+import { currentWeekKey, isGuildEmblem } from "../guilds.js";
+import { gateRankForScore, type Rank } from "../ranks.js";
 import { identitiesForUsers } from "../identity.js";
 import { createNotification } from "../notifications.js";
 import {
@@ -62,6 +64,42 @@ export function isGateMod(membership: GateMembership): boolean {
   return !!membership && MOD_ROLES.includes(membership.role);
 }
 
+// This week's activity score per gate: visible posts+replies ×2 plus
+// reactions on them ×1. Two queries for any number of gates (the directory
+// caps at 50); cache per weekKey if this ever gets hot.
+export async function gateActivityScores(gateIds: string[]): Promise<Map<string, number>> {
+  const scores = new Map<string, number>();
+  if (gateIds.length === 0) return scores;
+  const since = new Date(`${currentWeekKey()}T00:00:00Z`);
+  const posts = await prisma.post.groupBy({
+    by: ["gateId"],
+    where: {
+      gateId: { in: gateIds },
+      createdAt: { gte: since },
+      moderationStatus: "visible",
+    },
+    _count: true,
+  });
+  for (const row of posts) {
+    if (row.gateId) scores.set(row.gateId, row._count * 2);
+  }
+  const reactions = await prisma.$queryRaw<{ gateId: string; count: number }[]>(
+    Prisma.sql`
+      SELECT p."gateId" AS "gateId", COUNT(*)::int AS count
+      FROM "PostLike" l
+      JOIN "Post" p ON p."id" = l."postId"
+      WHERE p."gateId" IN (${Prisma.join(gateIds)})
+        AND l."createdAt" >= ${since}
+        AND p."moderationStatus" = 'visible'
+      GROUP BY p."gateId"
+    `,
+  );
+  for (const row of reactions) {
+    scores.set(row.gateId, (scores.get(row.gateId) ?? 0) + row.count);
+  }
+  return scores;
+}
+
 export function registerGateRoutes(app: FastifyInstance): void {
   // Permission-toggle gate: warden powers are configurable per gate (the
   // gatekeeper always passes).
@@ -90,6 +128,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
     },
     mine: GateMembership,
     hasRequested: boolean,
+    rank: Rank | null = null,
   ) => {
     // Private gates show only a masked shell to outsiders (found via search).
     if (g.visibility === "private" && !mine) {
@@ -105,6 +144,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
         myRole: null,
         approvedPoster: false,
         hasRequested,
+        rank: null as Rank | null,
         masked: true,
       };
     }
@@ -120,6 +160,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
       myRole: mine?.role ?? null,
       approvedPoster: mine?.approvedPoster ?? false,
       hasRequested,
+      rank,
       masked: false,
     };
   };
@@ -199,8 +240,21 @@ export function registerGateRoutes(app: FastifyInstance): void {
     ]);
     const mineByGate = new Map(myMemberships.map((m) => [m.gateId, m]));
     const requested = new Set(myRequests.map((r) => r.gateId));
+    // Weekly activity rank (E→S). Masked rows keep it hidden.
+    const scores = await gateActivityScores(
+      gates
+        .filter((g) => g.visibility !== "private" || mineByGate.has(g.id))
+        .map((g) => g.id),
+    );
     return gates.map((g) =>
-      summarize(g, mineByGate.get(g.id) ?? null, requested.has(g.id)),
+      summarize(
+        g,
+        mineByGate.get(g.id) ?? null,
+        requested.has(g.id),
+        scores.has(g.id) || g.visibility !== "private" || mineByGate.has(g.id)
+          ? gateRankForScore(scores.get(g.id) ?? 0)
+          : null,
+      ),
     );
   });
 
@@ -241,12 +295,16 @@ export function registerGateRoutes(app: FastifyInstance): void {
     ]);
     const base = summarize(gate, mine, !!request);
     if (base.masked) return base;
+    const scores = await gateActivityScores([gate.id]);
+    const weeklyScore = scores.get(gate.id) ?? 0;
     const canManage = isGateMod(mine);
     const pendingRequestCount = canManage
       ? await prisma.gateJoinRequest.count({ where: { gateId: gate.id } })
       : 0;
     return {
       ...base,
+      rank: gateRankForScore(weeklyScore),
+      weeklyScore,
       createdAt: gate.createdAt,
       canManage,
       // Per-capability truth for the client's buttons/fields.

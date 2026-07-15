@@ -21,7 +21,7 @@ import {
   View,
 } from "react-native";
 import { api, type GateRole, type PostInfo, type ReactionType } from "../../src/api";
-import { GateVisibilityBadge } from "../../src/components/GateDirectory";
+import { GateRankSigil, GateVisibilityBadge } from "../../src/components/GateDirectory";
 import { GuildEmblem } from "../../src/components/GuildCrest";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
@@ -226,6 +226,7 @@ export default function GateScreen() {
                 />
                 <View style={{ flex: 1, gap: 3 }}>
                   <View style={styles.nameRow}>
+                    {detail.rank ? <GateRankSigil rank={detail.rank} size={18} /> : null}
                     <Text style={styles.name} numberOfLines={1}>
                       ⛩ {detail.name}
                     </Text>
@@ -235,6 +236,7 @@ export default function GateScreen() {
                     <Users color={colors.muted} size={12} strokeWidth={2} />
                     <Text style={styles.metaText}>
                       {detail.memberCount} RAIDERS INSIDE
+                      {detail.rank ? ` · GATE RANK ${detail.rank}` : ""}
                       {detail.myRole ? ` · YOU'RE ${detail.myRole.toUpperCase()}` : ""}
                     </Text>
                   </View>

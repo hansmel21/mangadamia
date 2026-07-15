@@ -155,6 +155,8 @@ export interface GateSummary {
   myRole: GateRole | null;
   approvedPoster: boolean;
   hasRequested: boolean;
+  // Weekly activity rank (E→S); null on masked rows.
+  rank: "E" | "D" | "C" | "B" | "A" | "S" | null;
   masked: boolean;
 }
 
@@ -168,6 +170,7 @@ export type GatePermKey =
 
 export interface GateDetail extends GateSummary {
   createdAt?: string;
+  weeklyScore?: number;
   canManage?: boolean;
   // Per-capability truth for the viewer (server-decided).
   can?: Record<GatePermKey, boolean>;
