@@ -108,6 +108,8 @@ model User {
   guildInvites         GuildInvite[]        @relation("GuildInviteRecipient")
   guildInvitesSent     GuildInvite[]        @relation("GuildInviteSender")
   guildXpContributions GuildXpTransaction[]
+  gateMemberships      GateMember[]
+  gateJoinRequests     GateJoinRequest[]
   pollVotes            PollVote[]
   arenaEntries         ArenaEntry[]
   arenaVotes           ArenaVote[]
@@ -431,7 +433,7 @@ model Post {
   // rendered without the author's identity; `pinned` holds them atop the feed.
   isOfficial       Boolean          @default(false)
   createdAt        DateTime         @default(now())
-  moderationStatus String           @default("visible") // visible | removed
+  moderationStatus String           @default("visible") // visible | removed | gate_removed
   moderationReason String?
   moderatedAt      DateTime?
   likes            PostLike[]
@@ -446,7 +448,15 @@ model Post {
   // When set, this is a post on a guild's members-only wall (not the public feed).
   guildId          String?
   guild            Guild?           @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  // Guild board only: officers can pin a post to the top of the board.
+  // When set, this post lives inside a Gate (Reddit-style community). Gate
+  // posts stay off the main wall unless promoted (see promotedAt).
+  gateId           String?
+  gate             Gate?            @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  // Set when a gate post crosses the reaction threshold: it surfaces on the
+  // main Dungeon wall (never for private gates). Sticky — cleared only when
+  // the gate turns private.
+  promotedAt       DateTime?
+  // Guild board / gate feed: officers or wardens pin a post to the top.
   pinned           Boolean          @default(false)
   // Quote-repost: this post embeds and comments on another top-level post.
   quotedPostId     String?
@@ -461,6 +471,8 @@ model Post {
   @@index([createdAt])
   @@index([rootId])
   @@index([guildId, createdAt])
+  @@index([gateId, createdAt])
+  @@index([promotedAt, createdAt])
   @@index([canonicalId, kind])
   @@index([isOfficial, pinned, createdAt])
 }
@@ -897,4 +909,52 @@ model GuildXpTransaction {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([guildId, createdAt])
+}
+
+// ── Gates ─────────────────────────────────────────────────────────────────
+// Reddit-style communities inside the Dungeon. Readers may join many gates
+// (unlike the one-guild rule). Visibility: open (anyone views/joins/posts),
+// restricted (anyone views/joins, only authorized posters post — "SEALED"),
+// private (invisible to non-members, entry by request — "HIDDEN").
+model Gate {
+  id             String            @id @default(cuid())
+  name           String            @unique // 3–30 chars
+  emblemKey      String            @default("crest") // shares the guild emblem catalog
+  primaryColor   String            @default("#7C5CFF")
+  secondaryColor String?
+  description    String?
+  visibility     String            @default("open") // open | restricted | private
+  // The gatekeeper (head mod). Succession on leave mirrors guilds.
+  ownerId        String
+  createdAt      DateTime          @default(now())
+  members        GateMember[]
+  joinRequests   GateJoinRequest[]
+  posts          Post[]
+
+  @@index([createdAt])
+}
+
+model GateMember {
+  userId         String
+  gateId         String
+  role           String   @default("member") // gatekeeper | warden | member
+  // Restricted ("sealed") gates only: whether this member may post.
+  approvedPoster Boolean  @default(false)
+  joinedAt       DateTime @default(now())
+  gate           Gate     @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, gateId])
+  @@index([gateId, role])
+}
+
+// Entry requests for private ("hidden") gates.
+model GateJoinRequest {
+  gateId    String
+  userId    String
+  createdAt DateTime @default(now())
+  gate      Gate     @relation(fields: [gateId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([gateId, userId])
 }

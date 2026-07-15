@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { useSwitchFade } from "../../src/anim";
 import { api, type PostInfo, type ReactionType } from "../../src/api";
+import { GateDirectory } from "../../src/components/GateDirectory";
 import { PostCard } from "../../src/components/PostCard";
 import { PostComposer } from "../../src/components/PostComposer";
 import { ReportModal, type ReportTarget } from "../../src/components/ReportModal";
@@ -40,7 +41,9 @@ export default function FeedScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [quoteTarget, setQuoteTarget] = useState<PostInfo | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
-  const [feedMode, setFeedMode] = useState<"global" | "following" | "guild">("global");
+  // Dungeon tab: THE WALL (the feed) or GATES (the communities directory).
+  const [tab, setTab] = useState<"wall" | "gates">("wall");
+  const [feedMode, setFeedMode] = useState<"global" | "following" | "guild" | "gates">("global");
   const [typeFilter, setTypeFilter] = useState<"all" | "theory" | "review">("all");
   const [sort, setSort] = useState<"new" | "top" | "hot">("new");
   const [topic, setTopic] = useState("");
@@ -75,6 +78,10 @@ export default function FeedScreen() {
   // an active war — reading and posting here is contributing.
   const myGuild = useQuery({ queryKey: ["myGuild"], queryFn: api.myGuild, enabled: !!user });
   const myGuildId = myGuild.data?.guildId ?? null;
+
+  // Joined gates enable the GATES FEED scope (your subscribed firehose).
+  const myGates = useQuery({ queryKey: ["myGates"], queryFn: api.myGates, enabled: !!user });
+  const hasGates = (myGates.data?.length ?? 0) > 0;
   const war = useQuery({
     queryKey: ["guildWar", myGuildId],
     queryFn: () => api.guildWar(myGuildId as string),
@@ -166,6 +173,11 @@ export default function FeedScreen() {
     setFeedMode("guild");
     setTypeFilter("all");
   };
+  const selectGates = () => {
+    clearFeedPages();
+    setFeedMode("gates");
+    setTypeFilter("all");
+  };
 
   // Scope dropdown (replaces the chip row): what the feed shows.
   const [scopeOpen, setScopeOpen] = useState(false);
@@ -174,11 +186,13 @@ export default function FeedScreen() {
       ? "FOLLOWING"
       : feedMode === "guild"
         ? "GUILD"
-        : typeFilter === "theory"
-          ? "THEORIES"
-          : typeFilter === "review"
-            ? "REVIEWS"
-            : "ALL RECORDS";
+        : feedMode === "gates"
+          ? "MY GATES"
+          : typeFilter === "theory"
+            ? "THEORIES"
+            : typeFilter === "review"
+              ? "REVIEWS"
+              : "ALL RECORDS";
   const scopeOptions = [
     {
       key: "all",
@@ -219,6 +233,17 @@ export default function FeedScreen() {
           },
         ]
       : []),
+    ...(hasGates
+      ? [
+          {
+            key: "gates",
+            label: "MY GATES",
+            active: feedMode === "gates",
+            disabled: false,
+            select: selectGates,
+          },
+        ]
+      : []),
   ];
   const cycleSort = () => {
     clearFeedPages();
@@ -241,6 +266,35 @@ export default function FeedScreen() {
         </Pressable>
       </View>
 
+      {/* THE WALL (feed) · GATES (communities) — the Dungeon's two rooms */}
+      <View style={styles.tabRow}>
+        {(
+          [
+            { key: "wall", label: "THE WALL" },
+            { key: "gates", label: "⛩ GATES" },
+          ] as const
+        ).map((t) => (
+          <Pressable
+            key={t.key}
+            style={[styles.tabKey, tab === t.key && styles.tabKeyOn]}
+            onPress={() => {
+              setScopeOpen(false);
+              setTab(t.key);
+            }}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t.key }}
+          >
+            <Text style={[styles.tabKeyText, tab === t.key && { color: colors.accentSoft }]}>
+              {t.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {tab === "gates" ? (
+        <GateDirectory signedIn={!!user} />
+      ) : (
+        <>
       {/* filter row — one scope dropdown + the sort key. The dropdown keeps
           the row to two calm controls instead of six competing chips. */}
       <View style={styles.deck}>
@@ -419,6 +473,8 @@ export default function FeedScreen() {
           <Text style={styles.signedOutText}>Sign in from the Status tab to post.</Text>
         </View>
       )}
+        </>
+      )}
 
       <PostComposer
         visible={composerOpen}
@@ -533,6 +589,23 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
   },
+  tabRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+  },
+  tabKey: {
+    flex: 1,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    paddingVertical: 8,
+    backgroundColor: colors.card,
+  },
+  tabKeyOn: { borderColor: colors.accentLine, backgroundColor: colors.accentGhost },
+  tabKeyText: { color: colors.muted, fontSize: 10.5, fontWeight: "900", letterSpacing: 1.4 },
   arenaKey: {
     flexDirection: "row",
     alignItems: "center",

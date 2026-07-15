@@ -82,6 +82,9 @@ export default function RootLayout() {
         <Stack.Screen name="guilds" options={{ title: "Guilds" }} />
         <Stack.Screen name="guild/[id]" options={{ title: "" }} />
         <Stack.Screen name="guild/create" options={{ title: "Found a Guild" }} />
+        <Stack.Screen name="gate/[id]" options={{ title: "" }} />
+        <Stack.Screen name="gate/create" options={{ title: "Open a Gate" }} />
+        <Stack.Screen name="gate/members/[id]" options={{ title: "" }} />
         <Stack.Screen name="account/edit" options={{ title: "Edit Profile" }} />
         <Stack.Screen name="account/appearance" options={{ title: "Appearance" }} />
         <Stack.Screen name="account/follow-requests" options={{ title: "Follow Requests" }} />

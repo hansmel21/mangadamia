@@ -533,9 +533,61 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - ⚠ **Deploy:** scraper runs as its own service; set matching `SCRAPER_API_KEY`
       on both sides (see README).
 
+### Gates — Reddit-style communities in the Dungeon ✅ (2026-07-15, API E2E-tested 45/45; UI pending device test)
+Owner request "Communities" built as **Gates** (manhwa dungeon-gate flavor, no
+`r/` prefix — ⛩ chip instead). Unrelated to guilds; readers join many gates.
+Plan: `.claude/plans/refactored-pondering-manatee.md`.
+- [x] **Schema** (migration `20260715105653_gates`): `Gate` (name unique,
+      emblem/colors shared with guild catalog, `visibility open|restricted|private`,
+      ownerId), `GateMember` (`@@id([userId,gateId])` — many gates per reader,
+      role `gatekeeper|warden|member`, `approvedPoster` for sealed gates),
+      `GateJoinRequest`; `Post.gateId` + `Post.promotedAt` + indexes.
+- [x] **Routes** (`api/src/routes/gates.ts`): create (5/hr, name-clash 409),
+      directory (popular/new, search; **hidden gates masked in name search
+      only**), detail (masked shell for outsiders), join (private → entry
+      request + notification), leave (gatekeeper succession → warden → oldest,
+      last-out deletes gate), requests admit/deny, members, role
+      promote/demote, authorize-poster, kick, PATCH edit (visibility/name
+      gatekeeper-only; **→private demotes all promoted posts**), `GET /me/gates`.
+- [x] **Feed integration** (`social.ts`): posts carry `gate` payload +
+      `promoted`; `POST /posts` takes `gateId` (open = anyone, sealed =
+      authorized/wardens, hidden = raiders; replies inherit + viewability
+      check); **promotion mechanic** — a gate post crossing
+      `GATE_PROMOTION_THRESHOLD` (env, default 5) reactions gets `promotedAt`
+      and surfaces on the main wall + trending (never from hidden gates;
+      sticky until the gate goes private); `feed=gates` scope (joined-gates
+      firehose); `GET /gates/:id/posts` (hot/new/top, pinned first,
+      authorRole); pin endpoint now warden-aware; `POST /posts/:id/gate-remove`
+      (status `gate_removed` — vanishes everywhere, staff pipeline untouched).
+- [x] **Leak guards** (hidden gates): post detail/react/vote/quote 404,
+      mentions skipped, profile posts exclude gate posts, **review aggregates
+      exclude hidden-gate reviews** (closed a would-be leak into public series
+      ranks — search enrichment + reviews summary), global feed/trending OR
+      clause. Account deletion now runs **gate succession** per owned gate
+      (same fix as the guild-orphan bug).
+- [x] **Client**: Dungeon gains **THE WALL | ⛩ GATES tabs** — GATES embeds the
+      directory (`GateDirectory.tsx`: debounced search, POPULAR/NEW, YOUR
+      GATES section, OPEN A GATE); screens `gate/create` (visibility selector),
+      `gate/[id]` (header window, ENTER/WITHDRAW/REQUEST ENTRY, hot/new/top,
+      warden PIN/REMOVE rows, masked hidden shell, composer preselects the
+      gate), `gate/members/[id]` (roles, AUTHORIZE, KICK, entry requests);
+      **⛩ GateChip** on promoted wall cards (tap → gate); composer **POST
+      INTO** picker (THE DUNGEON | my gates); MY GATES scope in the wall
+      dropdown.
+- [x] **E2E (45/45)**: duplicate 409 · open-gate post without joining +
+      signed-out view · sealed 403 → authorize → post + outsider reply ·
+      hidden-gate 404s (detail/react/feed/quote), masked search, absent from
+      directory+wall · request → admit → read · promotion at threshold with
+      gate payload, 1-below stays off, hidden never promotes, →private
+      demotes · member pin 403, warden pin + pinned-first, gate-remove hides
+      from thread, non-mod remove 403 · hidden-gate review doesn't move
+      public series rank · gatekeeper leave → warden inherits → dissolve
+      cascades posts. Both workspaces typecheck clean.
+- Naming: OPEN/SEALED/HIDDEN gate · GATEKEEPER/WARDEN/RAIDER · ENTER/WITHDRAW/
+  REQUEST ENTRY/AUTHORIZE. Fast-follows deferred: GateInvite, gate rank E→S
+  flourish, gate posts on profiles.
+
 ### Future ideas (owner requests, 2026-07-15)
-- **Communities** — Reddit-style user-created communities (create/join, own
-  feed, moderation) alongside guilds.
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active
   guild war).

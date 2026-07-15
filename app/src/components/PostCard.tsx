@@ -14,6 +14,7 @@ import { pressFx } from "../anim";
 import { resolveMediaUrl, type PostInfo, type ReactionType } from "../api";
 import { POST_KINDS } from "../ranks";
 import { colors } from "../theme";
+import { GateChip } from "./GateChip";
 import { LinkedText } from "./LinkedText";
 import { PollView } from "./PollView";
 import { QuotedPost } from "./QuotedPost";
@@ -57,6 +58,7 @@ export function PostCard({
   depth = 0,
   hideReplies = false,
   root = false,
+  showGateChip = true,
 }: {
   post: PostInfo;
   isReply?: boolean;
@@ -79,6 +81,8 @@ export function PostCard({
   hideReplies?: boolean;
   // Thread root: full System window with 4 corner brackets + glow.
   root?: boolean;
+  // ⛩ chip linking to the post's gate; the gate's own feed hides it.
+  showGateChip?: boolean;
 }) {
   const [localRevealed, setLocalRevealed] = useState(false);
   // Replies deeper than one indent level collapse behind "▾ N MORE REPLIES".
@@ -147,6 +151,12 @@ export function PostCard({
           )}
         </View>
       </View>
+
+      {post.gate && showGateChip && !isReply ? (
+        <View style={styles.gateChipRow}>
+          <GateChip gate={post.gate} />
+        </View>
+      ) : null}
 
       {seriesChips.map((series) => (
         <SeriesEmbed
@@ -379,6 +389,7 @@ export function PostCard({
 }
 
 const styles = StyleSheet.create({
+  gateChipRow: { flexDirection: "row", marginBottom: 7 },
   card: {
     position: "relative",
     backgroundColor: colors.card,

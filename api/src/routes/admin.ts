@@ -87,7 +87,7 @@ export function registerAdminRoutes(app: FastifyInstance): void {
         type: z.enum(["post", "comment"]).default("post"),
         q: z.string().trim().max(200).optional(),
         username: z.string().trim().max(30).optional(),
-        status: z.enum(["visible", "removed", "all"]).default("all"),
+        status: z.enum(["visible", "removed", "gate_removed", "all"]).default("all"),
         kind: z.string().trim().max(30).optional(),
         reported: z.coerce.boolean().optional(),
         from: z.coerce.date().optional(),

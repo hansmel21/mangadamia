@@ -137,6 +137,59 @@ export interface PublicIdentity {
 export type GuildRole = "guildmaster" | "officer" | "member";
 export type GuildJoinPolicy = "open" | "request" | "invite";
 
+// ── Gates (Reddit-style communities in the Dungeon) ─────────────────────
+export type GateVisibility = "open" | "restricted" | "private";
+export type GateRole = "gatekeeper" | "warden" | "member";
+
+export interface GateSummary {
+  id: string;
+  name: string;
+  // Masked (hidden-gate) rows carry null cosmetics.
+  emblemKey: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  description: string | null;
+  visibility: GateVisibility;
+  memberCount: number;
+  myRole: GateRole | null;
+  approvedPoster: boolean;
+  hasRequested: boolean;
+  masked: boolean;
+}
+
+export interface GateDetail extends GateSummary {
+  createdAt?: string;
+  canManage?: boolean;
+  pendingRequestCount?: number;
+}
+
+export interface MyGate {
+  id: string;
+  name: string;
+  emblemKey: string;
+  primaryColor: string;
+  visibility: GateVisibility;
+  role: GateRole;
+  approvedPoster: boolean;
+}
+
+export interface GateMemberInfo {
+  userId: string;
+  role: GateRole;
+  approvedPoster: boolean;
+  joinedAt: string;
+  identity: PublicIdentity | null;
+}
+
+// The compact gate payload attached to posts (the ⛩ chip on cards).
+export interface PostGateInfo {
+  id: string;
+  name: string;
+  emblemKey: string;
+  primaryColor: string;
+  visibility: GateVisibility;
+}
+
 export interface GuildSummary {
   id: string;
   name: string;
@@ -648,6 +701,10 @@ export interface PostInfo {
   poll?: PollInfo | null;
   // Present on quote-reposts: the embedded post being quoted.
   quotedPost?: QuotedPostInfo | null;
+  // Set when the post lives inside a Gate; `promoted` marks a gate post that
+  // crossed the reaction threshold onto the main wall.
+  gate?: PostGateInfo | null;
+  promoted?: boolean;
   completedQuests?: QuestCompletion[];
   levelUp?: number | null;
 }
@@ -849,7 +906,7 @@ export const api = {
   feed: (
     page = 1,
     canonicalId?: string,
-    feed: "global" | "following" | "guild" = "global",
+    feed: "global" | "following" | "guild" | "gates" = "global",
     kind?: "theory" | "review",
     sort: "new" | "top" | "hot" = "new",
     topic?: string,
@@ -876,6 +933,7 @@ export const api = {
       imageUrls?: string[];
       pollOptions?: string[];
       quotedPostId?: string;
+      gateId?: string;
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];
     },
   ) =>
@@ -1019,6 +1077,72 @@ export const api = {
       `/posts/${encodeURIComponent(postId)}/pin`,
       "POST",
     ),
+
+  // ── Gates ────────────────────────────────────────────────────────────────
+  gates: (sort: "popular" | "new" = "popular", q?: string, joined = false) =>
+    get<GateSummary[]>(
+      `/gates?sort=${sort}${q ? `&q=${encodeURIComponent(q)}` : ""}${joined ? "&joined=true" : ""}`,
+    ),
+  gate: (id: string) => get<GateDetail>(`/gates/${encodeURIComponent(id)}`),
+  myGates: () => get<MyGate[]>("/me/gates"),
+  gatePosts: (id: string, page = 1, sort: "hot" | "new" | "top" = "hot") =>
+    get<(PostInfo & { pinned: boolean; authorRole: GateRole | null })[]>(
+      `/gates/${encodeURIComponent(id)}/posts?page=${page}&sort=${sort}`,
+    ),
+  createGate: (body: {
+    name: string;
+    description?: string | null;
+    emblemKey: string;
+    primaryColor: string;
+    secondaryColor?: string | null;
+    visibility: GateVisibility;
+  }) => request<{ id: string }>("/gates", "POST", body),
+  joinGate: (id: string) =>
+    request<{ status: "joined" | "requested" }>(`/gates/${encodeURIComponent(id)}/join`, "POST"),
+  leaveGate: (id: string) =>
+    request<{ status: "left" | "dissolved" }>(`/gates/${encodeURIComponent(id)}/leave`, "POST"),
+  gateMembers: (id: string, page = 1) =>
+    get<GateMemberInfo[]>(`/gates/${encodeURIComponent(id)}/members?page=${page}`),
+  gateRequests: (id: string) =>
+    get<{ userId: string; createdAt: string; identity: PublicIdentity | null }[]>(
+      `/gates/${encodeURIComponent(id)}/requests`,
+    ),
+  answerGateRequest: (id: string, userId: string, action: "accept" | "reject") =>
+    request<{ ok: boolean; status: string }>(
+      `/gates/${encodeURIComponent(id)}/requests/${encodeURIComponent(userId)}`,
+      "POST",
+      { action },
+    ),
+  setGateRole: (id: string, userId: string, role: "warden" | "member") =>
+    request<{ ok: boolean; role: GateRole }>(
+      `/gates/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/role`,
+      "POST",
+      { role },
+    ),
+  setGateApprovedPoster: (id: string, userId: string, approved: boolean) =>
+    request<{ ok: boolean; approved: boolean }>(
+      `/gates/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/approved-poster`,
+      "POST",
+      { approved },
+    ),
+  kickGateMember: (id: string, userId: string) =>
+    request<{ ok: boolean }>(
+      `/gates/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      "DELETE",
+    ),
+  updateGate: (
+    id: string,
+    body: Partial<{
+      name: string;
+      description: string | null;
+      emblemKey: string;
+      primaryColor: string;
+      secondaryColor: string | null;
+      visibility: GateVisibility;
+    }>,
+  ) => request<{ ok: boolean }>(`/gates/${encodeURIComponent(id)}`, "PATCH", body),
+  gateRemovePost: (postId: string) =>
+    request<{ ok: boolean }>(`/posts/${encodeURIComponent(postId)}/gate-remove`, "POST"),
   arenaEvents: () => get<ArenaEventsResponse>("/arena/events"),
   arenaEvent: (id: string) =>
     get<ArenaQuizDetail | ArenaPollDetail | ArenaDrawDetail>(

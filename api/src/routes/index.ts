@@ -11,6 +11,7 @@ import { registerSocialRoutes } from "./social.js";
 import { registerAdminRoutes } from "./admin.js";
 import { registerLegalRoutes } from "./legal.js";
 import { registerGuildRoutes } from "./guilds.js";
+import { registerGateRoutes } from "./gates.js";
 import { registerArenaRoutes } from "./arena.js";
 import { registerGifRoutes } from "./gifs.js";
 import { registerUploadRoutes } from "./uploads.js";
@@ -79,6 +80,7 @@ export function registerRoutes(app: FastifyInstance): void {
   registerAdminRoutes(app);
   registerLegalRoutes(app);
   registerGuildRoutes(app);
+  registerGateRoutes(app);
   registerArenaRoutes(app);
   registerGifRoutes(app);
   registerUploadRoutes(app);
@@ -141,6 +143,8 @@ export function registerRoutes(app: FastifyInstance): void {
           canonicalId: { in: ids },
           moderationStatus: "visible",
           rating: { not: null },
+          // Hidden-gate reviews never feed the public series rank.
+          OR: [{ gateId: null }, { gate: { visibility: { not: "private" } } }],
         },
         _avg: { rating: true },
         _count: true,

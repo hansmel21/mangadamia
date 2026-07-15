@@ -9,7 +9,15 @@ import * as ImagePicker from "expo-image-picker";
 import { EyeOff, ImagePlus, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { api, resolveMediaUrl, type PostInfo, type PostKind, type UnifiedCard } from "../api";
+import {
+  api,
+  resolveMediaUrl,
+  type MyGate,
+  type PostGateInfo,
+  type PostInfo,
+  type PostKind,
+  type UnifiedCard,
+} from "../api";
 import { celebrateBadges } from "../badges";
 import { getLastReadTag } from "../library";
 import { POST_KINDS } from "../ranks";
@@ -41,6 +49,7 @@ export function PostComposer({
   context,
   replyTo,
   quote,
+  gate,
   initialKind,
   onPosted,
 }: {
@@ -52,6 +61,9 @@ export function PostComposer({
   replyTo?: PostInfo;
   // Or quote-repost an existing post (a top-level record with your take on top)
   quote?: PostInfo;
+  // Post straight into this gate (opened from a gate screen). When absent, a
+  // bare composer offers a POST INTO picker over the reader's joined gates.
+  gate?: PostGateInfo;
   // Open on a specific record type (e.g. Review from the series screen)
   initialKind?: PostKind;
   onPosted?: (post: PostInfo) => void;
@@ -74,7 +86,23 @@ export function PostComposer({
   const [autoTag, setAutoTag] = useState<
     { canonicalId: string; title: string; chapterNumber: number } | null
   >(null);
+  // "POST INTO" — bare composes can target one of the reader's gates.
+  const [pickedGate, setPickedGate] = useState<MyGate | null>(null);
+  const [gatePickerOpen, setGatePickerOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const bareCompose = !replyTo && !quote && !gate;
+  const myGates = useQuery({
+    queryKey: ["myGates"],
+    queryFn: api.myGates,
+    enabled: visible && bareCompose,
+    staleTime: 60_000,
+  });
+  // Sealed gates the reader isn't authorized in can't be posted into.
+  const postableGates = (myGates.data ?? []).filter(
+    (g) =>
+      g.visibility !== "restricted" || g.approvedPoster || g.role !== "member",
+  );
 
   // Reset the type/rating/poll each time the composer opens, and re-read the
   // last-read auto-tag (only meaningful for brand-new, uncontexted posts).
@@ -86,6 +114,8 @@ export function PostComposer({
       setGifUrl("");
       setImages([]);
       setPostTitle("");
+      setPickedGate(null);
+      setGatePickerOpen(false);
       if (!replyTo && !quote && !context) {
         try {
           setAutoTag(getLastReadTag() ?? null);
@@ -176,6 +206,8 @@ export function PostComposer({
         imageUrls: images.length > 0 ? images : undefined,
         pollOptions: isPoll ? cleanPollOptions : undefined,
         quotedPostId: isQuote ? quote.id : undefined,
+        gateId:
+          replyTo || isQuote ? undefined : (gate?.id ?? pickedGate?.id ?? undefined),
         seriesTags: replyTo
           ? undefined
           : isReview
@@ -206,6 +238,9 @@ export function PostComposer({
       setImages([]);
       setPostTitle("");
       queryClient.invalidateQueries({ queryKey: ["feed"] });
+      if (gate || pickedGate) {
+        queryClient.invalidateQueries({ queryKey: ["gatePosts"] });
+      }
       onPosted?.(created);
       onClose();
     } catch (e) {
@@ -238,6 +273,78 @@ export function PostComposer({
             <Text style={styles.quoteBody} numberOfLines={3}>
               {quote.isSpoiler ? "⚠ Spoiler" : quote.body}
             </Text>
+          </View>
+        ) : null}
+
+        {/* Posting straight into a gate (opened from its screen) */}
+        {gate && !replyTo && !isQuote ? (
+          <View style={[styles.chip, { borderColor: (gate.primaryColor || colors.accent) + "88" }]}>
+            <Text
+              style={[styles.chipText, { color: gate.primaryColor || colors.accentSoft }]}
+              numberOfLines={1}
+            >
+              ⛩ POSTING INTO {gate.name.toUpperCase()}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* POST INTO — bare composes pick the dungeon wall or one of my gates */}
+        {bareCompose && postableGates.length > 0 ? (
+          <View style={styles.gatePickWrap}>
+            <Pressable
+              style={styles.gatePickKey}
+              onPress={() => setGatePickerOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Choose where to post"
+            >
+              <Text
+                style={[
+                  styles.gatePickText,
+                  pickedGate && { color: pickedGate.primaryColor || colors.accentSoft },
+                ]}
+                numberOfLines={1}
+              >
+                POST INTO · {pickedGate ? `⛩ ${pickedGate.name.toUpperCase()}` : "THE DUNGEON"}
+              </Text>
+              <Text style={styles.gatePickCaret}>{gatePickerOpen ? "▴" : "▾"}</Text>
+            </Pressable>
+            {gatePickerOpen ? (
+              <View style={styles.gatePickMenu}>
+                <Pressable
+                  style={styles.gatePickOption}
+                  onPress={() => {
+                    setPickedGate(null);
+                    setGatePickerOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[styles.gatePickOptionText, !pickedGate && { color: colors.accentSoft }]}
+                  >
+                    {!pickedGate ? "◆ " : ""}THE DUNGEON
+                  </Text>
+                </Pressable>
+                {postableGates.map((g) => (
+                  <Pressable
+                    key={g.id}
+                    style={styles.gatePickOption}
+                    onPress={() => {
+                      setPickedGate(g);
+                      setGatePickerOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.gatePickOptionText,
+                        pickedGate?.id === g.id && { color: g.primaryColor || colors.accentSoft },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {pickedGate?.id === g.id ? "◆ " : ""}⛩ {g.name.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -584,6 +691,41 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   chipText: { color: colors.accentSoft, fontSize: 11, fontWeight: "700" },
+  gatePickWrap: { marginBottom: 10, zIndex: 30 },
+  gatePickKey: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: colors.card,
+  },
+  gatePickText: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+    flexShrink: 1,
+  },
+  gatePickCaret: { color: colors.muted, fontSize: 11, fontWeight: "900" },
+  gatePickMenu: {
+    marginTop: 4,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.accentLine,
+    borderRadius: 3,
+    paddingVertical: 2,
+  },
+  gatePickOption: { paddingHorizontal: 12, paddingVertical: 9 },
+  gatePickOptionText: {
+    color: colors.mutedStrong,
+    fontSize: 10.5,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
   titleInput: {
     backgroundColor: colors.card,
     color: colors.text,

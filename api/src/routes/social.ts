@@ -23,6 +23,7 @@ import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../i
 import { createNotification } from "../notifications.js";
 import { bumpWeeklyXp } from "../arena.js";
 import { bumpGuildEvent, bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
+import { canViewGate, gateMembership, isGateMod } from "./gates.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateGifUrl, validateUserContent } from "../policy.js";
 import { isStoredImageUrl } from "../storage.js";
@@ -56,6 +57,12 @@ const commentParams = z.object({
   canonicalId: z.string().min(1),
   chapterNumber: z.coerce.number(),
 });
+
+// Reactions needed before a gate post breaks onto the main Dungeon wall.
+const GATE_PROMOTION_THRESHOLD = Math.max(
+  1,
+  Number(process.env.GATE_PROMOTION_THRESHOLD ?? 5) || 5,
+);
 
 function httpError(statusCode: number, message: string): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -498,14 +505,22 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       getStats(target.id),
       prisma.userBadge.findMany({ where: { userId: target.id }, orderBy: { earnedAt: "asc" } }),
       prisma.post.count({
-        where: { userId: target.id, parentId: null, guildId: null, moderationStatus: "visible" },
+        where: {
+          userId: target.id,
+          parentId: null,
+          guildId: null,
+          gateId: null,
+          moderationStatus: "visible",
+        },
       }),
       prisma.post.findMany({
         where: {
           userId: target.id,
           parentId: null,
           // Guild-board posts are members-only; profiles never surface them.
+          // Gate posts stay inside their gate too (v1 keeps profiles gate-free).
           guildId: null,
+          gateId: null,
           moderationStatus: "visible",
         },
         orderBy: { createdAt: "desc" },
@@ -1189,6 +1204,16 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     replies: PostNode[];
     // Total comments in this post's whole thread (all nesting levels).
     commentCount: number;
+    // Set when the post lives inside a Gate (community). `promoted` marks a
+    // gate post that crossed the reaction threshold onto the main wall.
+    gate: {
+      id: string;
+      name: string;
+      emblemKey: string;
+      primaryColor: string;
+      visibility: string;
+    } | null;
+    promoted: boolean;
     // Present on poll posts.
     poll: {
       options: { id: string; text: string; votes: number }[];
@@ -1225,6 +1250,15 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         select: { id: true, text: true, position: true, _count: { select: { votes: true } } },
       },
       pollVotes: meId ? { where: { userId: meId }, select: { optionId: true } } : false,
+      gate: {
+        select: {
+          id: true,
+          name: true,
+          emblemKey: true,
+          primaryColor: true,
+          visibility: true,
+        },
+      },
       quotedPost: {
         select: {
           id: true,
@@ -1267,6 +1301,14 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     likes?: { type: string }[] | false;
     pollOptions?: { id: string; text: string; position: number; _count: { votes: number } }[];
     pollVotes?: { optionId: string }[] | false;
+    promotedAt?: Date | null;
+    gate?: {
+      id: string;
+      name: string;
+      emblemKey: string;
+      primaryColor: string;
+      visibility: string;
+    } | null;
     quotedPost?: {
       id: string;
       userId: string;
@@ -1319,6 +1361,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     })),
     replies: [],
     commentCount: 0,
+    gate: p.gate ?? null,
+    promoted: !!p.promotedAt,
     poll:
       p.pollOptions && p.pollOptions.length > 0
         ? {
@@ -1420,6 +1464,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
             id: { in: ranked.map(([id]) => id) },
             parentId: null,
             guildId: null,
+            // Same wall rule as the main feed: gate posts only trend once
+            // promoted, and hidden gates never trend.
+            OR: [
+              { gateId: null },
+              { promotedAt: { not: null }, gate: { visibility: { not: "private" } } },
+            ],
             moderationStatus: "visible",
             userId: { notIn: blockedIds },
           },
@@ -1457,7 +1507,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       .object({
         page: z.coerce.number().int().min(1).default(1),
         canonicalId: z.string().optional(),
-        feed: z.enum(["global", "following", "guild"]).default("global"),
+        feed: z.enum(["global", "following", "guild", "gates"]).default("global"),
         kind: z.enum(["theory", "review"]).optional(),
         sort: z.enum(["new", "top", "hot"]).default("new"),
         topic: z
@@ -1470,6 +1520,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const me = await getUser(req);
     if (feed === "following" && !me) throw httpError(401, "Sign in to view your Following feed");
     if (feed === "guild" && !me) throw httpError(401, "Sign in to view your guild's feed");
+    if (feed === "gates" && !me) throw httpError(401, "Sign in to view your gates feed");
     const blockedIds = me ? await hiddenUserIds(me.id) : [];
     const followingIds =
       feed === "following" && me
@@ -1492,6 +1543,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         })
       ).map((m) => m.userId);
     }
+    // Gates feed = everything inside the gates I joined (my private ones too).
+    let myGateIds: string[] | null = null;
+    if (feed === "gates" && me) {
+      myGateIds = (
+        await prisma.gateMember.findMany({
+          where: { userId: me.id },
+          select: { gateId: true },
+        })
+      ).map((m) => m.gateId);
+      if (myGateIds.length === 0) throw httpError(404, "You haven't entered any gates");
+    }
     // new = chronological; top = most-reacted all-time; hot = most-reacted in
     // the last week (a small-app-friendly "what's popular right now").
     const orderBy =
@@ -1507,7 +1569,20 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         // Blocks hide readers from each other, but never THE SYSTEM's posts.
         // The following/guild branches below still scope by author list, so
         // officials don't leak into those feeds.
-        AND: [{ OR: [{ isOfficial: true }, { userId: { notIn: blockedIds } }] }],
+        AND: [
+          { OR: [{ isOfficial: true }, { userId: { notIn: blockedIds } }] },
+          // Gate posts stay inside their gate unless promoted onto the wall;
+          // hidden (private) gates never surface here. The gates feed instead
+          // scopes to the viewer's own gates (promoted or not).
+          myGateIds
+            ? { gateId: { in: myGateIds } }
+            : {
+                OR: [
+                  { gateId: null },
+                  { promotedAt: { not: null }, gate: { visibility: { not: "private" } } },
+                ],
+              },
+        ],
         ...(followingIds && me ? { userId: { in: [...followingIds, me.id], notIn: blockedIds } } : {}),
         ...(guildmateIds ? { userId: { in: guildmateIds, notIn: blockedIds } } : {}),
         ...(kind ? { kind } : {}),
@@ -1601,6 +1676,11 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         throw httpError(404, "No such post");
       }
     }
+    // Hidden-gate threads are members-only, same 404 treatment.
+    if (rootPost.gate && rootPost.gate.visibility === "private") {
+      const membership = me ? await gateMembership(me.id, rootPost.gate.id) : null;
+      if (!membership) throw httpError(404, "No such post");
+    }
     const descendants = await prisma.post.findMany({
       where: { rootId, moderationStatus: "visible", userId: { notIn: blockedIds } },
       orderBy: { createdAt: "asc" },
@@ -1653,6 +1733,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       imageUrls,
       pollOptions,
       quotedPostId,
+      gateId,
     } = z
       .object({
         title: z.string().trim().min(3).max(120).optional(),
@@ -1660,6 +1741,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         canonicalId: z.string().optional(),
         chapterNumber: z.coerce.number().optional(),
         parentId: z.string().optional(),
+        gateId: z.string().optional(),
         isSpoiler: z.boolean().optional(),
         kind: z.enum(["record", "theory", "review", "spoiler_intel", "poll"]).optional(),
         rating: z.coerce.number().int().min(1).max(5).optional(),
@@ -1694,12 +1776,38 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       if (!pollOptions || pollOptions.length < 2) throw httpError(400, "A poll needs at least 2 options");
       for (const option of pollOptions) validateUserContent(option);
     }
+    // Posting into a gate: permission depends on the gate's visibility tier.
+    let targetGateId: string | null = null;
+    let inPrivateGate = false;
+    if (gateId && !parentId) {
+      const gate = await prisma.gate.findUnique({ where: { id: gateId } });
+      if (!gate) throw httpError(404, "No such gate");
+      const membership = await gateMembership(user.id, gate.id);
+      if (gate.visibility === "private" && !membership) {
+        throw httpError(404, "No such gate");
+      }
+      if (gate.visibility === "restricted" && !(membership?.approvedPoster || isGateMod(membership))) {
+        throw httpError(403, "This gate is sealed — only authorized raiders can post");
+      }
+      targetGateId = gate.id;
+      inPrivateGate = gate.visibility === "private";
+    }
     // Quote-reposts embed another top-level post; only top-level posts can quote.
     let quoted = null;
     if (quotedPostId && !parentId) {
-      quoted = await prisma.post.findUnique({ where: { id: quotedPostId } });
-      // Guild-board posts can't be quoted onto the public feed.
-      if (!quoted || quoted.moderationStatus !== "visible" || quoted.parentId || quoted.guildId) {
+      quoted = await prisma.post.findUnique({
+        where: { id: quotedPostId },
+        include: { gate: { select: { visibility: true } } },
+      });
+      // Guild-board posts can't be quoted onto the public feed, and neither
+      // can posts inside hidden gates.
+      if (
+        !quoted ||
+        quoted.moderationStatus !== "visible" ||
+        quoted.parentId ||
+        quoted.guildId ||
+        quoted.gate?.visibility === "private"
+      ) {
         throw httpError(404, "That post can't be quoted");
       }
       if ((await hiddenUserIds(user.id)).includes(quoted.userId)) {
@@ -1736,6 +1844,15 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           throw httpError(404, "No such post to reply to");
         }
       }
+      // Replies in a gate thread inherit the gateId below. Anyone who can view
+      // the gate can reply (hidden gates: members only).
+      if (root.gateId) {
+        const gate = await prisma.gate.findUnique({ where: { id: root.gateId } });
+        if (!gate || !canViewGate(gate, await gateMembership(user.id, gate.id))) {
+          throw httpError(404, "No such post to reply to");
+        }
+        inPrivateGate = gate.visibility === "private";
+      }
       if ((await hiddenUserIds(user.id)).includes(parent.userId)) {
         throw httpError(403, "You cannot interact with this user");
       }
@@ -1759,6 +1876,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         parentId: parent?.id,
         rootId: parent ? (parent.rootId ?? parent.id) : null,
         guildId: root?.guildId ?? null,
+        gateId: root ? (root.gateId ?? null) : targetGateId,
         seriesTags:
           !parent && uniqueTags.length > 0
             ? {
@@ -1803,16 +1921,19 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         postId: post.id,
       });
     }
-    await notifyMentions({
-      authorId: user.id,
-      authorUsername: user.username,
-      body,
-      targetUrl: `/post/${(root ?? post).id}`,
-      targetKind: "post",
-      targetId: post.id,
-      metadata: { postId: post.id, rootId: (root ?? post).id },
-      postId: post.id,
-    });
+    // Mention pings inside a hidden gate would leak its content to outsiders.
+    if (!inPrivateGate) {
+      await notifyMentions({
+        authorId: user.id,
+        authorUsername: user.username,
+        body,
+        targetUrl: `/post/${(root ?? post).id}`,
+        targetKind: "post",
+        targetId: post.id,
+        metadata: { postId: post.id, rootId: (root ?? post).id },
+        postId: post.id,
+      });
+    }
     const levelBefore = levelForXp(user.xp);
     const updated = await prisma.user.update({
       where: { id: user.id },
@@ -1920,11 +2041,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     const user = await requireActiveUser(req);
     const { type } = z.object({ type: z.string() }).parse(req.body);
     if (!isReactionType(type)) throw httpError(400, "Unknown reaction");
-    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      include: { gate: { select: { id: true, visibility: true } } },
+    });
     if (!post || post.moderationStatus !== "visible") throw httpError(404, "No such post");
     if (post.guildId) {
       const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
       if (!membership || membership.guildId !== post.guildId) throw httpError(404, "No such post");
+    }
+    if (post.gate && !canViewGate(post.gate, await gateMembership(user.id, post.gate.id))) {
+      throw httpError(404, "No such post");
     }
     if ((await hiddenUserIds(user.id)).includes(post.userId)) {
       throw httpError(403, "You cannot interact with this user");
@@ -1935,6 +2062,24 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (action === "create") await prisma.postLike.create({ data: { ...key, type } });
     else if (action === "remove") await prisma.postLike.delete({ where: { userId_postId: key } });
     else await prisma.postLike.update({ where: { userId_postId: key }, data: { type } });
+
+    // Popular gate posts break onto the main wall (never from hidden gates).
+    // Sticky: un-reacting doesn't demote — only the gate turning private does.
+    if (
+      action === "create" &&
+      post.gate &&
+      post.gate.visibility !== "private" &&
+      !post.parentId &&
+      !post.promotedAt
+    ) {
+      const total = await prisma.postLike.count({ where: { postId: post.id } });
+      if (total >= GATE_PROMOTION_THRESHOLD) {
+        await prisma.post.update({
+          where: { id: post.id },
+          data: { promotedAt: new Date() },
+        });
+      }
+    }
 
     // EXP tracks whether the reader has *a* reaction, not which emote.
     const delta = (action === "create" ? 5 : 0) - (action === "remove" ? 5 : 0);
@@ -1997,6 +2142,12 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (post.guildId) {
       const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
       if (!membership || membership.guildId !== post.guildId) throw httpError(404, "No such poll");
+    }
+    if (post.gateId) {
+      const gate = await prisma.gate.findUnique({ where: { id: post.gateId } });
+      if (!gate || !canViewGate(gate, await gateMembership(user.id, gate.id))) {
+        throw httpError(404, "No such poll");
+      }
     }
     const option = await prisma.pollOption.findUnique({ where: { id: optionId } });
     if (!option || option.postId !== post.id) throw httpError(404, "No such option");
@@ -2113,20 +2264,31 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     },
   );
 
-  // Officers pin/unpin a board post (the 📌 row at the top of the board).
+  // Officers pin/unpin a board post (the 📌 row at the top of the board);
+  // wardens do the same inside their gate.
   app.post<{ Params: { id: string } }>("/posts/:id/pin", async (req) => {
     const user = await requireActiveUser(req);
     const post = await prisma.post.findUnique({ where: { id: req.params.id } });
-    if (!post || post.moderationStatus !== "visible" || !post.guildId || post.parentId) {
+    if (
+      !post ||
+      post.moderationStatus !== "visible" ||
+      (!post.guildId && !post.gateId) ||
+      post.parentId
+    ) {
       throw httpError(404, "No such board post");
     }
-    const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
-    if (
-      !membership ||
-      membership.guildId !== post.guildId ||
-      !["guildmaster", "officer"].includes(membership.role)
-    ) {
-      throw httpError(403, "Officers only");
+    if (post.gateId) {
+      const membership = await gateMembership(user.id, post.gateId);
+      if (!isGateMod(membership)) throw httpError(403, "Wardens only");
+    } else {
+      const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+      if (
+        !membership ||
+        membership.guildId !== post.guildId ||
+        !["guildmaster", "officer"].includes(membership.role)
+      ) {
+        throw httpError(403, "Officers only");
+      }
     }
     const updated = await prisma.post.update({
       where: { id: post.id },
@@ -2135,13 +2297,113 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return { ok: true, pinned: updated.pinned };
   });
 
+  // ── Gate feed — posts inside one gate (mirrors the guild board) ────────
+  app.get<{ Params: { id: string } }>("/gates/:id/posts", async (req) => {
+    const me = await getUser(req);
+    const { page, sort } = z
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        sort: z.enum(["hot", "new", "top"]).default("hot"),
+      })
+      .parse(req.query);
+    const gate = await prisma.gate.findUnique({ where: { id: req.params.id } });
+    if (!gate) throw httpError(404, "No such gate");
+    const mine = await gateMembership(me?.id, gate.id);
+    if (!canViewGate(gate, mine)) throw httpError(404, "No such gate");
+    const blockedIds = me ? await hiddenUserIds(me.id) : [];
+    const orderBy =
+      sort === "new"
+        ? [{ pinned: "desc" as const }, { createdAt: "desc" as const }]
+        : [
+            { pinned: "desc" as const },
+            { likes: { _count: "desc" as const } },
+            { createdAt: "desc" as const },
+          ];
+    const rows = await prisma.post.findMany({
+      where: {
+        gateId: gate.id,
+        parentId: null,
+        moderationStatus: "visible",
+        userId: { notIn: blockedIds },
+        ...(sort === "hot"
+          ? { createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } }
+          : {}),
+      },
+      orderBy,
+      skip: (page - 1) * 25,
+      take: 25,
+      include: postInclude(me?.id),
+    });
+    const rootIds = rows.map((p) => p.id);
+    const counts = rootIds.length
+      ? await prisma.post.groupBy({
+          by: ["rootId"],
+          where: { rootId: { in: rootIds }, moderationStatus: "visible", userId: { notIn: blockedIds } },
+          _count: true,
+        })
+      : [];
+    const countByRoot = new Map(counts.map((c) => [c.rootId, c._count]));
+    const memberRows = await prisma.gateMember.findMany({
+      where: { gateId: gate.id, userId: { in: rows.map((r) => r.userId) } },
+      select: { userId: true, role: true },
+    });
+    const roleByUser = new Map(memberRows.map((m) => [m.userId, m.role]));
+    const [identities, reactionMap] = await Promise.all([
+      identitiesForUsers(
+        [...rows.map((p) => p.userId), ...rows.flatMap((p) => (p.quotedPost ? [p.quotedPost.userId] : []))],
+        me?.id,
+      ),
+      reactionsForPosts(rootIds),
+    ]);
+    return rows.map((p) => ({
+      ...serializePost(p, identities, me?.id, reactionMap.get(p.id) ?? {}),
+      commentCount: countByRoot.get(p.id) ?? 0,
+      pinned: p.pinned,
+      authorRole: roleByUser.get(p.userId) ?? null,
+    }));
+  });
+
+  // ── Gate moderation: wardens remove posts inside their gate ────────────
+  // A distinct status keeps this out of the staff pipeline: every reader
+  // query already filters moderationStatus "visible", so gate-removed
+  // content vanishes everywhere, while staff "removed" + appeals stay
+  // untouched (and staff actions still work on gate posts).
+  app.post<{ Params: { id: string } }>("/posts/:id/gate-remove", async (req) => {
+    const user = await requireActiveUser(req);
+    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!post || post.moderationStatus !== "visible" || !post.gateId) {
+      throw httpError(404, "No such gate post");
+    }
+    const membership = await gateMembership(user.id, post.gateId);
+    if (!isGateMod(membership)) throw httpError(403, "Wardens only");
+    await prisma.post.update({
+      where: { id: post.id },
+      data: {
+        moderationStatus: "gate_removed",
+        moderationReason: "Removed by a Warden",
+        moderatedAt: new Date(),
+        pinned: false,
+        promotedAt: null,
+      },
+    });
+    return { ok: true };
+  });
+
   // Community review summary for a series: average rating, count, letter rank,
   // and the viewer's own review if they've filed one.
   app.get<{ Params: { id: string } }>("/canonical/:id/reviews", async (req) => {
     const me = await getUser(req);
     const canonicalId = req.params.id;
     const agg = await prisma.post.aggregate({
-      where: { kind: "review", canonicalId, moderationStatus: "visible", rating: { not: null } },
+      where: {
+        kind: "review",
+        canonicalId,
+        moderationStatus: "visible",
+        rating: { not: null },
+        // Reviews filed inside hidden gates stay hidden — they never feed the
+        // public series rank.
+        OR: [{ gateId: null }, { gate: { visibility: { not: "private" } } }],
+      },
       _avg: { rating: true },
       _count: true,
     });
