@@ -491,6 +491,11 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - [x] **HOME key closes search** — tapping the HOME tab while a search is open
       dismisses the keyboard + clears the query/results back to the default
       Home view (`tabPress` listener → `clearSearch`).
+- [x] **Composer ✕ hidden by the keyboard** (iPhone 14 Pro report) —
+      `SystemSheet` had no height cap, so the keyboard-avoiding push shoved
+      the header off the top of the screen. Now: safe-area top padding +
+      `maxHeight` on the sheet with a shrinkable ScrollView (header stays
+      pinned, content scrolls), plus drag-down dismisses the keyboard.
 - [x] **Backward continuous reading** — scrolling up at the top of a chapter
       prepends the PREVIOUS chapter inline (vertical mode), mirroring the
       forward flow: pages fetched before the queue prepend,

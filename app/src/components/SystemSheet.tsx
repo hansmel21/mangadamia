@@ -73,7 +73,10 @@ export function SystemSheet({
       <Animated.View style={[styles.backdrop, { opacity: backdrop }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <KeyboardAvoidingView
-          style={styles.fill}
+          // Top padding keeps the sheet's header (and its ✕) inside the safe
+          // area when the keyboard pushes the sheet up — the scroll area
+          // compresses instead (sheet maxHeight + flexShrink below).
+          style={[styles.fill, { paddingTop: insets.top + 10 }]}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           pointerEvents="box-none"
         >
@@ -99,6 +102,9 @@ export function SystemSheet({
             <View style={styles.rule} />
             <ScrollView
               keyboardShouldPersistTaps="handled"
+              // Dragging the content down slides the keyboard away (iOS), so
+              // the sheet is never trapped under it.
+              keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               showsVerticalScrollIndicator={false}
               style={styles.scroll}
             >
@@ -120,13 +126,16 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(107,94,204,0.65)",
     paddingHorizontal: 16,
     paddingTop: 18,
+    // Never taller than the space left above the keyboard — the header row
+    // stays pinned and the ScrollView shrinks/scrolls instead.
+    maxHeight: "100%",
     shadowColor: colors.accent,
     shadowOpacity: 0.16,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: -6 },
     elevation: 16,
   },
-  scroll: { flexGrow: 0 },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   tick: { position: "absolute", width: 11, height: 11, borderColor: colors.accentBright },
   tickL: { top: -2, left: 14, borderTopWidth: 2.5, borderLeftWidth: 2.5 },
   tickR: { top: -2, right: 14, borderTopWidth: 2.5, borderRightWidth: 2.5 },
