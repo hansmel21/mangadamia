@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./db/client.js";
 import { creditGuild, currentWeekKey, weekEndsAt } from "./guilds.js";
 import { createNotification } from "./notifications.js";
+import { maybeGrantLevelMilestones } from "./progression.js";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -81,6 +82,7 @@ export async function awardArenaXp(userId: string, amount: number): Promise<void
   await prisma.user.update({ where: { id: userId }, data: { xp: { increment: amount } } });
   await bumpWeeklyXp(prisma, userId, amount);
   await creditGuild(userId, amount);
+  void maybeGrantLevelMilestones(userId);
 }
 
 // Lazy close-out: pay winner rewards for an ended, un-finalized event.

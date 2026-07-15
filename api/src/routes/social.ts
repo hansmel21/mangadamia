@@ -24,6 +24,7 @@ import { createNotification } from "../notifications.js";
 import { bumpWeeklyXp } from "../arena.js";
 import { bumpGuildEvent, bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
 import { hasGatePerm, hasGuildPerm } from "../permissions.js";
+import { maybeGrantLevelMilestones, milestoneTrack } from "../progression.js";
 import { canViewGate, gateMembership, isGateMod } from "./gates.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateGifUrl, validateUserContent } from "../policy.js";
@@ -194,10 +195,20 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     return { ok: true };
   });
 
+  // The Status tab's MILESTONE TRACK — every step with reached/reward info.
+  app.get("/me/milestones", async (req) => {
+    const user = await requireUser(req);
+    void maybeGrantLevelMilestones(user.id);
+    return milestoneTrack(user.xp);
+  });
+
   app.get("/me", async (req) => {
     const user = await requireUser(req);
     // Evaluate here too — it's what eventually grants account-age badges
     await evaluateBadges(user.id);
+    // Lazy backfill: existing readers pick up level-milestone rewards the
+    // next time they open Status, even if no XP site fired for them.
+    void maybeGrantLevelMilestones(user.id);
     const [stats, owned, fresh, followerCount, followingCount, pendingFollowCount, identity] = await Promise.all([
       getStats(user.id),
       prisma.userBadge.findMany({ where: { userId: user.id } }),
@@ -842,6 +853,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       });
       const after = levelForXp(updated.xp);
       if (after > before) levelUp = after;
+      if (after > before) void maybeGrantLevelMilestones(user.id);
       await bumpWeeklyXp(prisma, user.id, 2);
       await creditGuild(user.id, 2);
       newBadges = (await evaluateBadges(user.id)).map((b) => ({
@@ -1023,6 +1035,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       });
       const levelAfter = levelForXp(updated.xp);
       const levelUp = levelAfter > levelBefore ? levelAfter : null;
+      if (levelUp) void maybeGrantLevelMilestones(user.id);
       await bumpWeeklyXp(prisma, user.id, 10);
       await creditGuild(user.id, 10);
       const newBadges = (await evaluateBadges(user.id)).map((b) => ({
@@ -1945,6 +1958,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     await creditGuild(user.id, 8);
     void bumpGuildEvent(user.id, parent ? "reply_created" : "post_created");
     const levelAfter = levelForXp(updated.xp);
+    if (levelAfter > levelBefore) void maybeGrantLevelMilestones(user.id);
     const identity = await identityForUser(user.id, user.id);
     const quotedAuthor = post.quotedPost
       ? await identityForUser(post.quotedPost.userId, user.id)

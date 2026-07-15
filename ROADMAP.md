@@ -684,6 +684,22 @@ depth → XP balance.
 - [x] **Client**: E→S sigil (rankColors) on GateRow and the gate header, plus
       "GATE RANK n" in the meta line.
 
+### Depth 5 — Hunter level milestones + level gates ✅ (2026-07-15, E2E 12/12)
+- [x] **`api/src/progression.ts`** — LEVEL_MILESTONES track (LV 3/5/10/15/20/
+      30/50 → seeded titles/cosmetics: Rising/Proven/Elite/High Hunter,
+      Tempered Halo, Veteran Sigil, Transcendent Crown; migration
+      `level_milestones`), `milestoneTrack()` for the client, and
+      **catch-up-idempotent `maybeGrantLevelMilestones()`** (grants everything
+      ≤ current level; RewardGrant is the once-only guard; item hook stub for
+      the items phase). Wired at: read/comment/post level-ups, awardArenaXp,
+      `/me` (lazy backfill for existing readers), new `GET /me/milestones`.
+- [x] **Level gates** (tunable consts): found a guild **LV 3+**, open a gate
+      **LV 5+** — friendly 403 copy; create screens carry the hint.
+      ⚠ Tuning note: with current XP rates LV5 = 1600 XP (~200 posts) — the
+      Phase-8 XP balance pass and/or gate values may want revisiting.
+- [x] **Client**: Status tab MILESTONE TRACK (next unlock + XP bar + step
+      chips with ✓).
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active

@@ -146,7 +146,10 @@ export default function CreateGuildScreen() {
             <Text style={styles.submitText}>FOUND GUILD</Text>
           )}
         </Pressable>
-        <Text style={styles.hint}>You'll be the Guildmaster. You can leave to disband it.</Text>
+        <Text style={styles.hint}>
+          You'll be the Guildmaster. You can leave to disband it. Founding a guild unlocks at
+          Hunter LV 3.
+        </Text>
         <View style={{ height: 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>

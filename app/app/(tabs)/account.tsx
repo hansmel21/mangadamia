@@ -51,6 +51,11 @@ function Profile() {
     refetchInterval: 15_000,
   });
   const quests = useQuery({ queryKey: ["quests"], queryFn: api.quests, staleTime: 60_000 });
+  const milestones = useQuery({
+    queryKey: ["milestones"],
+    queryFn: api.myMilestones,
+    staleTime: 60_000,
+  });
   const equippedId = me.data?.equippedTitleId ?? null;
   const badges = me.data?.badges ?? BADGE_CATALOG;
   const [selectedBadge, setSelectedBadge] = useState<BadgeInfo | null>(null);
@@ -210,6 +215,57 @@ function Profile() {
               </View>
             </View>
           </Pressable>
+        ) : null}
+
+        {/* MILESTONE TRACK — the climb: next unlock + the whole ladder */}
+        {milestones.data ? (
+          <View style={styles.milestoneBox}>
+            <Text style={styles.sectionLabel}>MILESTONE TRACK</Text>
+            {milestones.data.next ? (
+              <>
+                <Text style={styles.milestoneNext}>
+                  NEXT · LV {milestones.data.next.level} —{" "}
+                  {milestones.data.next.rewards.map((r) => r.name).join(" + ")}
+                </Text>
+                <View style={styles.milestoneBar}>
+                  <View
+                    style={[
+                      styles.milestoneBarFill,
+                      {
+                        width: `${Math.min(
+                          100,
+                          Math.round(
+                            (milestones.data.xp / Math.max(1, milestones.data.next.xpRequired)) *
+                              100,
+                          ),
+                        )}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.milestoneXp}>
+                  {milestones.data.xp.toLocaleString()} /{" "}
+                  {milestones.data.next.xpRequired.toLocaleString()} XP
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.milestoneNext}>Every milestone cleared. Transcendent.</Text>
+            )}
+            <View style={styles.milestoneSteps}>
+              {milestones.data.steps.map((s) => (
+                <View
+                  key={s.level}
+                  style={[styles.milestoneStep, s.reached && styles.milestoneStepDone]}
+                >
+                  <Text
+                    style={[styles.milestoneStepText, s.reached && { color: colors.foil }]}
+                  >
+                    {s.reached ? "✓" : ""}LV {s.level}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
         ) : null}
 
         {/* EQUIPPED slots */}
@@ -815,6 +871,49 @@ const styles = StyleSheet.create({
   recordStat: { width: "33.3%", alignItems: "center" },
   recordValue: { color: colors.text, fontFamily: fonts.display, fontSize: 19 },
   recordLabel: { color: colors.muted, fontSize: 9.5, letterSpacing: 1, marginTop: 2 },
+  milestoneBox: { paddingBottom: 2 },
+  milestoneNext: {
+    color: colors.foilSoft,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    paddingHorizontal: 20,
+  },
+  milestoneBar: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.card,
+    marginHorizontal: 20,
+    marginTop: 7,
+    overflow: "hidden",
+  },
+  milestoneBarFill: { height: "100%", backgroundColor: colors.foil, borderRadius: 3 },
+  milestoneXp: {
+    color: colors.muted,
+    fontSize: 10,
+    fontVariant: ["tabular-nums"],
+    paddingHorizontal: 20,
+    marginTop: 4,
+  },
+  milestoneSteps: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  milestoneStep: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  milestoneStepDone: {
+    borderColor: "rgba(205,164,94,0.55)",
+    backgroundColor: "rgba(205,164,94,0.07)",
+  },
+  milestoneStepText: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   sectionLabel: {
     color: colors.muted,
     fontSize: 9.5,

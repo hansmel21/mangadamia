@@ -170,7 +170,8 @@ export default function CreateGateScreen() {
           )}
         </Pressable>
         <Text style={styles.hint}>
-          You'll be the Gatekeeper. You can join as many gates as you like.
+          You'll be the Gatekeeper. You can join as many gates as you like. Opening a gate
+          unlocks at Hunter LV 5.
         </Text>
         <View style={{ height: 40 }} />
       </ScrollView>

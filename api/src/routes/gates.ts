@@ -19,6 +19,8 @@ import {
   roleToggleState,
   type GatePermKey,
 } from "../permissions.js";
+import { GATE_CREATE_MIN_LEVEL } from "../progression.js";
+import { levelForXp } from "../badges.js";
 import { validateUserContent } from "../policy.js";
 
 function httpError(statusCode: number, message: string): Error {
@@ -172,6 +174,14 @@ export function registerGateRoutes(app: FastifyInstance): void {
     async (req) => {
       const user = await requireAcceptedTerms(req);
       const body = createBody.parse(req.body);
+      // Opening a gate is a milestone privilege (a Gate Key item can bypass
+      // this once the items system lands).
+      if (levelForXp(user.xp) < GATE_CREATE_MIN_LEVEL) {
+        throw httpError(
+          403,
+          `Opening a gate unlocks at Hunter LV ${GATE_CREATE_MIN_LEVEL} — keep reading and posting!`,
+        );
+      }
       validateUserContent(body.name);
       if (body.description) validateUserContent(body.description);
       if (!isGuildEmblem(body.emblemKey)) throw httpError(400, "Unknown emblem");

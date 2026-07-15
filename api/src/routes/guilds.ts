@@ -32,6 +32,8 @@ import {
   roleToggleState,
   type GuildPermKey,
 } from "../permissions.js";
+import { GUILD_CREATE_MIN_LEVEL } from "../progression.js";
+import { levelForXp } from "../badges.js";
 import { validateUserContent } from "../policy.js";
 
 function httpError(statusCode: number, message: string): Error {
@@ -99,6 +101,13 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       const { name, tag, emblemKey, primaryColor, secondaryColor, motto } = createBody.parse(
         req.body,
       );
+      // Founding a guild is a milestone privilege — keeps day-one spam guilds out.
+      if (levelForXp(user.xp) < GUILD_CREATE_MIN_LEVEL) {
+        throw httpError(
+          403,
+          `Founding a guild unlocks at Hunter LV ${GUILD_CREATE_MIN_LEVEL} — keep reading and posting!`,
+        );
+      }
       validateUserContent(name);
       if (motto) validateUserContent(motto);
       if (!isGuildEmblem(emblemKey)) throw httpError(400, "Unknown emblem");

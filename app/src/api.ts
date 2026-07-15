@@ -443,6 +443,19 @@ export interface TopSeriesBoard {
   reads: number;
 }
 
+// The Status tab's milestone track.
+export interface MilestoneTrack {
+  level: number;
+  xp: number;
+  steps: {
+    level: number;
+    xpRequired: number;
+    reached: boolean;
+    rewards: { type: "title" | "cosmetic" | "item"; id: string; name: string }[];
+  }[];
+  next: MilestoneTrack["steps"][number] | null;
+}
+
 // One frozen past week of a board (top 3 podium rows).
 export interface BoardHistoryWeek {
   periodKey: string;
@@ -1247,6 +1260,7 @@ export const api = {
       "POST",
       { option },
     ),
+  myMilestones: () => get<MilestoneTrack>("/me/milestones"),
   weeklyBoard: () => get<WeeklyBoardResponse>("/arena/leaderboards/weekly_xp"),
   weeklyQuestsBoard: () => get<CountBoardResponse>("/arena/leaderboards/weekly_quests"),
   seriesBoard: (canonicalId: string) =>
