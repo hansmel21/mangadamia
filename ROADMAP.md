@@ -491,6 +491,10 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - [x] **HOME key closes search** — tapping the HOME tab while a search is open
       dismisses the keyboard + clears the query/results back to the default
       Home view (`tabPress` listener → `clearSearch`).
+- [x] **Duplicate HALL inside the members screen** — `guild/[id]` kept its own
+      HALL | MEMBERS tabs after the guild tab became the full Hall. Members
+      now get a roster-only screen (no tabs); bare own-guild links redirect to
+      the guild-tab Hall. Foreign guilds keep both tabs (their only hall).
 - [x] **Composer ✕ hidden by the keyboard** (iPhone 14 Pro report) —
       `SystemSheet` had no height cap, so the keyboard-avoiding push shoved
       the header off the top of the screen. Now: safe-area top padding +
