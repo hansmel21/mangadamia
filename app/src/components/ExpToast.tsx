@@ -8,16 +8,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, fonts } from "../theme";
 import { SystemWindow } from "./SystemWindow";
 
-let deliver: ((amount: number) => void) | null = null;
+interface ExpPop {
+  amount: number;
+  bonus?: number;
+}
 
-export function showExpGain(amount?: number | null) {
-  if (amount && amount > 0) deliver?.(amount);
+let deliver: ((pop: ExpPop) => void) | null = null;
+
+// `bonus` marks streak-boosted awards ("🔥 streak bonus" under the number).
+export function showExpGain(amount?: number | null, bonus?: number | null) {
+  if (amount && amount > 0) deliver?.({ amount, bonus: bonus ?? 0 });
 }
 
 export function ExpToastHost() {
   const insets = useSafeAreaInsets();
-  const [amount, setAmount] = useState<number | null>(null);
-  const queue = useRef<number[]>([]);
+  const [amount, setAmount] = useState<ExpPop | null>(null);
+  const queue = useRef<ExpPop[]>([]);
   const y = useRef(new Animated.Value(-120)).current;
   const op = useRef(new Animated.Value(0)).current;
 
@@ -56,9 +62,10 @@ export function ExpToastHost() {
     >
       <SystemWindow compact translucent style={styles.window}>
         <View style={styles.row}>
-          <Text style={styles.plus}>+{amount}</Text>
+          <Text style={styles.plus}>+{amount.amount}</Text>
           <Text style={styles.label}>EXP</Text>
         </View>
+        {amount.bonus ? <Text style={styles.bonus}>🔥 streak bonus +{amount.bonus}</Text> : null}
       </SystemWindow>
     </Animated.View>
   );
@@ -70,4 +77,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "baseline", gap: 6 },
   plus: { color: colors.foil, fontFamily: fonts.display, fontSize: 20 },
   label: { color: colors.foil, fontSize: 11, fontWeight: "900", letterSpacing: 2 },
+  bonus: { color: colors.foilSoft, fontSize: 9.5, fontWeight: "800", textAlign: "center", marginTop: 2 },
 });

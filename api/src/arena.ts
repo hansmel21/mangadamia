@@ -1,37 +1,15 @@
 // Arena mechanics (ARENA_PLAN.md phase 1): the weekly XP window every reader
 // carries for the leaderboard, quiz scoring, and the lazy close-out that pays
 // winner rewards when an ended event is first read.
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./db/client.js";
-import { creditGuild, currentWeekKey, weekEndsAt } from "./guilds.js";
+import { currentWeekKey, weekEndsAt } from "./guilds.js";
 import { createNotification } from "./notifications.js";
-import { maybeGrantLevelMilestones } from "./progression.js";
+import { awardUserXp } from "./xp.js";
 
-type Db = PrismaClient | Prisma.TransactionClient;
-
-// Roll a reader's weekly XP window forward and apply a delta. Mirrors the
-// GuildMember weeklyXp/weekKey pattern: the window rolls over lazily on the
-// first award of a new Monday-anchored UTC week. Negative deltas (moderation
-// reversals) floor at zero. Best-effort — never let a leaderboard bump break
-// the underlying action.
-export async function bumpWeeklyXp(db: Db, userId: string, delta: number): Promise<void> {
-  if (delta === 0) return;
-  try {
-    const weekKey = currentWeekKey();
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { weeklyXp: true, weekKey: true },
-    });
-    if (!user) return;
-    const base = user.weekKey === weekKey ? user.weeklyXp : 0;
-    await db.user.update({
-      where: { id: userId },
-      data: { weeklyXp: Math.max(0, base + delta), weekKey },
-    });
-  } catch {
-    // best-effort; ignore
-  }
-}
+// bumpWeeklyXp moved to xp.ts (the central XP path); re-exported here so the
+// many existing call sites keep importing it from arena.js.
+export { bumpWeeklyXp } from "./xp.js";
 
 // ── Quiz config (stored on ArenaEvent.config) ───────────────────────────────
 export interface QuizQuestion {
@@ -76,13 +54,11 @@ export function scoreQuiz(config: QuizConfig, answers: number[]): number {
   return score;
 }
 
-// Award arena XP outside a transaction: total XP + weekly window + guild war.
+// Award arena XP outside a transaction — the central path applies the streak
+// multiplier, weekly window, guild credit, and milestone check.
 export async function awardArenaXp(userId: string, amount: number): Promise<void> {
   if (amount <= 0) return;
-  await prisma.user.update({ where: { id: userId }, data: { xp: { increment: amount } } });
-  await bumpWeeklyXp(prisma, userId, amount);
-  await creditGuild(userId, amount);
-  void maybeGrantLevelMilestones(userId);
+  await awardUserXp(userId, amount);
 }
 
 // Lazy close-out: pay winner rewards for an ended, un-finalized event.

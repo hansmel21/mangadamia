@@ -25,6 +25,7 @@ import { bumpWeeklyXp } from "../arena.js";
 import { bumpGuildEvent, bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
 import { hasGatePerm, hasGuildPerm } from "../permissions.js";
 import { maybeGrantLevelMilestones, milestoneTrack } from "../progression.js";
+import { awardUserXp } from "../xp.js";
 import { canViewGate, gateMembership, isGateMod } from "./gates.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateGifUrl, validateUserContent } from "../policy.js";
@@ -845,17 +846,20 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     let newBadges: { id: string; name: string; icon: string }[] = [];
     let levelUp: number | null = null;
     if (created.count > 0) {
-      const before = levelForXp(user.xp);
-      const updated = await prisma.user.update({
-        where: { id: user.id },
-        data: { xp: { increment: 2 } },
-        select: { xp: true },
-      });
-      const after = levelForXp(updated.xp);
-      if (after > before) levelUp = after;
-      if (after > before) void maybeGrantLevelMilestones(user.id);
-      await bumpWeeklyXp(prisma, user.id, 2);
-      await creditGuild(user.id, 2);
+      const award = await awardUserXp(user.id, 2);
+      levelUp = award.levelUp;
+      // First chapter of the day pays a small extra (the XpTransaction unique
+      // key on the dayKey is the idempotence guard).
+      const dayKey = new Date().toISOString().slice(0, 10);
+      try {
+        await prisma.xpTransaction.create({
+          data: { userId: user.id, delta: 5, sourceType: "first-read", sourceId: dayKey },
+        });
+        const bonusAward = await awardUserXp(user.id, 5);
+        levelUp = bonusAward.levelUp ?? levelUp;
+      } catch {
+        // already paid today
+      }
       newBadges = (await evaluateBadges(user.id)).map((b) => ({
         id: b.id,
         name: b.name,
@@ -1030,17 +1034,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         metadata: { canonicalId, chapterNumber, commentId: comment.id },
         commentId: comment.id,
       });
-      const levelBefore = levelForXp(user.xp);
-      const updated = await prisma.user.update({
-        where: { id: user.id },
-        data: { xp: { increment: 10 } },
-        select: { xp: true },
-      });
-      const levelAfter = levelForXp(updated.xp);
-      const levelUp = levelAfter > levelBefore ? levelAfter : null;
-      if (levelUp) void maybeGrantLevelMilestones(user.id);
-      await bumpWeeklyXp(prisma, user.id, 10);
-      await creditGuild(user.id, 10);
+      const award = await awardUserXp(user.id, 10);
+      const levelUp = award.levelUp;
       void bumpGuildEvent(user.id, "comment_created");
       const newBadges = (await evaluateBadges(user.id)).map((b) => ({
         id: b.id,
@@ -1061,7 +1056,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         isSpoiler: comment.isSpoiler,
         author: identity,
         username: user.username,
-        level: identity?.level ?? levelForXp(updated.xp),
+        level: identity?.level ?? levelForXp(user.xp + award.awarded),
         createdAt: comment.createdAt,
         likeCount: 0,
         likedByMe: false,
@@ -1069,7 +1064,8 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         myReaction: null,
         mine: true,
         replies: [],
-        xpAwarded: 10,
+        xpAwarded: award.awarded,
+        xpBonus: award.bonus,
         newBadges,
         levelUp: activity.levelUp ?? levelUp,
         completedQuests: activity.completedQuests,
@@ -1952,17 +1948,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
         postId: post.id,
       });
     }
-    const levelBefore = levelForXp(user.xp);
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: { xp: { increment: 8 } },
-      select: { xp: true },
-    });
-    await bumpWeeklyXp(prisma, user.id, 8);
-    await creditGuild(user.id, 8);
+    const award = await awardUserXp(user.id, 8);
     void bumpGuildEvent(user.id, parent ? "reply_created" : "post_created");
-    const levelAfter = levelForXp(updated.xp);
-    if (levelAfter > levelBefore) void maybeGrantLevelMilestones(user.id);
+    const levelAfter = levelForXp(user.xp + award.awarded);
     const identity = await identityForUser(user.id, user.id);
     const quotedAuthor = post.quotedPost
       ? await identityForUser(post.quotedPost.userId, user.id)
@@ -2036,8 +2024,9 @@ export function registerSocialRoutes(app: FastifyInstance): void {
                 : null,
             }
           : null,
-      xpAwarded: 8,
-      levelUp: activity.levelUp ?? (levelAfter > levelBefore ? levelAfter : null),
+      xpAwarded: award.awarded,
+      xpBonus: award.bonus,
+      levelUp: activity.levelUp ?? award.levelUp,
       completedQuests: activity.completedQuests,
     };
     },
@@ -2107,13 +2096,18 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       levelUp: null,
     };
     if (post.userId !== user.id && delta !== 0) {
-      await prisma.user.update({
-        where: { id: post.userId },
-        data: { xp: { increment: delta } },
-      });
-      await bumpWeeklyXp(prisma, post.userId, delta);
       if (delta > 0) {
-        await creditGuild(post.userId, 5);
+        // Central path: streak boost + weekly window + guild credit.
+        await awardUserXp(post.userId, 5);
+      } else {
+        // Reversals stay flat — clawing back a boosted award would drift.
+        await prisma.user.update({
+          where: { id: post.userId },
+          data: { xp: { increment: delta } },
+        });
+        await bumpWeeklyXp(prisma, post.userId, delta);
+      }
+      if (delta > 0) {
         void bumpGuildEvent(post.userId, "reaction_received");
         await evaluateBadges(post.userId);
         await createNotification({
@@ -2728,13 +2722,17 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     // XP for the comment's author (no farming your own comments)
     const delta = (action === "create" ? 5 : 0) - (action === "remove" ? 5 : 0);
     if (comment.userId !== user.id && delta !== 0) {
-      await prisma.user.update({
-        where: { id: comment.userId },
-        data: { xp: { increment: delta } },
-      });
-      await bumpWeeklyXp(prisma, comment.userId, delta);
       if (delta > 0) {
-        await creditGuild(comment.userId, 5);
+        await awardUserXp(comment.userId, 5);
+      } else {
+        // Reversals stay flat — clawing back a boosted award would drift.
+        await prisma.user.update({
+          where: { id: comment.userId },
+          data: { xp: { increment: delta } },
+        });
+        await bumpWeeklyXp(prisma, comment.userId, delta);
+      }
+      if (delta > 0) {
         void bumpGuildEvent(comment.userId, "reaction_received");
         await evaluateBadges(comment.userId);
         await createNotification({

@@ -201,7 +201,7 @@ export function PostComposer({
                   .map((series) => ({ canonicalId: series.canonicalId! }))
               : undefined,
       });
-      showExpGain(created.xpAwarded);
+      showExpGain(created.xpAwarded, created.xpBonus);
       celebrateBadges(created.newBadges);
       showQuestCompletions(created.completedQuests);
       if (created.levelUp) showLevelUp(created.levelUp);

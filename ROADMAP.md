@@ -742,6 +742,23 @@ depth → XP balance.
       unlock-reward lines); decoration picker shows 🔒 MILESTONE locks; new
       GUILD_DECOR entries for all four additions.
 
+### Depth 8 — XP balance: central award path + streak bonus ✅ (2026-07-15, E2E 7/7)
+- [x] **`api/src/xp.ts`** — `awardUserXp(userId, base)` is now THE user-XP
+      path: streak multiplier (**7+ days → ×1.1, ceil**), weekly window, guild
+      credit, level-milestone check. `bumpWeeklyXp` moved here (arena.ts
+      re-exports it, zero caller churn). Refactored sites: chapter read (+2),
+      comment (+10), post (+8), reactions received (+5, positive path only —
+      **reversals stay flat −5**, ≤1 XP drift accepted and documented),
+      `awardArenaXp`. Quest XP stays flat (the chain bonus already rewards
+      consistency).
+- [x] **First chapter of the day +5** (idempotent via the XpTransaction
+      unique on `first-read:dayKey`).
+- [x] **Client**: post/comment responses carry `xpAwarded` (boosted) +
+      `xpBonus`; the EXP toast shows "🔥 streak bonus +n".
+
+**🧗 DEPTH BATCH COMPLETE (8/8 phases, all E2E-verified).** Next: dummy-account
+population for testing, then **Arena PvP** — the final track.
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active

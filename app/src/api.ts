@@ -475,6 +475,7 @@ export interface UseItemResult {
   remaining: number;
   message: string;
   xpAwarded?: number;
+  xpBonus?: number;
   cosmeticId?: string;
 }
 
@@ -968,7 +969,7 @@ export const api = {
     parentId?: string,
     isSpoiler = false,
   ) =>
-    request<CommentInfo & { newBadges: BadgeMini[]; levelUp: number | null; xpAwarded?: number }>(
+    request<CommentInfo & { newBadges: BadgeMini[]; levelUp: number | null; xpAwarded?: number; xpBonus?: number }>(
       `/comments/${encodeURIComponent(canonicalId)}/${chapterNumber}`,
       "POST",
       { body, parentId, isSpoiler },
@@ -1037,7 +1038,14 @@ export const api = {
       seriesTags?: { canonicalId: string; chapterNumber?: number }[];
     },
   ) =>
-    request<PostInfo & { levelUp: number | null; newBadges?: BadgeMini[]; xpAwarded?: number }>(
+    request<
+      PostInfo & {
+        levelUp: number | null;
+        newBadges?: BadgeMini[];
+        xpAwarded?: number;
+        xpBonus?: number;
+      }
+    >(
       "/posts",
       "POST",
       { body, ...opts },
