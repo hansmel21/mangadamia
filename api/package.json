@@ -11,7 +11,8 @@
     "test:source": "tsx --env-file-if-exists=.env scripts/test-source.ts",
     "migrate": "prisma migrate dev",
     "test:pipeline": "tsx --env-file-if-exists=.env scripts/test-pipeline.ts",
-    "owner:promote": "tsx --env-file-if-exists=.env scripts/promote-owner.ts"
+    "owner:promote": "tsx --env-file-if-exists=.env scripts/promote-owner.ts",
+    "seed:dummies": "tsx --env-file-if-exists=.env scripts/seed-dummy-users.ts"
   },
   "keywords": [],
   "author": "",

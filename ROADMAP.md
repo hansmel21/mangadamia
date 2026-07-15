@@ -759,6 +759,20 @@ depth → XP balance.
 **🧗 DEPTH BATCH COMPLETE (8/8 phases, all E2E-verified).** Next: dummy-account
 population for testing, then **Arena PvP** — the final track.
 
+### Dev-DB dummy community ✅ (2026-07-15)
+- [x] **`api/scripts/seed-dummy-users.ts`** (`npm run seed:dummies`, re-run
+      safe — skips existing usernames): **32 personas** (LV1→LV10, bios,
+      streaks) living like real readers — 5 seeded canonical series, ~800
+      chapter reads, 46 wall posts (records/theories/reviews/polls with
+      votes), ~120 replies (nested), 234 reactions, 55 chapter comments, 142
+      follows, **4 guilds** (roles, weekly contributions, board chatter +
+      pinned + ⚑ NOTICE, one with invite-permission off, pending
+      requests/invites), **6 gates** (3 open · 2 sealed w/ authorized posters
+      · 1 hidden w/ pending entry requests; wardens, pins, notices, promoted
+      posts on the wall, one with warden-pin off), weekly XP + quest boards
+      populated, items sprinkled. All accounts: password `HunterPass123!`,
+      emails `<username>@dummy.mangadamia.test`.
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active
