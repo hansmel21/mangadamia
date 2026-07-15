@@ -258,7 +258,22 @@ export interface GuildDetail {
   guildmasterId: string;
   level: number;
   perks: { key: string; level: number; label: string; unlocked: boolean }[];
-  decorations: { key: string; name: string; minLevel: number; unlocked: boolean }[];
+  decorations: {
+    key: string;
+    name: string;
+    minLevel: number;
+    milestone: string | null;
+    unlocked: boolean;
+  }[];
+  // Lifetime guild milestones (progress computed server-side; claimed = paid).
+  milestones: {
+    id: string;
+    name: string;
+    target: number;
+    progress: number;
+    claimedAt: string | null;
+    decoration: string | null;
+  }[];
   xp: number;
   xpFloor: number;
   xpForNextLevel: number;

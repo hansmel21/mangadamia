@@ -219,7 +219,13 @@ export default function EditGuildScreen() {
                   </Text>
                   <Text style={styles.decorCellName}>{d.name}</Text>
                   <Text style={styles.decorCellLevel}>
-                    {d.unlocked ? `LV ${d.minLevel} ✓` : `🔒 LV ${d.minLevel}`}
+                    {d.milestone
+                      ? d.unlocked
+                        ? "MILESTONE ✓"
+                        : "🔒 MILESTONE"
+                      : d.unlocked
+                        ? `LV ${d.minLevel} ✓`
+                        : `🔒 LV ${d.minLevel}`}
                   </Text>
                 </Pressable>
               );

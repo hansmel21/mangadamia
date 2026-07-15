@@ -21,7 +21,7 @@ import {
 import { createAnnouncement } from "../announcements.js";
 import { getUser, requireActiveUser, requireCapability } from "../auth.js";
 import { prisma } from "../db/client.js";
-import { currentWeekKey, weekEndsAt, weekNumber } from "../guilds.js";
+import { bumpGuildEvent, currentWeekKey, weekEndsAt, weekNumber } from "../guilds.js";
 import { identitiesForUsers } from "../identity.js";
 import { recordActivity } from "../quests.js";
 import { isStoredImageUrl } from "../storage.js";
@@ -230,6 +230,7 @@ export function registerArenaRoutes(app: FastifyInstance): void {
         });
         const xp = QUIZ_ENTRY_XP + score * QUIZ_PER_CORRECT_XP;
         await awardArenaXp(user.id, xp);
+        void bumpGuildEvent(user.id, "arena_entered");
         const activity = await recordActivity(user.id, {
           type: "arena_entry",
           eventKey: event.id,
@@ -267,6 +268,7 @@ export function registerArenaRoutes(app: FastifyInstance): void {
           },
         });
         await awardArenaXp(user.id, DRAW_ENTRY_XP);
+        void bumpGuildEvent(user.id, "arena_entered");
         const activity = await recordActivity(user.id, {
           type: "arena_entry",
           eventKey: event.id,
@@ -298,6 +300,7 @@ export function registerArenaRoutes(app: FastifyInstance): void {
         data: { eventId: event.id, userId: user.id, payload: { option } },
       });
       await awardArenaXp(user.id, POLL_VOTE_XP);
+      void bumpGuildEvent(user.id, "arena_entered");
       const activity = await recordActivity(user.id, { type: "arena_entry", eventKey: event.id });
       return {
         ok: true,

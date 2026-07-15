@@ -254,6 +254,45 @@ export default function GuildTab() {
             </HallSection>
           ) : null}
 
+          {/* Lifetime milestones — long-term goals beyond the weekly loop */}
+          <SystemWindow title="Milestones" dim>
+            <View style={{ gap: 10 }}>
+              {g.milestones.map((m) => {
+                const pct = Math.min(100, Math.round((m.progress / Math.max(1, m.target)) * 100));
+                return (
+                  <View key={m.id} style={styles.milestoneRow}>
+                    <View style={styles.milestoneHead}>
+                      <Text
+                        style={[styles.milestoneName, m.claimedAt && { color: colors.foilSoft }]}
+                        numberOfLines={1}
+                      >
+                        {m.claimedAt ? "✓ " : ""}
+                        {m.name}
+                      </Text>
+                      <Text style={styles.milestoneCount}>
+                        {m.progress.toLocaleString()}/{m.target.toLocaleString()}
+                      </Text>
+                    </View>
+                    <View style={styles.milestoneTrack}>
+                      <View
+                        style={[
+                          styles.milestoneFill,
+                          { width: `${pct}%` },
+                          m.claimedAt && { backgroundColor: colors.foil },
+                        ]}
+                      />
+                    </View>
+                    {m.decoration && GUILD_DECOR[m.decoration] ? (
+                      <Text style={styles.milestoneReward}>
+                        {GUILD_DECOR[m.decoration].icon} unlocks {GUILD_DECOR[m.decoration].name}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          </SystemWindow>
+
           <HallSection onPress={() => setInfoModal("perks")} label="Open the perk details">
             <SystemWindow title="Perk Track" dim>
               <Text style={styles.moreHint}>▸</Text>
@@ -622,6 +661,13 @@ const styles = StyleSheet.create({
   },
   vanguardXp: { color: colors.muted, fontSize: 11, fontWeight: "800", fontVariant: ["tabular-nums"] },
   vanguardAllTime: { color: colors.muted, fontSize: 9, fontVariant: ["tabular-nums"] },
+  milestoneRow: { gap: 4 },
+  milestoneHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  milestoneName: { color: colors.text, fontSize: 12, fontWeight: "800", flexShrink: 1 },
+  milestoneCount: { color: colors.muted, fontSize: 10, fontVariant: ["tabular-nums"] },
+  milestoneTrack: { height: 4, borderRadius: 2, backgroundColor: colors.bg, overflow: "hidden" },
+  milestoneFill: { height: "100%", backgroundColor: colors.accent, borderRadius: 2 },
+  milestoneReward: { color: colors.muted, fontSize: 10 },
   moreHint: {
     position: "absolute",
     top: 14,

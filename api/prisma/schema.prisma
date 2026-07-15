@@ -803,6 +803,7 @@ model Guild {
   warsAsA        GuildWar[]           @relation("WarsAsA")
   warsAsB        GuildWar[]           @relation("WarsAsB")
   raidProgress   GuildRaidProgress[]
+  milestones     GuildMilestone[]
 
   @@index([xp])
 }
@@ -921,6 +922,17 @@ model GuildXpTransaction {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([guildId, createdAt])
+}
+
+// Lifetime guild milestones (GUILD_MILESTONES in guilds.ts): claimed lazily
+// on hall reads; the row is the once-only payout guard.
+model GuildMilestone {
+  guildId     String
+  milestoneId String
+  claimedAt   DateTime?
+  guild       Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@id([guildId, milestoneId])
 }
 
 // ── Items ──────────────────────────────────────────────────────────────────

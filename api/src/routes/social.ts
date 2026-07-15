@@ -875,7 +875,10 @@ export function registerSocialRoutes(app: FastifyInstance): void {
           createdAt: { gte: new Date(`${currentWeekKey()}T00:00:00Z`) },
         },
       });
-      if (priorThisWeek === 0) void bumpGuildRaid(user.id);
+      if (priorThisWeek === 0) {
+        void bumpGuildRaid(user.id);
+        void bumpGuildEvent(user.id, "chapters_read");
+      }
     }
     const activity = await recordActivity(user.id, {
       type: event === "completed" ? "chapter_completed" : "chapter_opened",
@@ -1038,6 +1041,7 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       if (levelUp) void maybeGrantLevelMilestones(user.id);
       await bumpWeeklyXp(prisma, user.id, 10);
       await creditGuild(user.id, 10);
+      void bumpGuildEvent(user.id, "comment_created");
       const newBadges = (await evaluateBadges(user.id)).map((b) => ({
         id: b.id,
         name: b.name,

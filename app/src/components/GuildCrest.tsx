@@ -169,6 +169,10 @@ export const GUILD_DECOR: Record<string, { name: string; color: string; icon: st
   gilded: { name: "Gilded Frame", color: "#cda45e", icon: "✦" },
   bloodmoon: { name: "Blood Moon", color: "#ce5153", icon: "☾" },
   eclipse: { name: "Eclipse Crown", color: "#a79fe3", icon: "◐" },
+  astral: { name: "Astral Gate", color: "#54D6FF", icon: "✧" },
+  monarchseal: { name: "Monarch's Seal", color: "#e8d3a0", icon: "♛" },
+  raidbreaker: { name: "Raidbreaker Standard", color: "#d0a06a", icon: "⚑" },
+  warlord: { name: "Warlord's Banner", color: "#ce5153", icon: "⚔" },
 };
 
 // Placeholder color menu the create/edit UI can offer.

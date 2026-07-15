@@ -724,6 +724,24 @@ depth → XP balance.
 - [x] **Client**: Status tab INVENTORY grid (rarity-tinted cells, qty badges)
       + item modal with USE flow and result copy.
 
+### Depth 7 — Guild depth: event variety, lifetime milestones, extended perks ✅ (2026-07-15, E2E 12/12)
+- [x] **Event rotation doubled**: + `comment_created`, `chapters_read`,
+      `arena_entered` (arena target ≈ one entry per member — entries are
+      scarce). New tick sites: chapter comments, first-completion chapter
+      reads, arena quiz/pool/draw entries.
+- [x] **Lifetime guild milestones** (migration `guild_milestones` +
+      `GuildMilestone` claim rows): 10k/50k GXP, 5/25 raids, 3/10 wars —
+      progress computed lazily on hall reads, claimed atomically, paying
+      +500/+1500 GXP; `raids-25`/`wars-10` unlock **milestone-locked hall
+      decorations** (Raidbreaker Standard, Warlord's Banner) and `wars-10`
+      grants the roster-wide **Warborn** title (seeded, legendary).
+- [x] **Perk track extended**: LV10 boost upgrade (**×1.15** contributions,
+      tiered in creditGuild), LV10 Astral Gate + LV12 Monarch's Seal
+      decorations, member cap now `min(60, 8+2·level)`.
+- [x] **Client**: MILESTONES window on the hall (progress bars, ✓,
+      unlock-reward lines); decoration picker shows 🔒 MILESTONE locks; new
+      GUILD_DECOR entries for all four additions.
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active

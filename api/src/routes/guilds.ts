@@ -6,8 +6,10 @@ import { getUser, requireAcceptedTerms, requireActiveUser } from "../auth.js";
 import { prisma } from "../db/client.js";
 import {
   currentWeekKey,
+  decorationMilestone,
   decorationMinLevel,
   ensureGuildEvent,
+  ensureGuildMilestones,
   finalizePastWars,
   GUILD_DECORATIONS,
   guildEventTitle,
@@ -228,6 +230,12 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     // "sees the management surfaces" flag.
     const can = guildCan(guild, isMember ? myMembership : null);
     const canManage = isMember && officerRoles.includes(myMembership!.role);
+    // Lifetime milestones: computes progress and claims/pays anything newly
+    // crossed (the GuildMilestone PK is the once-only guard).
+    const milestones = await ensureGuildMilestones(guild.id);
+    const claimedMilestones = new Set(
+      milestones.filter((m) => m.claimedAt).map((m) => m.id),
+    );
     const [myRequest, myInvite, requests, invites] = await Promise.all([
       me && !isMember
         ? prisma.guildJoinRequest.findUnique({
@@ -274,8 +282,10 @@ export function registerGuildRoutes(app: FastifyInstance): void {
         key: d.key,
         name: d.name,
         minLevel: d.minLevel,
-        unlocked: level >= d.minLevel,
+        milestone: d.milestone ?? null,
+        unlocked: d.milestone ? claimedMilestones.has(d.milestone) : level >= d.minLevel,
       })),
+      milestones,
       xp: guild.xp,
       xpFloor: guildXpForLevel(level),
       xpForNextLevel: guildXpForLevel(level + 1),
@@ -661,12 +671,22 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     if (patch.decorationKey) {
       const minLevel = decorationMinLevel(patch.decorationKey);
       if (minLevel === null) throw httpError(400, "Unknown decoration");
-      const current = await prisma.guild.findUniqueOrThrow({
-        where: { id: req.params.id },
-        select: { xp: true },
-      });
-      if (guildLevelForXp(current.xp) < minLevel) {
-        throw httpError(403, `That decoration unlocks at guild LV ${minLevel}`);
+      const milestone = decorationMilestone(patch.decorationKey);
+      if (milestone) {
+        const claimed = await prisma.guildMilestone.findUnique({
+          where: { guildId_milestoneId: { guildId: req.params.id, milestoneId: milestone } },
+        });
+        if (!claimed?.claimedAt) {
+          throw httpError(403, "That decoration unlocks through a guild milestone");
+        }
+      } else {
+        const current = await prisma.guild.findUniqueOrThrow({
+          where: { id: req.params.id },
+          select: { xp: true },
+        });
+        if (guildLevelForXp(current.xp) < minLevel) {
+          throw httpError(403, `That decoration unlocks at guild LV ${minLevel}`);
+        }
       }
     }
     if (patch.name || patch.tag) {

@@ -26,17 +26,32 @@ export function isGuildEmblem(key: string): boolean {
 
 // Curated, level-gated hall decorations (cosmetic — a progression sink).
 // Rendered client-side as styled treatments on the hall banner; no uploads.
-export const GUILD_DECORATIONS = [
+// `milestone` entries unlock by claiming that lifetime GuildMilestone instead
+// of by level.
+export const GUILD_DECORATIONS: readonly {
+  key: string;
+  name: string;
+  minLevel: number;
+  milestone?: string;
+}[] = [
   { key: "halo", name: "Arcane Halo", minLevel: 2 },
   { key: "verdant", name: "Verdant Wreath", minLevel: 2 },
   { key: "stormveil", name: "Storm Veil", minLevel: 4 },
   { key: "gilded", name: "Gilded Frame", minLevel: 4 },
   { key: "bloodmoon", name: "Blood Moon", minLevel: 6 },
   { key: "eclipse", name: "Eclipse Crown", minLevel: 8 },
+  { key: "astral", name: "Astral Gate", minLevel: 10 },
+  { key: "monarchseal", name: "Monarch's Seal", minLevel: 12 },
+  { key: "raidbreaker", name: "Raidbreaker Standard", minLevel: 0, milestone: "raids-25" },
+  { key: "warlord", name: "Warlord's Banner", minLevel: 0, milestone: "wars-10" },
 ] as const;
 
 export function decorationMinLevel(key: string): number | null {
   return GUILD_DECORATIONS.find((d) => d.key === key)?.minLevel ?? null;
+}
+
+export function decorationMilestone(key: string): string | null {
+  return GUILD_DECORATIONS.find((d) => d.key === key)?.milestone ?? null;
 }
 
 // The perk track shown in the Hall: what this level already grants and what
@@ -70,6 +85,19 @@ export function guildPerks(level: number): {
     },
     { key: "deco6", level: 6, label: "Hall decorations III (Blood Moon)", unlocked: level >= 6 },
     { key: "deco8", level: 8, label: "Hall decorations IV (Eclipse)", unlocked: level >= 8 },
+    {
+      key: "boost10",
+      level: 10,
+      label: "+15% guild XP on every member contribution",
+      unlocked: level >= 10,
+    },
+    { key: "deco10", level: 10, label: "Hall decorations V (Astral Gate)", unlocked: level >= 10 },
+    {
+      key: "deco12",
+      level: 12,
+      label: "Hall decorations VI (Monarch's Seal)",
+      unlocked: level >= 12,
+    },
   ];
 }
 
@@ -78,7 +106,7 @@ export const guildLevelForXp = (xp: number): number =>
   Math.floor(Math.sqrt(Math.max(0, xp) / 400)) + 1;
 export const guildXpForLevel = (level: number): number => (level - 1) ** 2 * 400;
 // Member cap grows with investment but stays intimate early.
-export const guildMemberCap = (level: number): number => Math.min(50, 8 + level * 2);
+export const guildMemberCap = (level: number): number => Math.min(60, 8 + level * 2);
 
 // Guild "power" = sum of member levels (the aggregate rating readers first pictured).
 export const guildPower = (memberXps: number[]): number =>
@@ -222,7 +250,14 @@ async function grantRaidFrames(guildId: string, weekKey: string): Promise<void> 
 // The raid always asks for chapters; the event rotates through social goals
 // so the pair never overlaps. One event per guild per week, created lazily on
 // first read or first tick (same no-cron pattern as wars).
-export const GUILD_EVENT_TYPES = ["post_created", "reply_created", "reaction_received"] as const;
+export const GUILD_EVENT_TYPES = [
+  "post_created",
+  "reply_created",
+  "reaction_received",
+  "comment_created",
+  "chapters_read",
+  "arena_entered",
+] as const;
 export type GuildEventType = (typeof GUILD_EVENT_TYPES)[number];
 
 export const EVENT_BONUS_XP = 150;
@@ -235,6 +270,12 @@ export function guildEventTitle(eventType: string, target: number): string {
       return `Write ${target} replies together`;
     case "reaction_received":
       return `Earn ${target} reactions together`;
+    case "comment_created":
+      return `Leave ${target} chapter comments together`;
+    case "chapters_read":
+      return `Clear ${target} chapters together`;
+    case "arena_entered":
+      return `Enter the Arena ${target} times together`;
     default:
       return `Reach ${target} together`;
   }
@@ -253,9 +294,18 @@ export function eventTypeForWeek(guildId: string, weekKey: string): GuildEventTy
 }
 
 // Like the raid target: scales with the roster, rounded to read like a quest.
+// Arena entries are scarce (one entry per event per reader, few events per
+// week), so that target is simply ~one entry per member.
 export function eventTargetForGuild(eventType: GuildEventType, memberCount: number): number {
+  if (eventType === "arena_entered") return Math.max(3, memberCount);
   const perMember =
-    eventType === "post_created" ? 3 : eventType === "reply_created" ? 4 : 5;
+    eventType === "post_created"
+      ? 3
+      : eventType === "reply_created" || eventType === "comment_created"
+        ? 4
+        : eventType === "chapters_read"
+          ? 8
+          : 5;
   return Math.max(10, Math.ceil((memberCount * perMember) / 5) * 5);
 }
 
@@ -410,9 +460,12 @@ export async function finalizePastWars(): Promise<void> {
 // and all-time contribution only ever increase; weekly contribution rolls over
 // on the UTC week boundary. Best-effort — a guild-credit failure must never
 // break the underlying action (posting, reading, etc.).
-// LV 5 perk: contributions land 10% heavier (rounded up).
+// LV 5 perk: contributions land 10% heavier (rounded up); LV 10 upgrades the
+// boost to 15%.
 export const GUILD_BOOST_LEVEL = 5;
 export const GUILD_BOOST_MULTIPLIER = 1.1;
+export const GUILD_BOOST_LEVEL_2 = 10;
+export const GUILD_BOOST_MULTIPLIER_2 = 1.15;
 
 export async function creditGuild(userId: string, amount: number): Promise<void> {
   if (amount <= 0) return;
@@ -422,10 +475,14 @@ export async function creditGuild(userId: string, amount: number): Promise<void>
       include: { guild: { select: { xp: true } } },
     });
     if (!membership) return;
-    const boosted =
-      guildLevelForXp(membership.guild.xp) >= GUILD_BOOST_LEVEL
-        ? Math.ceil(amount * GUILD_BOOST_MULTIPLIER)
-        : amount;
+    const guildLevel = guildLevelForXp(membership.guild.xp);
+    const multiplier =
+      guildLevel >= GUILD_BOOST_LEVEL_2
+        ? GUILD_BOOST_MULTIPLIER_2
+        : guildLevel >= GUILD_BOOST_LEVEL
+          ? GUILD_BOOST_MULTIPLIER
+          : 1;
+    const boosted = Math.ceil(amount * multiplier);
     const weekKey = currentWeekKey();
     const sameWeek = membership.weekKey === weekKey;
     await prisma.$transaction([
@@ -443,6 +500,164 @@ export async function creditGuild(userId: string, amount: number): Promise<void>
         data: { guildId: membership.guildId, userId, delta: boosted },
       }),
     ]);
+  } catch {
+    // best-effort; ignore
+  }
+}
+
+// ── Lifetime guild milestones ───────────────────────────────────────────────
+// Long-term cumulative goals checked lazily on hall reads (3 cheap counts).
+// The GuildMilestone row is the once-only payout guard; rewards are GXP,
+// milestone-locked decorations (see GUILD_DECORATIONS), and — for the
+// biggest war milestone — a roster-wide title.
+export const GUILD_MILESTONES: readonly {
+  id: string;
+  name: string;
+  kind: "gxp" | "raids" | "wars";
+  target: number;
+  rewardXp: number;
+  decoration?: string;
+  rosterTitle?: string;
+}[] = [
+  { id: "gxp-10k", name: "Amass 10,000 GXP", kind: "gxp", target: 10_000, rewardXp: 500 },
+  { id: "gxp-50k", name: "Amass 50,000 GXP", kind: "gxp", target: 50_000, rewardXp: 1500 },
+  { id: "raids-5", name: "Clear 5 raids", kind: "raids", target: 5, rewardXp: 500 },
+  {
+    id: "raids-25",
+    name: "Clear 25 raids",
+    kind: "raids",
+    target: 25,
+    rewardXp: 1500,
+    decoration: "raidbreaker",
+  },
+  { id: "wars-3", name: "Win 3 wars", kind: "wars", target: 3, rewardXp: 500 },
+  {
+    id: "wars-10",
+    name: "Win 10 wars",
+    kind: "wars",
+    target: 10,
+    rewardXp: 1500,
+    decoration: "warlord",
+    rosterTitle: "warborn",
+  },
+];
+
+async function wonWarsCount(guildId: string): Promise<number> {
+  const [asA, asB] = await Promise.all([
+    prisma.guildWar.count({
+      where: { guildAId: guildId, finalizedAt: { not: null }, scoreA: { gt: prisma.guildWar.fields.scoreB } },
+    }),
+    prisma.guildWar.count({
+      where: { guildBId: guildId, finalizedAt: { not: null }, scoreB: { gt: prisma.guildWar.fields.scoreA } },
+    }),
+  ]);
+  return asA + asB;
+}
+
+export interface GuildMilestoneInfo {
+  id: string;
+  name: string;
+  target: number;
+  progress: number;
+  claimedAt: Date | null;
+  decoration: string | null;
+}
+
+// Compute progress, claim anything newly crossed (atomic via the PK), pay
+// rewards once, and return the full list for the hall payload.
+export async function ensureGuildMilestones(guildId: string): Promise<GuildMilestoneInfo[]> {
+  const guild = await prisma.guild.findUnique({
+    where: { id: guildId },
+    select: { xp: true, name: true },
+  });
+  if (!guild) return [];
+  const [raids, wars, claimedRows] = await Promise.all([
+    prisma.guildRaidProgress.count({ where: { guildId, claimedAt: { not: null } } }),
+    wonWarsCount(guildId),
+    prisma.guildMilestone.findMany({ where: { guildId } }),
+  ]);
+  const claimedById = new Map(claimedRows.map((row) => [row.milestoneId, row.claimedAt]));
+  const out: GuildMilestoneInfo[] = [];
+  for (const m of GUILD_MILESTONES) {
+    const progress = m.kind === "gxp" ? guild.xp : m.kind === "raids" ? raids : wars;
+    let claimedAt = claimedById.get(m.id) ?? null;
+    if (!claimedAt && progress >= m.target) {
+      try {
+        const row = await prisma.guildMilestone.create({
+          data: { guildId, milestoneId: m.id, claimedAt: new Date() },
+        });
+        claimedAt = row.claimedAt;
+        await prisma.guild.update({
+          where: { id: guildId },
+          data: { xp: { increment: m.rewardXp } },
+        });
+        // Roster payouts + pings run fire-and-forget like grantRaidFrames.
+        void announceGuildMilestone(guildId, guild.name, m);
+      } catch {
+        // Lost the claim race to a concurrent hall read — that call paid.
+        claimedAt = new Date();
+      }
+    }
+    out.push({
+      id: m.id,
+      name: m.name,
+      target: m.target,
+      progress: Math.min(progress, m.target),
+      claimedAt,
+      decoration: m.decoration ?? null,
+    });
+  }
+  return out;
+}
+
+async function announceGuildMilestone(
+  guildId: string,
+  guildName: string,
+  m: (typeof GUILD_MILESTONES)[number],
+): Promise<void> {
+  try {
+    const members = await prisma.guildMember.findMany({
+      where: { guildId },
+      select: { userId: true },
+    });
+    for (const member of members) {
+      if (m.rosterTitle) {
+        await prisma.userTitle.upsert({
+          where: { userId_titleId: { userId: member.userId, titleId: m.rosterTitle } },
+          create: { userId: member.userId, titleId: m.rosterTitle, source: "guild_milestone" },
+          update: {},
+        });
+        await prisma.rewardGrant.upsert({
+          where: {
+            userId_rewardType_rewardId_sourceType_sourceId: {
+              userId: member.userId,
+              rewardType: "title",
+              rewardId: m.rosterTitle,
+              sourceType: "guild_milestone",
+              sourceId: `${guildId}:${m.id}`,
+            },
+          },
+          create: {
+            userId: member.userId,
+            rewardType: "title",
+            rewardId: m.rosterTitle,
+            sourceType: "guild_milestone",
+            sourceId: `${guildId}:${m.id}`,
+          },
+          update: {},
+        });
+      }
+      await createNotification({
+        userId: member.userId,
+        kind: "guild_event_complete",
+        title: "Guild milestone!",
+        safeBody: `${guildName} reached “${m.name}” — +${m.rewardXp} Guild XP${
+          m.decoration ? ", a new hall decoration" : ""
+        }${m.rosterTitle ? ", and a roster title" : ""}.`,
+        targetUrl: `/guild/${guildId}`,
+        dedupeKey: `guild-milestone:${guildId}:${m.id}:${member.userId}`,
+      });
+    }
   } catch {
     // best-effort; ignore
   }
