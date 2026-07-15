@@ -208,6 +208,10 @@ async function grantRaidFrames(guildId: string, weekKey: string): Promise<void> 
           dedupeKey: `raid-frame:${c.userId}`,
         });
       }
+      // Raid loot: one Monarch's Chest per contributor per cleared raid week
+      // (grantItem's ledger key is the guard). Lazy import avoids a cycle.
+      const { grantItem } = await import("./items.js");
+      await grantItem(c.userId, "monarch-chest", 1, "guild_raid", `${guildId}:${weekKey}`);
     }
   } catch {
     // best-effort; ignore

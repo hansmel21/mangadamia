@@ -19,7 +19,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
-import { api, type BadgeInfo, type MeResponse, type TitleInfo } from "../../src/api";
+import {
+  api,
+  type BadgeInfo,
+  type InventoryItem,
+  type MeResponse,
+  type TitleInfo,
+} from "../../src/api";
+import { normalizeRarity, rarityColors } from "../../src/rarity";
 import { BADGE_CATALOG } from "../../src/badges";
 import { BadgeMedallion, badgeTierName } from "../../src/components/BadgeMedallion";
 import { GuildChip } from "../../src/components/GuildCrest";
@@ -56,6 +63,32 @@ function Profile() {
     queryFn: api.myMilestones,
     staleTime: 60_000,
   });
+  const inventory = useQuery({
+    queryKey: ["inventory"],
+    queryFn: api.myItems,
+    staleTime: 30_000,
+  });
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [useBusy, setUseBusy] = useState(false);
+  const [useResult, setUseResult] = useState<string | null>(null);
+
+  const useSelectedItem = async () => {
+    if (!selectedItem || useBusy) return;
+    setUseBusy(true);
+    try {
+      const res = await api.useItem(selectedItem.id);
+      setUseResult(res.message);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["me"] }),
+        queryClient.invalidateQueries({ queryKey: ["milestones"] }),
+      ]);
+    } catch (e) {
+      setUseResult((e as Error).message);
+    } finally {
+      setUseBusy(false);
+    }
+  };
   const equippedId = me.data?.equippedTitleId ?? null;
   const badges = me.data?.badges ?? BADGE_CATALOG;
   const [selectedBadge, setSelectedBadge] = useState<BadgeInfo | null>(null);
@@ -268,6 +301,40 @@ function Profile() {
           </View>
         ) : null}
 
+        {/* INVENTORY — items earned from quests, raids, milestones, arena */}
+        {(inventory.data?.length ?? 0) > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>INVENTORY</Text>
+            <View style={styles.invGrid}>
+              {(inventory.data ?? []).map((item) => {
+                const tone = rarityColors[normalizeRarity(item.rarity)];
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.invCell, { borderColor: tone.main + "88" }]}
+                    onPress={() => {
+                      setUseResult(null);
+                      setSelectedItem(item);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.name}, ${item.quantity} owned`}
+                  >
+                    <Text style={styles.invIcon}>{item.icon}</Text>
+                    <Text style={[styles.invName, { color: tone.text }]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <View style={[styles.invQty, { backgroundColor: tone.soft }]}>
+                      <Text style={[styles.invQtyText, { color: tone.text }]}>
+                        ×{item.quantity}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+
         {/* EQUIPPED slots */}
         <Text style={styles.sectionLabel}>EQUIPPED</Text>
         <View style={styles.slotRow}>
@@ -398,6 +465,45 @@ function Profile() {
         />
         <BadgeDetailModal badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
         <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} me={me.data} />
+        <SystemModal
+          visible={!!selectedItem}
+          onClose={() => setSelectedItem(null)}
+          title="Item"
+        >
+          {selectedItem ? (
+            <View style={{ alignItems: "center", gap: 8 }}>
+              <Text style={{ fontSize: 40 }}>{selectedItem.icon}</Text>
+              <Text style={styles.invModalName}>
+                {selectedItem.name} ×{selectedItem.quantity}
+              </Text>
+              <Text
+                style={[
+                  styles.invModalRarity,
+                  { color: rarityColors[normalizeRarity(selectedItem.rarity)].text },
+                ]}
+              >
+                {selectedItem.rarity.toUpperCase()}
+              </Text>
+              <Text style={styles.invModalDesc}>{selectedItem.description}</Text>
+              {useResult ? <Text style={styles.invModalResult}>{useResult}</Text> : null}
+              {selectedItem.usable ? (
+                <Pressable
+                  style={[styles.invUseKey, useBusy && { opacity: 0.5 }]}
+                  disabled={useBusy}
+                  onPress={() => void useSelectedItem()}
+                >
+                  {useBusy ? (
+                    <ActivityIndicator color={colors.accentSoft} size="small" />
+                  ) : (
+                    <Text style={styles.invUseKeyText}>USE</Text>
+                  )}
+                </Pressable>
+              ) : (
+                <Text style={styles.invModalPassive}>Consumed automatically when needed.</Text>
+              )}
+            </View>
+          ) : null}
+        </SystemModal>
       </ScrollView>
     </View>
   );
@@ -871,6 +977,49 @@ const styles = StyleSheet.create({
   recordStat: { width: "33.3%", alignItems: "center" },
   recordValue: { color: colors.text, fontFamily: fonts.display, fontSize: 19 },
   recordLabel: { color: colors.muted, fontSize: 9.5, letterSpacing: 1, marginTop: 2 },
+  invGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  invCell: {
+    width: "30%",
+    flexGrow: 1,
+    maxWidth: "32%",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1.2,
+    borderRadius: 4,
+    backgroundColor: colors.card,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+  },
+  invIcon: { fontSize: 26 },
+  invName: { fontSize: 9.5, fontWeight: "800", letterSpacing: 0.3 },
+  invQty: { borderRadius: 3, paddingHorizontal: 6, paddingVertical: 1 },
+  invQtyText: { fontSize: 9, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  invModalName: { color: colors.text, fontFamily: fonts.display, fontSize: 18 },
+  invModalRarity: { fontSize: 9, fontWeight: "900", letterSpacing: 1.6 },
+  invModalDesc: { color: colors.muted, fontSize: 12.5, textAlign: "center", lineHeight: 18 },
+  invModalResult: {
+    color: colors.fresh,
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 4,
+    fontWeight: "700",
+  },
+  invModalPassive: { color: colors.muted, fontSize: 11, marginTop: 6 },
+  invUseKey: {
+    marginTop: 10,
+    borderWidth: 1.5,
+    borderColor: "rgba(107,94,204,0.65)",
+    backgroundColor: "rgba(107,94,204,0.16)",
+    borderRadius: 4,
+    paddingHorizontal: 30,
+    paddingVertical: 10,
+  },
+  invUseKeyText: { color: colors.accentSoft, fontWeight: "900", fontSize: 12, letterSpacing: 1.6 },
   milestoneBox: { paddingBottom: 2 },
   milestoneNext: {
     color: colors.foilSoft,

@@ -145,6 +145,9 @@ export async function finalizeArenaEvent(eventId: string): Promise<void> {
           targetUrl: "/arena",
           dedupeKey: `arena-win:${event.id}`,
         });
+        // Winner's loot chest (dynamic import: items.ts imports this module).
+        const { grantItem } = await import("./items.js");
+        await grantItem(winner.userId, "monarch-chest", 1, "arena", event.id);
       }
     } else if (event.kind === "draw") {
       // Most community votes wins; ties break to the earliest entry.
@@ -193,6 +196,8 @@ export async function finalizeArenaEvent(eventId: string): Promise<void> {
           targetUrl: "/arena",
           dedupeKey: `arena-draw-win:${event.id}`,
         });
+        const { grantItem } = await import("./items.js");
+        await grantItem(winner.userId, "monarch-chest", 1, "arena", event.id);
       }
     } else if (event.kind === "poll") {
       const tally = new Map<number, number>();

@@ -13,6 +13,7 @@ import { registerLegalRoutes } from "./legal.js";
 import { registerGuildRoutes } from "./guilds.js";
 import { registerGateRoutes } from "./gates.js";
 import { registerArenaRoutes } from "./arena.js";
+import { registerItemRoutes } from "./items.js";
 import { registerGifRoutes } from "./gifs.js";
 import { registerUploadRoutes } from "./uploads.js";
 
@@ -82,6 +83,7 @@ export function registerRoutes(app: FastifyInstance): void {
   registerGuildRoutes(app);
   registerGateRoutes(app);
   registerArenaRoutes(app);
+  registerItemRoutes(app);
   registerGifRoutes(app);
   registerUploadRoutes(app);
 

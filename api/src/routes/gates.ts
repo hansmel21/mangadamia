@@ -174,14 +174,6 @@ export function registerGateRoutes(app: FastifyInstance): void {
     async (req) => {
       const user = await requireAcceptedTerms(req);
       const body = createBody.parse(req.body);
-      // Opening a gate is a milestone privilege (a Gate Key item can bypass
-      // this once the items system lands).
-      if (levelForXp(user.xp) < GATE_CREATE_MIN_LEVEL) {
-        throw httpError(
-          403,
-          `Opening a gate unlocks at Hunter LV ${GATE_CREATE_MIN_LEVEL} — keep reading and posting!`,
-        );
-      }
       validateUserContent(body.name);
       if (body.description) validateUserContent(body.description);
       if (!isGuildEmblem(body.emblemKey)) throw httpError(400, "Unknown emblem");
@@ -189,6 +181,19 @@ export function registerGateRoutes(app: FastifyInstance): void {
         where: { name: { equals: body.name, mode: "insensitive" } },
       });
       if (clash) throw httpError(409, "That gate name is taken");
+      // Opening a gate is a milestone privilege — unless the reader spends a
+      // Gate Key. Consumed atomically LAST, after every validation, so a
+      // rejected request never burns the key.
+      if (levelForXp(user.xp) < GATE_CREATE_MIN_LEVEL) {
+        const { consumeItem } = await import("../items.js");
+        const spentGateKey = await consumeItem(user.id, "gate-key");
+        if (!spentGateKey) {
+          throw httpError(
+            403,
+            `Opening a gate unlocks at Hunter LV ${GATE_CREATE_MIN_LEVEL} — keep reading and posting (or spend a Gate Key)!`,
+          );
+        }
+      }
       const gate = await prisma.gate.create({
         data: {
           name: body.name,

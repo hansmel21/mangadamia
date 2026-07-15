@@ -700,6 +700,30 @@ depth → XP balance.
 - [x] **Client**: Status tab MILESTONE TRACK (next unlock + XP bar + step
       chips with ✓).
 
+### Depth 6 — Items & inventory ✅ (2026-07-15, E2E 15/15)
+- [x] **Schema** (migration `items`): `ItemDefinition` (kind consumable|trophy,
+      rarity, emoji iconKey, effect Json = display metadata; logic lives in
+      code) + `UserItem` (`@@id([userId,itemId])`, quantity) +
+      `QuestDefinition.itemRewardId`. Seeded: **XP Elixir (S)** (+100 XP),
+      **Streak Shield** (passive), **Gate Key** (passive), **Monarch's Chest**
+      (random unowned cosmetic; XP dust fallback).
+- [x] **`api/src/items.ts`** — `grantItem` (once per source via a
+      RewardGrant-ledger create; never breaks the host action) +
+      `consumeItem` (atomic decrement) + `USE_HANDLERS`. Routes: `GET
+      /me/items`, `POST /me/items/:id/use` (decrement-first, refund on
+      handler throw; passives 400 with friendly copy).
+- [x] **Drop sources**: level milestones (LV3 elixir · LV5 shield · LV15 key ·
+      LV20 chest — wired via a progression hook, no import cycle), quest
+      `itemRewardId` (post-tx grants + reward chip), weekly first
+      chain-bonus elixir, raid contributors get a chest, arena quiz/draw
+      winners get a chest.
+- [x] **Passive hooks**: **Streak Shield** — the auth-layer streak reset
+      branch consumes one to keep the streak (+1) instead of resetting, with
+      a notification; **Gate Key** — under-level gate creation consumes one
+      (checked LAST after all validation so a 409 never burns it).
+- [x] **Client**: Status tab INVENTORY grid (rarity-tinted cells, qty badges)
+      + item modal with USE flow and result copy.
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active

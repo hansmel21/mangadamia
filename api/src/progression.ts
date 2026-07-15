@@ -20,11 +20,35 @@ interface MilestoneReward {
 }
 
 export const LEVEL_MILESTONES: { level: number; rewards: MilestoneReward[] }[] = [
-  { level: 3, rewards: [{ type: "title", id: "rising-hunter", name: "Rising Hunter" }] },
-  { level: 5, rewards: [{ type: "title", id: "proven-hunter", name: "Proven Hunter" }] },
+  {
+    level: 3,
+    rewards: [
+      { type: "title", id: "rising-hunter", name: "Rising Hunter" },
+      { type: "item", id: "xp-elixir-s", name: "XP Elixir (S)" },
+    ],
+  },
+  {
+    level: 5,
+    rewards: [
+      { type: "title", id: "proven-hunter", name: "Proven Hunter" },
+      { type: "item", id: "streak-shield", name: "Streak Shield" },
+    ],
+  },
   { level: 10, rewards: [{ type: "cosmetic", id: "frame-tempered", name: "Tempered Halo" }] },
-  { level: 15, rewards: [{ type: "cosmetic", id: "avatar-veteran", name: "Veteran Sigil" }] },
-  { level: 20, rewards: [{ type: "title", id: "elite-hunter", name: "Elite Hunter" }] },
+  {
+    level: 15,
+    rewards: [
+      { type: "cosmetic", id: "avatar-veteran", name: "Veteran Sigil" },
+      { type: "item", id: "gate-key", name: "Gate Key" },
+    ],
+  },
+  {
+    level: 20,
+    rewards: [
+      { type: "title", id: "elite-hunter", name: "Elite Hunter" },
+      { type: "item", id: "monarch-chest", name: "Monarch's Chest" },
+    ],
+  },
   { level: 30, rewards: [{ type: "title", id: "high-hunter", name: "High Hunter" }] },
   {
     level: 50,

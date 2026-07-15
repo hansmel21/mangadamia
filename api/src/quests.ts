@@ -2,6 +2,8 @@ import type { Prisma, QuestDefinition } from "@prisma/client";
 import { bumpWeeklyXp } from "./arena.js";
 import { getBadge, levelForXp } from "./badges.js";
 import { prisma } from "./db/client.js";
+import { currentWeekKey } from "./guilds.js";
+import { grantItem } from "./items.js";
 
 interface ActivityInput {
   type: string;
@@ -13,7 +15,7 @@ interface ActivityInput {
 }
 
 export interface QuestRewardInfo {
-  type: "xp" | "badge" | "title" | "cosmetic";
+  type: "xp" | "badge" | "title" | "cosmetic" | "item";
   id?: string;
   name: string;
   amount?: number;
@@ -61,7 +63,10 @@ function periodFor(quest: QuestDefinition, now: Date) {
 export async function recordActivity(userId: string, input: ActivityInput): Promise<ActivityResult> {
   const now = new Date();
   const value = Math.max(1, Math.min(10_000, Math.floor(input.value ?? 1)));
-  return prisma.$transaction(async (tx) => {
+  // Item drops run AFTER the transaction (grantItem manages its own ledger
+  // idempotence); collected inside the tx loop.
+  const pendingItemGrants: { itemId: string; sourceType: string; sourceId: string }[] = [];
+  const result = await prisma.$transaction(async (tx) => {
     const before = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { xp: true } });
     const event = await tx.activityEvent.create({
       data: {
@@ -193,6 +198,17 @@ export async function recordActivity(userId: string, input: ActivityInput): Prom
           rarity: quest.titleReward.rarity,
         });
       }
+      if (quest.itemRewardId) {
+        const item = await tx.itemDefinition.findUnique({ where: { id: quest.itemRewardId } });
+        if (item?.isActive) {
+          pendingItemGrants.push({
+            itemId: item.id,
+            sourceType: "quest",
+            sourceId: completed.id,
+          });
+          rewards.push({ type: "item", id: item.id, name: item.name, rarity: item.rarity });
+        }
+      }
       if (quest.cosmeticReward) {
         await tx.userCosmetic.upsert({
           where: { userId_cosmeticId: { userId, cosmeticId: quest.cosmeticReward.id } },
@@ -288,6 +304,13 @@ export async function recordActivity(userId: string, input: ActivityInput): Prom
           });
           await tx.user.update({ where: { id: userId }, data: { xp: { increment: CHAIN_BONUS } } });
           await bumpWeeklyXp(tx, userId, CHAIN_BONUS);
+          // Once per week, the first chain of the week also drops an elixir
+          // (grantItem's ledger key on the weekKey is the guard).
+          pendingItemGrants.push({
+            itemId: "xp-elixir-s",
+            sourceType: "quest_chain",
+            sourceId: currentWeekKey(now),
+          });
           await tx.notification.upsert({
             where: { userId_dedupeKey: { userId, dedupeKey: `quest-chain:${dayKey}` } },
             create: {
@@ -314,6 +337,11 @@ export async function recordActivity(userId: string, input: ActivityInput): Prom
     const afterLevel = levelForXp(after.xp);
     return { completedQuests, levelUp: afterLevel > beforeLevel ? afterLevel : null };
   });
+  // Item drops after the tx — each is once-only via the RewardGrant ledger.
+  for (const grant of pendingItemGrants) {
+    await grantItem(userId, grant.itemId, 1, grant.sourceType, grant.sourceId);
+  }
+  return result;
 }
 
 export async function questListForUser(userId: string) {

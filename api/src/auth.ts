@@ -117,13 +117,46 @@ function touchActivity(user: User): void {
   if (Date.now() - user.lastActiveAt.getTime() < ACTIVITY_BUMP_MS) return;
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const streak =
-    user.streakDayKey === today
-      ? {}
-      : {
+  const keeps = user.streakDayKey === today;
+  const extends_ = user.streakDayKey === yesterday;
+  // A gap would reset the streak — a Streak Shield in the inventory absorbs
+  // it once (consumed atomically) and the fire keeps burning. Runs inside the
+  // same fire-and-forget chain; never blocks the request.
+  if (!keeps && !extends_ && user.streakDays >= 2) {
+    void (async () => {
+      const shield = await prisma.userItem.updateMany({
+        where: { userId: user.id, itemId: "streak-shield", quantity: { gte: 1 } },
+        data: { quantity: { decrement: 1 } },
+      });
+      const saved = shield.count > 0;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          lastActiveAt: new Date(),
           streakDayKey: today,
-          streakDays: user.streakDayKey === yesterday ? user.streakDays + 1 : 1,
-        };
+          streakDays: saved ? user.streakDays + 1 : 1,
+        },
+      });
+      if (saved) {
+        const { createNotification } = await import("./notifications.js");
+        await createNotification({
+          userId: user.id,
+          kind: "reward_granted",
+          title: "Streak Shield consumed",
+          safeBody: `Your ${user.streakDays + 1}-day streak survived the gap. 🛡️`,
+          targetUrl: "/account",
+          dedupeKey: `streak-shield:${today}`,
+        });
+      }
+    })().catch(() => {});
+    return;
+  }
+  const streak = keeps
+    ? {}
+    : {
+        streakDayKey: today,
+        streakDays: extends_ ? user.streakDays + 1 : 1,
+      };
   void prisma.user
     .update({ where: { id: user.id }, data: { lastActiveAt: new Date(), ...streak } })
     .catch(() => {});

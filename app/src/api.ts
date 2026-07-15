@@ -443,6 +443,26 @@ export interface TopSeriesBoard {
   reads: number;
 }
 
+// One inventory row (Status tab INVENTORY grid).
+export interface InventoryItem {
+  id: string;
+  name: string;
+  description: string;
+  kind: "consumable" | "trophy";
+  rarity: Rarity;
+  icon: string;
+  quantity: number;
+  usable: boolean;
+}
+
+export interface UseItemResult {
+  ok: boolean;
+  remaining: number;
+  message: string;
+  xpAwarded?: number;
+  cosmeticId?: string;
+}
+
 // The Status tab's milestone track.
 export interface MilestoneTrack {
   level: number;
@@ -1261,6 +1281,9 @@ export const api = {
       { option },
     ),
   myMilestones: () => get<MilestoneTrack>("/me/milestones"),
+  myItems: () => get<InventoryItem[]>("/me/items"),
+  useItem: (id: string) =>
+    request<UseItemResult>(`/me/items/${encodeURIComponent(id)}/use`, "POST"),
   weeklyBoard: () => get<WeeklyBoardResponse>("/arena/leaderboards/weekly_xp"),
   weeklyQuestsBoard: () => get<CountBoardResponse>("/arena/leaderboards/weekly_quests"),
   seriesBoard: (canonicalId: string) =>

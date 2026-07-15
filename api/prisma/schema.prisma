@@ -110,6 +110,7 @@ model User {
   guildXpContributions GuildXpTransaction[]
   gateMemberships      GateMember[]
   gateJoinRequests     GateJoinRequest[]
+  items                UserItem[]
   pollVotes            PollVote[]
   arenaEntries         ArenaEntry[]
   arenaVotes           ArenaVote[]
@@ -638,6 +639,7 @@ model QuestDefinition {
   badgeRewardId    String?
   titleRewardId    String?
   cosmeticRewardId String?
+  itemRewardId     String?
   canonicalId      String?
   // Route the quest card's GO ▸ key opens (e.g. "/library", "/feed").
   deepLink         String?
@@ -919,6 +921,36 @@ model GuildXpTransaction {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([guildId, createdAt])
+}
+
+// ── Items ──────────────────────────────────────────────────────────────────
+// The inventory layer: consumables and trophies earned from quests, raids,
+// milestones, and arena wins. Definitions are seeded (no uploads); effects
+// live in code (items.ts USE_HANDLERS) — `effect` is display metadata only.
+model ItemDefinition {
+  id          String     @id
+  name        String
+  description String
+  kind        String // consumable | trophy
+  rarity      String
+  iconKey     String // emoji, v1
+  effect      Json?
+  stackable   Boolean    @default(true)
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  holders     UserItem[]
+}
+
+model UserItem {
+  userId    String
+  itemId    String
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item      ItemDefinition @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, itemId])
 }
 
 // Frozen leaderboard history (ARENA_PLAN phase 2). While a week is live the
