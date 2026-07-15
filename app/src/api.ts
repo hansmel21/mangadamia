@@ -136,6 +136,7 @@ export interface PublicIdentity {
 
 export type GuildRole = "guildmaster" | "officer" | "member";
 export type GuildJoinPolicy = "open" | "request" | "invite";
+export type GuildPermKey = "approve_requests" | "invite" | "kick" | "edit_info" | "pin_board";
 
 // ── Gates (Reddit-style communities in the Dungeon) ─────────────────────
 export type GateVisibility = "open" | "restricted" | "private";
@@ -157,9 +158,21 @@ export interface GateSummary {
   masked: boolean;
 }
 
+export type GatePermKey =
+  | "entry_requests"
+  | "authorize_posters"
+  | "kick"
+  | "edit_info"
+  | "pin"
+  | "remove_posts";
+
 export interface GateDetail extends GateSummary {
   createdAt?: string;
   canManage?: boolean;
+  // Per-capability truth for the viewer (server-decided).
+  can?: Record<GatePermKey, boolean>;
+  // Toggle state — present only for the gatekeeper.
+  wardenPermissions?: Record<GatePermKey, boolean> | null;
   pendingRequestCount?: number;
 }
 
@@ -251,6 +264,10 @@ export interface GuildDetail {
   memberCap: number;
   onlineCount: number;
   myRole: GuildRole | null;
+  // Per-capability truth for the viewer (server-decided).
+  can: Record<GuildPermKey, boolean>;
+  // Toggle state — present only for the guildmaster.
+  officerPermissions: Record<GuildPermKey, boolean> | null;
   inAnotherGuild: boolean;
   joinRequestPending: boolean;
   invitePending: boolean;
@@ -1084,6 +1101,12 @@ export const api = {
       decorationKey: string | null;
     }>,
   ) => request<{ ok: boolean }>(`/guilds/${encodeURIComponent(id)}`, "PATCH", body),
+  setGuildPermissions: (id: string, toggles: Record<GuildPermKey, boolean>) =>
+    request<{ ok: boolean; officerPermissions: Record<GuildPermKey, boolean> }>(
+      `/guilds/${encodeURIComponent(id)}/permissions`,
+      "PUT",
+      toggles,
+    ),
   guildWar: (id: string) =>
     get<{ war: GuildWarInfo | null }>(`/guilds/${encodeURIComponent(id)}/war`),
   guildWars: (id: string) =>
@@ -1170,6 +1193,12 @@ export const api = {
       visibility: GateVisibility;
     }>,
   ) => request<{ ok: boolean }>(`/gates/${encodeURIComponent(id)}`, "PATCH", body),
+  setGatePermissions: (id: string, toggles: Record<GatePermKey, boolean>) =>
+    request<{ ok: boolean; wardenPermissions: Record<GatePermKey, boolean> }>(
+      `/gates/${encodeURIComponent(id)}/permissions`,
+      "PUT",
+      toggles,
+    ),
   gateRemovePost: (postId: string) =>
     request<{ ok: boolean }>(`/posts/${encodeURIComponent(postId)}/gate-remove`, "POST"),
   arenaEvents: () => get<ArenaEventsResponse>("/arena/events"),

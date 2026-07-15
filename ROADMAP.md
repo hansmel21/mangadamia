@@ -636,6 +636,30 @@ depth → XP balance.
 - [x] E2E: 9/9 HTTP (ordering, me-ranks, 404s, regex guard) + 7/7 internals
       (freeze exactly-once, champion grants idempotent, notification dedupe).
 
+### Depth 2 — Role permission toggles (guilds + gates) ✅ (2026-07-15, E2E 19/19)
+- [x] **`permissions Json?`** on Guild + Gate (migration `role_permissions`) +
+      `api/src/permissions.ts`: `hasGuildPerm`/`hasGatePerm` (leader always
+      true, plain members false, officer/warden reads toggles — **missing keys
+      default TRUE** so historic behavior is unchanged until tightened).
+      Guild keys: approve_requests · invite · kick · edit_info · pin_board.
+      Gate keys: entry_requests · authorize_posters · kick · edit_info · pin ·
+      remove_posts. NOT toggleable: role changes/leadership, leader-only kick
+      escalation, gate name/visibility.
+- [x] **Dedicated leader-only endpoints** `PUT /guilds/:id/permissions` (GM) /
+      `PUT /gates/:id/permissions` (GK) — deliberately separate from PATCH
+      (officer-reachable; officers must not widen their own powers). Every
+      officer/warden check across guilds.ts, gates.ts and social.ts
+      (pin/gate-remove) now goes through the permission helpers; detail
+      payloads expose per-capability `can` + toggle state for the leader.
+- [x] **Client**: OFFICER PERMISSIONS switches in the guild editor (GM only,
+      instant save); **new Gate Settings screen** (`gate/edit/[id]`) — first
+      client UI for PATCH /gates/:id: description/emblem/color for wardens
+      with edit rights, name/visibility + WARDEN PERMISSIONS for the
+      gatekeeper; ⚙ SETTINGS key on the gate header.
+- [x] E2E 19/19: defaults on, non-leader PUT 403, toggled-off invite/edit/pin/
+      remove 403 while untouched powers keep working, leader unaffected,
+      `can` payloads match.
+
 ### Future ideas (owner requests, 2026-07-15)
 - **Guild board priorities** — posts flaggable as priority/announcement tiers
   beyond the pin (e.g. war-organization notices surfaced during an active

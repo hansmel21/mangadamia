@@ -286,6 +286,16 @@ export default function GateScreen() {
                       : ""}
                   </Text>
                 </Pressable>
+                {detail.can?.edit_info ? (
+                  <Pressable
+                    style={styles.membersKey}
+                    onPress={() =>
+                      router.push({ pathname: "/gate/edit/[id]", params: { id: gateId } })
+                    }
+                  >
+                    <Text style={styles.membersKeyText}>⚙ SETTINGS</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
 

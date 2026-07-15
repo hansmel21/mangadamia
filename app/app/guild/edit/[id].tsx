@@ -15,7 +15,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { api, type GuildJoinPolicy } from "../../../src/api";
+import { api, type GuildJoinPolicy, type GuildPermKey } from "../../../src/api";
 import {
   GUILD_COLORS,
   GUILD_DECOR,
@@ -28,6 +28,14 @@ const POLICIES: { key: GuildJoinPolicy; label: string; hint: string }[] = [
   { key: "open", label: "OPEN", hint: "Anyone joins instantly" },
   { key: "request", label: "REQUEST", hint: "Officers approve requests" },
   { key: "invite", label: "INVITE-ONLY", hint: "Members join by invitation" },
+];
+
+const OFFICER_PERMS: { key: GuildPermKey; label: string; hint: string }[] = [
+  { key: "approve_requests", label: "Approve join requests", hint: "Accept or reject readers asking in" },
+  { key: "invite", label: "Invite readers", hint: "Send and revoke invitations" },
+  { key: "kick", label: "Kick members", hint: "Remove members (officers stay GM-only)" },
+  { key: "edit_info", label: "Edit guild info", hint: "Name, emblem, colors, motto, policy" },
+  { key: "pin_board", label: "Pin board posts", hint: "Pin and unpin on the guild board" },
 ];
 
 export default function EditGuildScreen() {
@@ -47,6 +55,25 @@ export default function EditGuildScreen() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Officer permission toggles (guildmaster only) — saved instantly on flip.
+  const [officerPerms, setOfficerPerms] = useState<Record<GuildPermKey, boolean> | null>(null);
+  const [permBusy, setPermBusy] = useState(false);
+
+  const flipPerm = async (key: GuildPermKey) => {
+    if (!officerPerms || permBusy) return;
+    const next = { ...officerPerms, [key]: !officerPerms[key] };
+    setOfficerPerms(next);
+    setPermBusy(true);
+    try {
+      await api.setGuildPermissions(id, next);
+      await queryClient.invalidateQueries({ queryKey: ["guild", id] });
+    } catch (e) {
+      setOfficerPerms(officerPerms); // revert on failure
+      setError((e as Error).message);
+    } finally {
+      setPermBusy(false);
+    }
+  };
 
   // Prefill once from the loaded guild; edits after that are the user's.
   useEffect(() => {
@@ -59,6 +86,7 @@ export default function EditGuildScreen() {
     setPrimaryColor(guild.primaryColor);
     setJoinPolicy(guild.joinPolicy);
     setDecorationKey(guild.decorationKey);
+    if (guild.officerPermissions) setOfficerPerms(guild.officerPermissions);
     setLoaded(true);
   }, [guild, loaded]);
 
@@ -216,6 +244,39 @@ export default function EditGuildScreen() {
             ))}
           </View>
 
+          {guild.myRole === "guildmaster" && officerPerms ? (
+            <>
+              <Text style={styles.label}>OFFICER PERMISSIONS</Text>
+              <View style={{ gap: 8 }}>
+                {OFFICER_PERMS.map((p) => {
+                  const on = officerPerms[p.key];
+                  return (
+                    <Pressable
+                      key={p.key}
+                      style={[styles.permRow, on && styles.permRowOn]}
+                      onPress={() => void flipPerm(p.key)}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: on }}
+                    >
+                      <View style={{ flex: 1, gap: 1 }}>
+                        <Text style={[styles.permLabel, on && { color: colors.text }]}>
+                          {p.label}
+                        </Text>
+                        <Text style={styles.permHint}>{p.hint}</Text>
+                      </View>
+                      <View style={[styles.permTrack, on && styles.permTrackOn]}>
+                        <View style={[styles.permKnob, on && styles.permKnobOn]} />
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.permFootnote}>
+                Applies to every officer. Saved instantly.
+              </Text>
+            </>
+          ) : null}
+
           <Text style={styles.label}>MOTTO · OPTIONAL</Text>
           <TextInput
             style={styles.input}
@@ -321,6 +382,31 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   policyRowOn: { borderColor: "rgba(107,94,204,0.65)", backgroundColor: "rgba(107,94,204,0.08)" },
+  permRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  permRowOn: { borderColor: "rgba(107,94,204,0.45)" },
+  permLabel: { color: colors.mutedStrong, fontSize: 13, fontWeight: "800" },
+  permHint: { color: colors.muted, fontSize: 10.5 },
+  permTrack: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.border,
+    padding: 2,
+    justifyContent: "center",
+  },
+  permTrackOn: { backgroundColor: "rgba(107,94,204,0.7)" },
+  permKnob: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.muted },
+  permKnobOn: { alignSelf: "flex-end", backgroundColor: "#fff" },
+  permFootnote: { color: colors.muted, fontSize: 10.5, marginTop: 6 },
   policyLabel: { color: colors.text, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
   policyHint: { color: colors.muted, fontSize: 12, flexShrink: 1 },
   error: { color: colors.danger, marginTop: 10 },

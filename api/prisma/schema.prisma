@@ -783,6 +783,9 @@ model Guild {
   // Level-gated cosmetic hall decoration (curated key, see GUILD_DECORATIONS).
   decorationKey  String?
   joinPolicy     String               @default("open") // open | request | invite
+  // Role-permission toggles set by the guildmaster: { officer: { invite: false, ... } }.
+  // Missing keys default to true (historic officer powers). See permissions.ts.
+  permissions    Json?
   xp             Int                  @default(0) // contribution flow (never drops)
   guildmasterId  String
   createdAt      DateTime             @default(now())
@@ -946,6 +949,9 @@ model Gate {
   secondaryColor String?
   description    String?
   visibility     String            @default("open") // open | restricted | private
+  // Role-permission toggles set by the gatekeeper: { warden: { pin: false, ... } }.
+  // Missing keys default to true (historic warden powers). See permissions.ts.
+  permissions    Json?
   // The gatekeeper (head mod). Succession on leave mirrors guilds.
   ownerId        String
   createdAt      DateTime          @default(now())

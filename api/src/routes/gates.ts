@@ -10,6 +10,13 @@ import { prisma } from "../db/client.js";
 import { isGuildEmblem } from "../guilds.js";
 import { identitiesForUsers } from "../identity.js";
 import { createNotification } from "../notifications.js";
+import {
+  GATE_PERM_KEYS,
+  gateCan,
+  hasGatePerm,
+  roleToggleState,
+  type GatePermKey,
+} from "../permissions.js";
 import { validateUserContent } from "../policy.js";
 
 function httpError(statusCode: number, message: string): Error {
@@ -56,9 +63,16 @@ export function isGateMod(membership: GateMembership): boolean {
 }
 
 export function registerGateRoutes(app: FastifyInstance): void {
-  async function requireGateMod(userId: string, gateId: string) {
-    const m = await gateMembership(userId, gateId);
-    if (!isGateMod(m)) throw httpError(403, "Wardens only");
+  // Permission-toggle gate: warden powers are configurable per gate (the
+  // gatekeeper always passes).
+  async function requireGateMod(userId: string, gateId: string, key: GatePermKey) {
+    const [m, gate] = await Promise.all([
+      gateMembership(userId, gateId),
+      prisma.gate.findUnique({ where: { id: gateId }, select: { permissions: true } }),
+    ]);
+    if (!gate || !isGateMod(m) || !hasGatePerm(gate, m, key)) {
+      throw httpError(403, "Wardens only");
+    }
     return m!;
   }
 
@@ -231,7 +245,41 @@ export function registerGateRoutes(app: FastifyInstance): void {
     const pendingRequestCount = canManage
       ? await prisma.gateJoinRequest.count({ where: { gateId: gate.id } })
       : 0;
-    return { ...base, createdAt: gate.createdAt, canManage, pendingRequestCount };
+    return {
+      ...base,
+      createdAt: gate.createdAt,
+      canManage,
+      // Per-capability truth for the client's buttons/fields.
+      can: gateCan(gate, mine),
+      // Toggle state for the settings screen (gatekeeper reads/writes it).
+      wardenPermissions:
+        mine?.role === "gatekeeper"
+          ? roleToggleState(gate.permissions, "warden", GATE_PERM_KEYS)
+          : null,
+      pendingRequestCount,
+    };
+  });
+
+  // ── Warden permission toggles (gatekeeper only) ───────────────────────
+  app.put<{ Params: { id: string } }>("/gates/:id/permissions", async (req) => {
+    const user = await requireActiveUser(req);
+    const mine = await gateMembership(user.id, req.params.id);
+    if (mine?.role !== "gatekeeper") {
+      throw httpError(403, "Only the Gatekeeper can change warden permissions");
+    }
+    const toggles = z
+      .object(
+        Object.fromEntries(GATE_PERM_KEYS.map((key) => [key, z.boolean()])) as Record<
+          (typeof GATE_PERM_KEYS)[number],
+          z.ZodBoolean
+        >,
+      )
+      .parse(req.body);
+    await prisma.gate.update({
+      where: { id: req.params.id },
+      data: { permissions: { warden: toggles } },
+    });
+    return { ok: true, wardenPermissions: toggles };
   });
 
   // ── Enter (join) ──────────────────────────────────────────────────────
@@ -310,7 +358,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
   // ── Entry requests (mods) ─────────────────────────────────────────────
   app.get<{ Params: { id: string } }>("/gates/:id/requests", async (req) => {
     const user = await requireActiveUser(req);
-    await requireGateMod(user.id, req.params.id);
+    await requireGateMod(user.id, req.params.id, "entry_requests");
     const requests = await prisma.gateJoinRequest.findMany({
       where: { gateId: req.params.id },
       orderBy: { createdAt: "asc" },
@@ -328,7 +376,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
     async (req) => {
       const user = await requireActiveUser(req);
       const { action } = z.object({ action: z.enum(["accept", "reject"]) }).parse(req.body);
-      await requireGateMod(user.id, req.params.id);
+      await requireGateMod(user.id, req.params.id, "entry_requests");
       const request = await prisma.gateJoinRequest.findUnique({
         where: { gateId_userId: { gateId: req.params.id, userId: req.params.userId } },
       });
@@ -418,7 +466,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
     async (req) => {
       const user = await requireActiveUser(req);
       const { approved } = z.object({ approved: z.boolean() }).parse(req.body);
-      await requireGateMod(user.id, req.params.id);
+      await requireGateMod(user.id, req.params.id, "authorize_posters");
       const target = await gateMembership(req.params.userId, req.params.id);
       if (!target) throw httpError(404, "Not a raider here");
       if (MOD_ROLES.includes(target.role)) {
@@ -438,7 +486,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
     async (req) => {
       const user = await requireActiveUser(req);
       if (req.params.userId === user.id) throw httpError(400, "Use leave to withdraw yourself");
-      const mine = await requireGateMod(user.id, req.params.id);
+      const mine = await requireGateMod(user.id, req.params.id, "kick");
       const target = await gateMembership(req.params.userId, req.params.id);
       if (!target) throw httpError(404, "Not a raider here");
       if (target.role === "gatekeeper") throw httpError(403, "You can't remove the Gatekeeper");
@@ -456,7 +504,7 @@ export function registerGateRoutes(app: FastifyInstance): void {
   app.patch<{ Params: { id: string } }>("/gates/:id", async (req) => {
     const user = await requireActiveUser(req);
     const patch = editBody.parse(req.body);
-    const mine = await requireGateMod(user.id, req.params.id);
+    const mine = await requireGateMod(user.id, req.params.id, "edit_info");
     // Renaming and visibility flips reshape the gate itself — gatekeeper only.
     if ((patch.name || patch.visibility) && mine.role !== "gatekeeper") {
       throw httpError(403, "Only the Gatekeeper can rename the gate or change its visibility");

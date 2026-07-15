@@ -23,6 +23,7 @@ import { ensureDefaultIdentity, identitiesForUsers, identityForUser } from "../i
 import { createNotification } from "../notifications.js";
 import { bumpWeeklyXp } from "../arena.js";
 import { bumpGuildEvent, bumpGuildRaid, creditGuild, currentWeekKey } from "../guilds.js";
+import { hasGatePerm, hasGuildPerm } from "../permissions.js";
 import { canViewGate, gateMembership, isGateMod } from "./gates.js";
 import { isReactionType, seriesRankForAverage } from "../ranks.js";
 import { CURRENT_TERMS_VERSION, validateGifUrl, validateUserContent } from "../policy.js";
@@ -2278,14 +2279,23 @@ export function registerSocialRoutes(app: FastifyInstance): void {
       throw httpError(404, "No such board post");
     }
     if (post.gateId) {
-      const membership = await gateMembership(user.id, post.gateId);
-      if (!isGateMod(membership)) throw httpError(403, "Wardens only");
+      const [membership, gate] = await Promise.all([
+        gateMembership(user.id, post.gateId),
+        prisma.gate.findUnique({ where: { id: post.gateId }, select: { permissions: true } }),
+      ]);
+      if (!gate || !isGateMod(membership) || !hasGatePerm(gate, membership, "pin")) {
+        throw httpError(403, "Wardens only");
+      }
     } else {
-      const membership = await prisma.guildMember.findUnique({ where: { userId: user.id } });
+      const [membership, guild] = await Promise.all([
+        prisma.guildMember.findUnique({ where: { userId: user.id } }),
+        prisma.guild.findUnique({ where: { id: post.guildId! }, select: { permissions: true } }),
+      ]);
       if (
         !membership ||
+        !guild ||
         membership.guildId !== post.guildId ||
-        !["guildmaster", "officer"].includes(membership.role)
+        !hasGuildPerm(guild, membership, "pin_board")
       ) {
         throw httpError(403, "Officers only");
       }
@@ -2374,8 +2384,13 @@ export function registerSocialRoutes(app: FastifyInstance): void {
     if (!post || post.moderationStatus !== "visible" || !post.gateId) {
       throw httpError(404, "No such gate post");
     }
-    const membership = await gateMembership(user.id, post.gateId);
-    if (!isGateMod(membership)) throw httpError(403, "Wardens only");
+    const [membership, gate] = await Promise.all([
+      gateMembership(user.id, post.gateId),
+      prisma.gate.findUnique({ where: { id: post.gateId }, select: { permissions: true } }),
+    ]);
+    if (!gate || !isGateMod(membership) || !hasGatePerm(gate, membership, "remove_posts")) {
+      throw httpError(403, "Wardens only");
+    }
     await prisma.post.update({
       where: { id: post.id },
       data: {

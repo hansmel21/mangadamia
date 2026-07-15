@@ -25,6 +25,13 @@ import {
 } from "../guilds.js";
 import { identitiesForUsers } from "../identity.js";
 import { createNotification } from "../notifications.js";
+import {
+  GUILD_PERM_KEYS,
+  guildCan,
+  hasGuildPerm,
+  roleToggleState,
+  type GuildPermKey,
+} from "../permissions.js";
 import { validateUserContent } from "../policy.js";
 
 function httpError(statusCode: number, message: string): Error {
@@ -66,6 +73,21 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     const m = await prisma.guildMember.findUnique({ where: { userId } });
     if (!m) throw httpError(404, "You're not in a guild");
     return m;
+  }
+
+  // Permission-toggle gate: officer powers are configurable per guild (the
+  // guildmaster always passes). Replaces the old flat officerRoles check.
+  async function requireGuildPerm(userId: string, guildId: string, key: GuildPermKey) {
+    const membership = await requireMembership(userId);
+    if (membership.guildId !== guildId) throw httpError(403, "You can't manage this guild");
+    const guild = await prisma.guild.findUnique({
+      where: { id: guildId },
+      select: { permissions: true },
+    });
+    if (!guild || !hasGuildPerm(guild, membership, key)) {
+      throw httpError(403, "You can't manage this guild");
+    }
+    return membership;
   }
 
   // ── Create ────────────────────────────────────────────────────────────
@@ -193,6 +215,9 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     const lastActiveById = new Map(memberUsers.map((u) => [u.id, u.lastActiveAt]));
     const level = guildLevelForXp(guild.xp);
     const isMember = myMembership?.guildId === guild.id;
+    // Per-capability truth for the client; canManage stays as the umbrella
+    // "sees the management surfaces" flag.
+    const can = guildCan(guild, isMember ? myMembership : null);
     const canManage = isMember && officerRoles.includes(myMembership!.role);
     const [myRequest, myInvite, requests, invites] = await Promise.all([
       me && !isMember
@@ -250,6 +275,12 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       memberCap: guildMemberCap(level),
       onlineCount: onlineIds.size,
       myRole: isMember ? myMembership!.role : null,
+      can,
+      // Toggle state for the settings screen (guildmaster reads/writes it).
+      officerPermissions:
+        isMember && myMembership!.role === "guildmaster"
+          ? roleToggleState(guild.permissions, "officer", GUILD_PERM_KEYS)
+          : null,
       inAnotherGuild: !!myMembership && !isMember,
       joinRequestPending: !!myRequest,
       invitePending: !!myInvite,
@@ -370,10 +401,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     async (req) => {
       const user = await requireActiveUser(req);
       const { action } = z.object({ action: z.enum(["accept", "reject"]) }).parse(req.body);
-      const membership = await requireMembership(user.id);
-      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
-        throw httpError(403, "You can't manage this guild");
-      }
+      await requireGuildPerm(user.id, req.params.id, "approve_requests");
       const request = await prisma.guildJoinRequest.findUnique({
         where: { guildId_userId: { guildId: req.params.id, userId: req.params.userId } },
       });
@@ -433,10 +461,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       const { username } = z
         .object({ username: z.string().trim().min(1).max(30) })
         .parse(req.body);
-      const membership = await requireMembership(user.id);
-      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
-        throw httpError(403, "You can't manage this guild");
-      }
+      await requireGuildPerm(user.id, req.params.id, "invite");
       const target = await prisma.user.findFirst({
         where: { username: { equals: username, mode: "insensitive" } },
         select: { id: true, username: true, status: true },
@@ -551,10 +576,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     "/guilds/:id/invites/:userId",
     async (req) => {
       const user = await requireActiveUser(req);
-      const membership = await requireMembership(user.id);
-      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
-        throw httpError(403, "You can't manage this guild");
-      }
+      await requireGuildPerm(user.id, req.params.id, "invite");
       await prisma.guildInvite.deleteMany({
         where: { guildId: req.params.id, userId: req.params.userId },
       });
@@ -568,10 +590,7 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     async (req) => {
       const user = await requireActiveUser(req);
       if (req.params.userId === user.id) throw httpError(400, "Use leave to exit your own guild");
-      const membership = await requireMembership(user.id);
-      if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
-        throw httpError(403, "You can't manage this guild");
-      }
+      const membership = await requireGuildPerm(user.id, req.params.id, "kick");
       const target = await prisma.guildMember.findUnique({ where: { userId: req.params.userId } });
       if (!target || target.guildId !== req.params.id) throw httpError(404, "Not a member");
       if (target.role === "guildmaster") throw httpError(403, "You can't remove the Guildmaster");
@@ -621,14 +640,11 @@ export function registerGuildRoutes(app: FastifyInstance): void {
     },
   );
 
-  // ── Edit guild (officers) ─────────────────────────────────────────────
+  // ── Edit guild (officers with the edit_info permission) ───────────────
   app.patch<{ Params: { id: string } }>("/guilds/:id", async (req) => {
     const user = await requireActiveUser(req);
     const patch = editBody.parse(req.body);
-    const membership = await requireMembership(user.id);
-    if (membership.guildId !== req.params.id || !officerRoles.includes(membership.role)) {
-      throw httpError(403, "You can't edit this guild");
-    }
+    await requireGuildPerm(user.id, req.params.id, "edit_info");
     if (patch.name) validateUserContent(patch.name);
     if (patch.motto) validateUserContent(patch.motto);
     if (patch.description) validateUserContent(patch.description);
@@ -671,6 +687,30 @@ export function registerGuildRoutes(app: FastifyInstance): void {
       },
     });
     return { ok: true, guild: { id: updated.id, name: updated.name, tag: updated.tag } };
+  });
+
+  // ── Officer permission toggles (guildmaster only) ─────────────────────
+  // Deliberately its own endpoint: PATCH /guilds/:id is officer-reachable,
+  // and officers must not be able to widen their own powers.
+  app.put<{ Params: { id: string } }>("/guilds/:id/permissions", async (req) => {
+    const user = await requireActiveUser(req);
+    const membership = await requireMembership(user.id);
+    if (membership.guildId !== req.params.id || membership.role !== "guildmaster") {
+      throw httpError(403, "Only the Guildmaster can change officer permissions");
+    }
+    const toggles = z
+      .object(
+        Object.fromEntries(GUILD_PERM_KEYS.map((key) => [key, z.boolean()])) as Record<
+          (typeof GUILD_PERM_KEYS)[number],
+          z.ZodBoolean
+        >,
+      )
+      .parse(req.body);
+    await prisma.guild.update({
+      where: { id: req.params.id },
+      data: { permissions: { officer: toggles } },
+    });
+    return { ok: true, officerPermissions: toggles };
   });
 
   // ── Guild War: this week's head-to-head ───────────────────────────────
