@@ -491,6 +491,13 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - [x] **HOME key closes search** — tapping the HOME tab while a search is open
       dismisses the keyboard + clears the query/results back to the default
       Home view (`tabPress` listener → `clearSearch`).
+- [x] **Backward continuous reading** — scrolling up at the top of a chapter
+      prepends the PREVIOUS chapter inline (vertical mode), mirroring the
+      forward flow: pages fetched before the queue prepend,
+      `maintainVisibleContentPosition` anchors the viewport, `onStartReached` +
+      iOS pull-down trigger (armed after the resume jump settles), and leaving
+      a chapter upward no longer marks it completed (forward-only guard).
+      Bottom-bar PREV now scrolls in place when the chapter is loaded above.
 
 ### External scraper service ✅ (2026-07-15, E2E-tested end-to-end)
 - [x] **New `scraper/` service** (Fastify, stateless, no DB) hosting the three

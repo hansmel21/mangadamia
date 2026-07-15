@@ -238,7 +238,10 @@ export default function ReaderScreen() {
       setCurrent({ id: item.chapterId, number: item.chapterNumber, pageCount: item.chapterPageCount });
       enterChapter(item.chapterId, item.chapterNumber);
       const leaving = chapterById(leavingId);
-      if (leaving && leaving.number !== item.chapterNumber) reportCompleted(leaving.number);
+      // Only crossing FORWARD into the next chapter completes the one left —
+      // scrolling UP into the previous chapter (recap) must not mark the
+      // current chapter as finished.
+      if (leaving && leaving.number < item.chapterNumber) reportCompleted(leaving.number);
     }
     saveProgress(item.chapterId, item.chapterNumber, item.pageIndex, item.chapterPageCount);
     if (item.pageIndex >= item.chapterPageCount - 1) reportCompleted(item.chapterNumber);
@@ -291,6 +294,39 @@ export default function ReaderScreen() {
     } else if (!nextCh && lastPage) {
       reportCompleted(lastPage.chapterNumber);
     }
+  };
+
+  // Reaching the top: prepend the PREVIOUS chapter (scroll up to recap what
+  // happened). Pages are fetched BEFORE the id enters the queue — the items
+  // builder halts at the first unloaded chapter, so prepending an unloaded id
+  // would blank the list. maintainVisibleContentPosition keeps the viewport
+  // anchored when the items appear above.
+  const prependingRef = useRef(false);
+  const loadPrevious = () => {
+    if (prependingRef.current) return;
+    const firstPage = items.find((it): it is PageReaderItem => it.kind === "page");
+    const firstLoadedId = firstPage?.chapterId ?? chapterId;
+    const idx = chapters.findIndex((c) => c.sourceChapterId === firstLoadedId);
+    const prevCh = idx > 0 ? chapters[idx - 1] : undefined;
+    if (!prevCh || queueIds.includes(prevCh.sourceChapterId)) return;
+    prependingRef.current = true;
+    const prevId = prevCh.sourceChapterId;
+    queryClient
+      .fetchQuery({
+        queryKey: ["pages", src, seriesId, prevId],
+        queryFn: () => api.pages(src, seriesId, prevId),
+        staleTime: 10 * 60 * 1000,
+      })
+      .then((data) => {
+        setPagesByChapter((prev) => ({ ...prev, [prevId]: data }));
+        setQueueIds((prev) => (prev.includes(prevId) ? prev : [prevId, ...prev]));
+      })
+      .catch(() => {
+        // fetch failed (offline / scraper down) — the next attempt retries
+      })
+      .finally(() => {
+        prependingRef.current = false;
+      });
   };
 
   // Cascade prefetch: warm page images in order from the reader's position, so
@@ -374,6 +410,15 @@ export default function ReaderScreen() {
       goTo(next.sourceChapterId);
     }
   };
+  const goPrev = () => {
+    if (!prev) return;
+    // Already prepended above — just scroll back up to it. Otherwise navigate.
+    if (mode === "vertical" && chapterOffsets[prev.sourceChapterId] !== undefined) {
+      jumpRef.current?.(chapterOffsets[prev.sourceChapterId]);
+    } else {
+      goTo(prev.sourceChapterId);
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -386,6 +431,7 @@ export default function ReaderScreen() {
           onTap={() => setOverlay((v) => !v)}
           onVisiblePage={onVisiblePage}
           onEndReached={loadNextOrFinish}
+          onStartReached={loadPrevious}
         />
       ) : (
         <PagedReader
@@ -468,7 +514,7 @@ export default function ReaderScreen() {
               <Pressable
                 style={(s) => [styles.navBtn, !prev && styles.navBtnDisabled, pressFx(s)]}
                 disabled={!prev}
-                onPress={() => prev && goTo(prev.sourceChapterId)}
+                onPress={goPrev}
               >
                 <Text style={styles.btnText}>‹ Prev</Text>
               </Pressable>
@@ -588,6 +634,7 @@ function VerticalReader({
   onTap,
   onVisiblePage,
   onEndReached,
+  onStartReached,
 }: {
   items: ReaderItem[];
   width: number;
@@ -596,11 +643,19 @@ function VerticalReader({
   onTap: () => void;
   onVisiblePage: (item: PageReaderItem, globalIndex: number) => void;
   onEndReached: () => void;
+  onStartReached: () => void;
 }) {
   // Natural image heights aren't known until each image loads, so keep a map
   // of aspect ratios (keyed by item key) and let items grow when they arrive.
   const [ratios, setRatios] = useState<Record<string, number>>({});
   const listRef = useRef<FlatList<ReaderItem>>(null);
+
+  // Previous-chapter loading arms only after the mount settles (the resume
+  // jump fires ~150ms in; prepending before it would shift its target index).
+  const armedRef = useRef(false);
+  const handleStartReached = () => {
+    if (armedRef.current) onStartReached();
+  };
 
   // "Current page" = the page dominating the screen (≥50% of the viewport),
   // skipping chapter dividers. Both viewability props must be referentially
@@ -620,6 +675,8 @@ function VerticalReader({
     registerJump(jump);
     // Resume the saved reading position once, shortly after mount
     if (initialIndex > 0) setTimeout(() => jump(initialIndex), 150);
+    const arm = setTimeout(() => (armedRef.current = true), 600);
+    return () => clearTimeout(arm);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -645,6 +702,17 @@ function VerticalReader({
       windowSize={5}
       onEndReached={onEndReached}
       onEndReachedThreshold={1.5}
+      // Scrolling up near the top loads the PREVIOUS chapter above; keeping
+      // the visible page anchored stops the prepend from jumping the viewport.
+      onStartReached={handleStartReached}
+      onStartReachedThreshold={0.5}
+      maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+      // iOS: pulling down (bounce) at the very top also asks for the previous
+      // chapter — onStartReached alone doesn't re-fire while resting at 0.
+      onScroll={(e) => {
+        if (e.nativeEvent.contentOffset.y < -60) handleStartReached();
+      }}
+      scrollEventThrottle={32}
       viewabilityConfig={viewability.viewabilityConfig}
       onViewableItemsChanged={viewability.onViewableItemsChanged}
       renderItem={({ item }) =>
