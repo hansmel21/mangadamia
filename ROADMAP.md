@@ -494,10 +494,14 @@ contribution board · edit UI · weekly events · perks/decorations.**
 - [x] **Backward continuous reading** — scrolling up at the top of a chapter
       prepends the PREVIOUS chapter inline (vertical mode), mirroring the
       forward flow: pages fetched before the queue prepend,
-      `maintainVisibleContentPosition` anchors the viewport, `onStartReached` +
-      iOS pull-down trigger (armed after the resume jump settles), and leaving
-      a chapter upward no longer marks it completed (forward-only guard).
+      `maintainVisibleContentPosition` anchors the viewport, and leaving a
+      chapter upward no longer marks it completed (forward-only guard).
       Bottom-bar PREV now scrolls in place when the chapter is loaded above.
+      **Fix (same day):** the trigger is a real upward scroll gesture near the
+      top (dy<0 within ¾ viewport, armed 600ms after mount) — the first cut
+      used `onStartReached`, which re-fires on every content-size change while
+      images load, so plain chapter opens auto-prepended the previous chapter
+      and anchor drift started chapters on random pages.
 
 ### External scraper service ✅ (2026-07-15, E2E-tested end-to-end)
 - [x] **New `scraper/` service** (Fastify, stateless, no DB) hosting the three

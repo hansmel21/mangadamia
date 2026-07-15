@@ -19,6 +19,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -650,11 +652,26 @@ function VerticalReader({
   const [ratios, setRatios] = useState<Record<string, number>>({});
   const listRef = useRef<FlatList<ReaderItem>>(null);
 
-  // Previous-chapter loading arms only after the mount settles (the resume
-  // jump fires ~150ms in; prepending before it would shift its target index).
+  // Previous-chapter loading requires a REAL upward scroll gesture near the
+  // top. onStartReached is deliberately NOT used: it re-fires on every content
+  // size change (which happens constantly while page images load in), so it
+  // silently prepended the previous chapter on plain chapter opens and the
+  // anchor drift landed the reader on a random page.
+  // armedRef: also wait out the mount (the resume jump fires ~150ms in;
+  // prepending before it would shift its target index).
   const armedRef = useRef(false);
-  const handleStartReached = () => {
-    if (armedRef.current) onStartReached();
+  const lastYRef = useRef(0);
+  const onListScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastYRef.current;
+    lastYRef.current = y;
+    // Moving upward within a viewport of the top (or into the iOS bounce)
+    // is the "show me the previous chapter" gesture. Prepends adjust the
+    // offset DOWNWARD-positive via maintainVisibleContentPosition, so they
+    // can't re-trigger this themselves.
+    if (armedRef.current && dy < -1 && y < e.nativeEvent.layoutMeasurement.height * 0.75) {
+      onStartReached();
+    }
   };
 
   // "Current page" = the page dominating the screen (≥50% of the viewport),
@@ -704,14 +721,8 @@ function VerticalReader({
       onEndReachedThreshold={1.5}
       // Scrolling up near the top loads the PREVIOUS chapter above; keeping
       // the visible page anchored stops the prepend from jumping the viewport.
-      onStartReached={handleStartReached}
-      onStartReachedThreshold={0.5}
       maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-      // iOS: pulling down (bounce) at the very top also asks for the previous
-      // chapter — onStartReached alone doesn't re-fire while resting at 0.
-      onScroll={(e) => {
-        if (e.nativeEvent.contentOffset.y < -60) handleStartReached();
-      }}
+      onScroll={onListScroll}
       scrollEventThrottle={32}
       viewabilityConfig={viewability.viewabilityConfig}
       onViewableItemsChanged={viewability.onViewableItemsChanged}
